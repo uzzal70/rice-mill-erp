@@ -1,0 +1,1564 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../../backend/node_modules/.prisma/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserStatus {
+  INVITED
+  ACTIVE
+  LOCKED
+  DISABLED
+}
+
+enum AuthLoginResult {
+  SUCCESS
+  FAILED
+  LOCKED
+}
+
+enum ProductionType {
+  AUTO
+  PARBOILED
+  TRADITIONAL
+  INTEGRATED
+}
+
+enum BusinessMode {
+  PADDY_TRADING
+  RICE_TRADING
+  WHOLESALE
+  RETAIL
+  DEALER_DISTRIBUTION
+  TOLL_MILLING
+}
+
+enum PermissionAction {
+  CREATE
+  READ
+  UPDATE
+  DELETE
+  APPROVE
+  REJECT
+  POST
+  PRINT
+  EXPORT
+  VIEW_FINANCIAL
+}
+
+enum PartnerType {
+  SUPPLIER
+  FARMER
+  BROKER
+  CUSTOMER
+}
+
+enum BrokerCommissionType {
+  PER_KG
+  PER_MON
+  PER_TON
+  PERCENTAGE
+  FIXED_AMOUNT
+}
+
+enum ItemKind {
+  PADDY
+  RICE
+  BY_PRODUCT
+  PACKAGING
+  FUEL
+  SPARE_PART
+  CONSUMABLE
+  OTHER
+}
+
+enum StockMovementType {
+  OPENING
+  RECEIPT
+  ISSUE
+  TRANSFER
+  TRANSFER_IN
+  TRANSFER_OUT
+  PRODUCTION_IN
+  PRODUCTION_OUT
+  PURCHASE_RETURN
+  SALE
+  SALE_RETURN
+  REPACK
+  DAMAGE
+  LOSS
+  ADJUSTMENT
+  REVERSAL
+}
+
+enum LandedCostComponentType {
+  TRANSPORT
+  LOADING
+  UNLOADING
+  COMMISSION
+  DRYING
+  OTHER_DIRECT
+}
+
+enum MoistureDeductionFormula {
+  DRY_MATTER_CORRECTION
+  SLAB_PERCENTAGE
+}
+
+enum DocumentStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+  POSTED
+  CANCELLED
+}
+
+enum JournalStatus {
+  DRAFT
+  POSTED
+  REVERSED
+}
+
+enum UnitOfMeasure {
+  KG
+  MON
+  TON
+  BAG
+  PIECE
+  LITER
+}
+
+enum AuthChallengePurpose {
+  PASSWORD_RESET
+  EMAIL_VERIFICATION
+  OTP_LOGIN
+}
+
+enum GateDirection {
+  INWARD
+  OUTWARD
+}
+
+enum GatePurpose {
+  PROCUREMENT
+  SALES
+  TRANSFER
+  TOLL_MILLING
+  OTHER
+}
+
+enum GateStatus {
+  ENTRY
+  WEIGHING
+  QUALITY
+  RECEIVING
+  COMPLETED
+  REJECTED
+  CANCELLED
+}
+
+enum QualitySampleType {
+  GATE
+  PIT
+  FINAL
+}
+
+enum QualitySampleStatus {
+  SAMPLE
+  TESTED
+  APPROVED
+  REJECTED
+}
+
+enum QualityDecision {
+  ACCEPT
+  REJECT
+}
+
+enum ParboilingStageType {
+  SOAKING
+  STEAMING
+  DRYING
+}
+
+model Company {
+  id                 String              @id @default(cuid())
+  name               String
+  code               String              @unique
+  logoUrl            String?
+  registrationNumber String?
+  tin                String?
+  bin                String?
+  address            String?
+  district           String?
+  division           String?
+  phone              String?
+  email              String?
+  website            String?
+  fiscalYearStart    Int                 @default(1)
+  currency           String              @default("BDT")
+  timezone           String              @default("Asia/Dhaka")
+  active             Boolean             @default(true)
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  factories          Factory[]
+  memberships        Membership[]
+  roles              Role[]
+  settings           CompanySetting?
+  partners           Partner[]
+  items              Item[]
+  godowns            Godown[]
+  productionLines    ProductionLine[]
+  stockMovements     StockMovement[]
+  journals           Journal[]
+  auditEvents        AuditEvent[]
+  unitConversions    UnitConversion[]
+  vehicles           Vehicle[]
+  gateEntries        GateEntry[]
+  gateAttachments    GateAttachment[]
+  weighbridgeTickets WeighbridgeTicket[]
+  qualitySamples     QualitySample[]
+  purchaseOrders     PurchaseOrder[]
+  goodsReceipts      GoodsReceipt[]
+  stockTransfers     StockTransfer[]
+  stockAdjustments   StockAdjustment[]
+  stockCounts        StockCount[]
+  productionBatches  ProductionBatch[]
+  dryingBatches      DryingBatch[]
+  parboilingBatches  ParboilingBatch[]
+  moisturePolicies   MoisturePolicy[]
+  purchaseInvoices   PurchaseInvoice[]
+  landedCostConfigs  LandedCostComponentConfig[]
+  landedCosts        LandedCost[]
+  repackingBatches   RepackingBatch[]
+  salesQuotations    SalesQuotation[]
+  salesQuotationLines SalesQuotationLine[]
+  salesOrders        SalesOrder[]
+  salesOrderLines    SalesOrderLine[]
+  dispatches         Dispatch[]
+  dispatchLines      DispatchLine[]
+
+  @@index([active])
+}
+
+model Factory {
+  id                 String              @id @default(cuid())
+  companyId          String
+  name               String
+  code               String
+  address            String?
+  managerName        String?
+  capacityPerDay     Decimal?            @db.Decimal(14, 3)
+  productionType     ProductionType
+  businessModes      BusinessMode[]      @default([])
+  active             Boolean             @default(true)
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  company            Company             @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  godowns            Godown[]
+  lines              ProductionLine[]
+  memberships        Membership[]
+  stockMovements     StockMovement[]
+  gateEntries        GateEntry[]
+  gateAttachments    GateAttachment[]
+  weighbridgeTickets WeighbridgeTicket[]
+  qualitySamples     QualitySample[]
+  purchaseOrders     PurchaseOrder[]
+  goodsReceipts      GoodsReceipt[]
+  stockTransfers     StockTransfer[]
+  stockAdjustments   StockAdjustment[]
+  stockCounts        StockCount[]
+  productionBatches  ProductionBatch[]
+  dryingBatches      DryingBatch[]
+  parboilingBatches  ParboilingBatch[]
+  moisturePolicies   MoisturePolicy[]
+  purchaseInvoices   PurchaseInvoice[]
+  landedCostConfigs  LandedCostComponentConfig[]
+  landedCosts        LandedCost[]
+  repackingBatches   RepackingBatch[]
+  salesQuotations    SalesQuotation[]
+  salesQuotationLines SalesQuotationLine[]
+  salesOrders        SalesOrder[]
+  salesOrderLines    SalesOrderLine[]
+  dispatches         Dispatch[]
+  dispatchLines      DispatchLine[]
+
+  @@unique([companyId, code])
+  @@unique([companyId, id])
+  @@index([companyId, active])
+}
+
+model User {
+  id                         String              @id @default(cuid())
+  email                      String              @unique
+  phone                      String?
+  passwordHash               String?
+  fullName                   String
+  status                     UserStatus          @default(INVITED)
+  emailVerifiedAt            DateTime?
+  failedLoginCount           Int                 @default(0)
+  lockedUntil                DateTime?
+  lastLoginAt                DateTime?
+  createdAt                  DateTime            @default(now())
+  updatedAt                  DateTime            @updatedAt
+  memberships                Membership[]
+  sessions                   AuthSession[]
+  authChallenges             AuthChallenge[]
+  loginEvents                AuthLoginEvent[]
+  auditEvents                AuditEvent[]
+  createdGateEntries         GateEntry[]         @relation("GateEntryCreator")
+  uploadedGateAttachments    GateAttachment[]    @relation("GateAttachmentUploader")
+  operatedWeighbridgeTickets WeighbridgeTicket[] @relation("WeighbridgeOperator")
+  sampledQualitySamples      QualitySample[]     @relation("QualitySampler")
+  testedQualitySamples       QualitySample[]     @relation("QualityTester")
+  approvedQualitySamples     QualitySample[]     @relation("QualityApprover")
+  createdPurchaseOrders      PurchaseOrder[]     @relation("PurchaseOrderCreator")
+  approvedPurchaseOrders     PurchaseOrder[]     @relation("PurchaseOrderApprover")
+  createdGoodsReceipts       GoodsReceipt[]      @relation("GoodsReceiptCreator")
+  approvedGoodsReceipts      GoodsReceipt[]      @relation("GoodsReceiptApprover")
+  postedGoodsReceipts        GoodsReceipt[]      @relation("GoodsReceiptPoster")
+  createdStockTransfers      StockTransfer[]     @relation("StockTransferCreator")
+  createdStockAdjustments    StockAdjustment[]   @relation("StockAdjustmentCreator")
+  createdStockCounts         StockCount[]        @relation("StockCountCreator")
+  postedStockCounts          StockCount[]        @relation("StockCountPoster")
+  createdRepackingBatches    RepackingBatch[]   @relation("RepackingBatchCreator")
+  approvedRepackingBatches   RepackingBatch[]   @relation("RepackingBatchApprover")
+  postedRepackingBatches     RepackingBatch[]   @relation("RepackingBatchPoster")
+  createdProductionBatches   ProductionBatch[]   @relation("ProductionBatchCreator")
+  approvedProductionBatches  ProductionBatch[]   @relation("ProductionBatchApprover")
+  postedProductionBatches    ProductionBatch[]   @relation("ProductionBatchPoster")
+  createdDryingBatches       DryingBatch[]       @relation("DryingBatchCreator")
+  approvedDryingBatches      DryingBatch[]       @relation("DryingBatchApprover")
+  postedDryingBatches        DryingBatch[]       @relation("DryingBatchPoster")
+  createdParboilingBatches   ParboilingBatch[]   @relation("ParboilingBatchCreator")
+  approvedParboilingBatches  ParboilingBatch[]   @relation("ParboilingBatchApprover")
+  postedParboilingBatches    ParboilingBatch[]   @relation("ParboilingBatchPoster")
+  createdPurchaseInvoices    PurchaseInvoice[]   @relation("PurchaseInvoiceCreator")
+  approvedPurchaseInvoices   PurchaseInvoice[]   @relation("PurchaseInvoiceApprover")
+  postedPurchaseInvoices     PurchaseInvoice[]   @relation("PurchaseInvoicePoster")
+  landedCostsCalculated     LandedCost[]           @relation("LandedCostCalculatedBy")
+  landedCostsApproved      LandedCost[]           @relation("LandedCostApprover")
+  landedCostsPosted         LandedCost[]           @relation("LandedCostPoster")
+  createdMoisturePolicies    MoisturePolicy[]   @relation("MoisturePolicyCreator")
+
+  @@index([status])
+}
+
+model Membership {
+  id              String     @id @default(cuid())
+  userId          String
+  companyId       String
+  factoryId       String?
+  active          Boolean    @default(true)
+  createdAt       DateTime   @default(now())
+  user            User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company         Company    @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  factory         Factory?   @relation(fields: [companyId, factoryId], references: [companyId, id], onDelete: Restrict)
+  roleAssignments UserRole[]
+
+  @@unique([userId, companyId, factoryId])
+  @@index([companyId, active])
+}
+
+model Role {
+  id          String           @id @default(cuid())
+  companyId   String?
+  name        String
+  code        String
+  description String?
+  systemRole  Boolean          @default(false)
+  createdAt   DateTime         @default(now())
+  company     Company?         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  permissions RolePermission[]
+  assignments UserRole[]
+
+  @@unique([companyId, code])
+}
+
+model Permission {
+  id          String           @id @default(cuid())
+  resource    String
+  action      PermissionAction
+  description String?
+  roles       RolePermission[]
+
+  @@unique([resource, action])
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+}
+
+model UserRole {
+  membershipId String
+  roleId       String
+  membership   Membership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Restrict)
+
+  @@id([membershipId, roleId])
+}
+
+model AuthSession {
+  id               String    @id @default(cuid())
+  userId           String
+  refreshTokenHash String    @unique
+  deviceName       String?
+  ipAddress        String?
+  userAgent        String?
+  expiresAt        DateTime
+  revokedAt        DateTime?
+  createdAt        DateTime  @default(now())
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+}
+
+model AuthLoginEvent {
+  id         String          @id @default(cuid())
+  userId     String?
+  result     AuthLoginResult
+  deviceName String?
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime        @default(now())
+  user       User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+}
+
+model AuthChallenge {
+  id             String               @id @default(cuid())
+  userId         String
+  purpose        AuthChallengePurpose
+  secretHash     String
+  expiresAt      DateTime
+  consumedAt     DateTime?
+  failedAttempts Int                  @default(0)
+  createdAt      DateTime             @default(now())
+  user           User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, purpose, expiresAt])
+  @@index([purpose, secretHash])
+}
+
+model CompanySetting {
+  id        String   @id @default(cuid())
+  companyId String   @unique
+  settings  Json     @default("{}")
+  updatedAt DateTime @updatedAt
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}
+
+model Godown {
+  id             String          @id @default(cuid())
+  companyId      String
+  factoryId      String
+  name           String
+  code           String
+  active         Boolean         @default(true)
+  company        Company         @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  factory        Factory         @relation(fields: [companyId, factoryId], references: [companyId, id], onDelete: Restrict)
+  stacks         Stack[]
+  purchaseOrders PurchaseOrder[]
+  goodsReceipts  GoodsReceipt[]
+
+  @@unique([factoryId, code])
+  @@unique([companyId, factoryId, id])
+  @@index([companyId, factoryId])
+}
+
+model Stack {
+  companyId            String
+  factoryId            String
+  id                   String             @id @default(cuid())
+  godownId             String
+  code                 String
+  capacityKg           Decimal            @db.Decimal(14, 3)
+  materialItemId       String?
+  varietyName          String?
+  cropYear             Int?
+  batchNumber          String?
+  lotNumber            String?
+  receivedAt           DateTime?
+  godown               Godown             @relation(fields: [companyId, factoryId, godownId], references: [companyId, factoryId, id], onDelete: Restrict)
+  materialItem         Item?              @relation("StackMaterial", fields: [companyId, materialItemId], references: [companyId, id], onDelete: Restrict)
+  stockMovements       StockMovement[]
+  purchaseOrders       PurchaseOrder[]
+  goodsReceipts        GoodsReceipt[]
+  sourceTransfers      StockTransfer[]    @relation("TransferSourceStack")
+  destinationTransfers StockTransfer[]    @relation("TransferDestinationStack")
+  stockAdjustments     StockAdjustment[]
+  stockCounts          StockCount[]
+  productionInputs     ProductionBatch[]  @relation("ProductionInputStack")
+  productionOutputs    ProductionOutput[]
+  dryingInputBatches   DryingBatch[]      @relation("DryingInputStack")
+  dryingOutputBatches  DryingBatch[]      @relation("DryingOutputStack")
+  parboilingInputs     ParboilingBatch[]  @relation("ParboilingInputStack")
+  parboilingOutputs    ParboilingBatch[]  @relation("ParboilingOutputStack")
+  repackingSourceBatches RepackingBatch[] @relation("RepackingSourceStack")
+  repackingDestinationBatches RepackingBatch[] @relation("RepackingDestinationStack")
+  salesOrderLines SalesOrderLine[]
+  dispatchLines   DispatchLine[]
+
+  @@unique([godownId, code])
+  @@unique([companyId, factoryId, id])
+  @@unique([companyId, factoryId, godownId, id])
+  @@index([companyId, factoryId])
+  @@index([companyId, factoryId, receivedAt])
+  @@index([materialItemId])
+}
+
+model ProductionLine {
+  id        String            @id @default(cuid())
+  companyId String
+  factoryId String
+  name      String
+  code      String
+  active    Boolean           @default(true)
+  company   Company           @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  factory   Factory           @relation(fields: [companyId, factoryId], references: [companyId, id], onDelete: Restrict)
+  batches   ProductionBatch[]
+
+  @@unique([factoryId, code])
+  @@unique([companyId, factoryId, id])
+  @@index([companyId, factoryId])
+}
+
+model Partner {
+  id               String                @id @default(cuid())
+  companyId        String
+  type             PartnerType
+  name             String
+  code             String
+  phone            String?
+  businessName     String?
+  email            String?
+  address          String?
+  nid              String?
+  tin              String?
+  bin              String?
+  bankName         String?
+  bankAccount      String?
+  paymentMethod    String?
+  creditLimit      Decimal?              @db.Decimal(18, 2)
+  paymentTermsDays Int?
+  commissionType   BrokerCommissionType?
+  commissionRate   Decimal?              @db.Decimal(18, 4)
+  openingBalance   Decimal               @default(0) @db.Decimal(18, 2)
+  active           Boolean               @default(true)
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+  company          Company               @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  packagingSpecs   PackagingSpec[]       @relation("PackagingSupplier")
+  gateEntries      GateEntry[]
+  purchaseOrders   PurchaseOrder[]
+  brokerPurchaseOrders PurchaseOrder[]   @relation("PurchaseBroker")
+  moisturePolicies     MoisturePolicy[]  @relation("MoisturePolicySupplier")
+  purchaseInvoices     PurchaseInvoice[]
+  salesQuotations      SalesQuotation[]      @relation("SalesQuotationCustomer")
+  salesOrders          SalesOrder[]          @relation("SalesOrderCustomer")
+  dispatches           Dispatch[]            @relation("DispatchCustomer")
+
+  @@unique([companyId, code])
+  @@unique([companyId, id])
+  @@index([companyId, type, name])
+}
+
+model Item {
+  id                    String             @id @default(cuid())
+  companyId             String
+  kind                  ItemKind
+  name                  String
+  code                  String
+  variety               String?
+  cropYear              Int?
+  grade                 String?
+  localName             String?
+  brand                 String?
+  riceType              String?
+  byProductType         String?
+  defaultPackagingLabel String?
+  standardMoisture      Decimal?           @db.Decimal(5, 2)
+  standardRecovery      Decimal?           @db.Decimal(5, 2)
+  headRicePercentage    Decimal?           @db.Decimal(5, 2)
+  brokenPercentage      Decimal?           @db.Decimal(5, 2)
+  purchasePrice         Decimal?           @db.Decimal(18, 4)
+  salesPrice            Decimal?           @db.Decimal(18, 4)
+  description           String?
+  baseUnit              UnitOfMeasure      @default(KG)
+  active                Boolean            @default(true)
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+  company               Company            @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  stockMovements        StockMovement[]
+  gateEntries           GateEntry[]
+  purchaseOrders        PurchaseOrder[]
+  stockTransfers        StockTransfer[]
+  stockAdjustments      StockAdjustment[]
+  stockCounts           StockCount[]
+  productionInputs      ProductionBatch[]  @relation("ProductionInputItem")
+  productionOutputs     ProductionOutput[]
+  dryingBatches         DryingBatch[]
+  parboilingInputs      ParboilingBatch[]  @relation("ParboilingInputItem")
+  parboilingOutputs     ParboilingBatch[]  @relation("ParboilingOutputItem")
+  repackingSourceBatches RepackingBatch[] @relation("RepackingSourceItem")
+  repackingOutputBatches RepackingBatch[] @relation("RepackingOutputItem")
+  repackingPackagingBatches RepackingBatch[] @relation("RepackingPackagingItem")
+  salesQuotationLines   SalesQuotationLine[]
+  salesOrderLines       SalesOrderLine[]   @relation("SalesOrderItem")
+  salesOrderPackagingLines SalesOrderLine[] @relation("SalesOrderPackagingItem")
+  dispatchLines         DispatchLine[]     @relation("DispatchLineItem")
+  dispatchPackagingLines DispatchLine[]    @relation("DispatchPackagingItem")
+  packagingSpec         PackagingSpec?
+  designatedStacks      Stack[]            @relation("StackMaterial")
+  moisturePolicies      MoisturePolicy[]   @relation("MoisturePolicyVariety")
+
+  @@unique([companyId, id])
+  @@unique([companyId, code])
+  @@index([companyId, kind, name])
+}
+
+model PackagingSpec {
+  id                String   @id @default(cuid())
+  companyId         String
+  itemId            String   @unique
+  supplierPartnerId String?
+  bagType           String?
+  sizeKg            Decimal  @db.Decimal(14, 3)
+  material          String
+  unitCost          Decimal  @default(0) @db.Decimal(18, 4)
+  item              Item     @relation(fields: [companyId, itemId], references: [companyId, id], onDelete: Cascade)
+  supplier          Partner? @relation("PackagingSupplier", fields: [companyId, supplierPartnerId], references: [companyId, id], onDelete: Restrict)
+
+  @@unique([companyId, itemId])
+  @@index([supplierPartnerId])
+}
+
+model UnitConversion {
+  id            String        @id @default(cuid())
+  companyId     String
+  fromUnit      UnitOfMeasure
+  toUnit        UnitOfMeasure
+  factor        Decimal       @db.Decimal(18, 8)
+  effectiveFrom DateTime      @default(now())
+  createdAt     DateTime      @default(now())
+  company       Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, fromUnit, toUnit, effectiveFrom])
+  @@index([companyId, fromUnit, toUnit, effectiveFrom])
+}
+
+model MoisturePolicy {
+  id                  String                   @id @default(cuid())
+  companyId           String
+  name                String
+  factoryId           String?
+  paddyItemId         String?
+  supplierPartnerId   String?
+  active              Boolean                  @default(true)
+  priority            Int                      @default(0)
+  allowedMoisturePct  Decimal                  @db.Decimal(7, 3)
+  tolerancePct        Decimal                  @default(0) @db.Decimal(7, 3)
+  formula             MoistureDeductionFormula
+  rateDeductionPct    Decimal                  @default(0) @db.Decimal(7, 4)
+  slabs               Json                     @default("[]")
+  createdById         String
+  createdAt           DateTime                 @default(now())
+  updatedAt           DateTime                 @updatedAt
+  company             Company                  @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  factory             Factory?                 @relation(fields: [companyId, factoryId], references: [companyId, id], onDelete: Restrict)
+  paddyItem           Item?                    @relation("MoisturePolicyVariety", fields: [companyId, paddyItemId], references: [companyId, id], onDelete: Restrict)
+  supplier            Partner?                @relation("MoisturePolicySupplier", fields: [companyId, supplierPartnerId], references: [companyId, id], onDelete: Restrict)
+  createdBy           User                    @relation("MoisturePolicyCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  purchaseOrders      PurchaseOrder[]
+
+  @@unique([companyId, id])
+  @@index([companyId, active, priority])
+  @@index([companyId, factoryId, active, priority])
+  @@index([companyId, paddyItemId, supplierPartnerId])
+}
+
+model StockMovement {
+  id           String            @id @default(cuid())
+  companyId    String
+  factoryId    String
+  itemId       String
+  stackId      String?
+  type         StockMovementType
+  quantity     Decimal           @db.Decimal(18, 3)
+  unit         UnitOfMeasure     @default(KG)
+  unitCost     Decimal?          @db.Decimal(18, 4)
+  sourceType   String
+  sourceId     String
+  reversalOfId String?
+  occurredAt   DateTime          @default(now())
+  company      Company           @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  factory      Factory           @relation(fields: [companyId, factoryId], references: [companyId, id], onDelete: Restrict)
+  item         Item              @relation(fields: [companyId, itemId], references: [companyId, id], onDelete: Restrict)
+  stack        Stack?            @relation(fields: [companyId, factoryId, stackId], references: [companyId, factoryId, id], onDelete: Restrict)
+  reversalOf   StockMovement?    @relation("MovementReversal", fields: [companyId, reversalOfId], references: [companyId, id], onDelete: Restrict)
+  reversals    StockMovement[]   @relation("MovementReversal")
+
+  @@unique([sourceType, sourceId, type, stackId])
+  @@unique([companyId, id])
+  @@index([companyId, factoryId, itemId, occurredAt])
+  @@index([sourceType, sourceId])
+}
+
+model StockTransfer {
+  id                 String   @id @default(cuid())
+  companyId          String
+  factoryId          String
+  transferNumber     String
+  itemId             String
+  sourceStackId      String
+  destinationStackId String
+  quantity           Decimal  @db.Decimal(18, 3)
+  reason             String?
+  createdById        String
+  createdAt          DateTime @default(now())
+  company            Company  @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  factory            Factory  @relation(fields: [companyId, factoryId], references: [companyId, id], onDelete: Restrict)
+  item               Item     @relation(fields: [companyId, itemId], references: [companyId, id], onDelete: Restrict)
+  sourceStack        Stack    @relation("TransferSourceStack", fields: [companyId, factoryId, sourceStackId], references: [companyId, factoryId, id], onDelete: Restrict)
+  destinationStack   Stack    @relation("TransferDestinationStack", fields: [companyId, factoryId, destinationStackId], references: [companyId, factoryId, id], onDelete: Restrict)
+  createdBy          User     @relation("StockTransferCreator", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@unique([companyId, transferNumber])
+  @@index([companyId, factoryId, itemId, createdAt])
+}
+
+model StockAdjustment {
+  id               String   @id @default(cuid())
+  companyId        String
+  factoryId        String
+  adjustmentNumber String
+  itemId           String
+  stackId          String
+  quantity         Decimal  @db.Decimal(18, 3)
+  reason           String
+  createdById      String
+  createdAt        DateTime @default(now())
+  company          Company  @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  factory          Factory  @relation(fields: [companyId, factoryId], references: [companyId, id], onDelete: Restrict)
+  item             Item     @relation(fields: [companyId, itemId], references: [companyId, id], onDelete: Restrict)
+  stack            Stack    @relation(fields: [companyId, factoryId, stackId], references: [companyId, factoryId, id], onDelete: Restrict)
+  createdBy        User     @relation("StockAdjustmentCreator", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@unique([companyId, adjustmentNumber])
+  @@index([companyId, factoryId, itemId, createdAt])
+}
+
+model StockCount {
+  id                 String         @id @default(cuid())
+  companyId          String
+  factoryId          String
+  countNumber        String
+  itemId             String
+  stackId            String
+  bookQuantity       Decimal        @db.Decimal(18, 3)
+  countedQuantity    Decimal        @db.Decimal(18, 3)
+  adjustmentQuantity Decimal        @db.Decimal(18, 3)
+  unit               UnitOfMeasure  @default(KG)
+  status             DocumentStatus @default(DRAFT)
+  reason             String
+  countedAt          DateTime       @default(now())
+  createdById        String
+  postedById         String?
+  postedAt           DateTime?
+  createdAt          DateTime       @default(now())
+  company            Company        @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  factory            Factory        @relation(fields: [companyId, factoryId], references: [companyId, id], onDelete: Restrict)
+  item               Item           @relation(fields: [companyId, itemId], references: [companyId, id], onDelete: Restrict)
+  stack              Stack          @relation(fields: [companyId, factoryId, stackId], references: [companyId, factoryId, id], onDelete: Restrict)
+  createdBy          User           @relation("StockCountCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  postedBy           User?          @relation("StockCountPoster", fields: [postedById], references: [id], onDelete: Restrict)
+
+  @@unique([companyId, countNumber])
+  @@index([companyId, factoryId, itemId, countedAt])
+}
+
+model RepackingBatch {
+  id                  String         @id @default(cuid())
+  companyId           String
+  factoryId           String
+  batchNumber         String
+  sourceItemId        String
+  outputItemId        String
+  packagingItemId     String
+  sourceStackId       String
+  destinationStackId  String
+  inputQuantityKg     Decimal        @db.Decimal(18, 3)
+  packageSizeKg       Decimal        @db.Decimal(14, 3)
+  packageCount        Int
+  packedQuantityKg    Decimal        @db.Decimal(18, 3)
+  packingLossKg       Decimal        @db.Decimal(18, 3)
+  status              DocumentStatus @default(DRAFT)
+  remarks             String?
+  createdById         String
+  approvedById        String?
+  approvedAt          DateTime?
+  postedById          String?
+  postedAt            DateTime?
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+  company             Company        @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  factory             Factory        @relation(fields: [companyId, factoryId], references: [companyId, id], onDelete: Restrict)
+  sourceItem          Item           @relation("RepackingSourceItem", fields: [companyId, sourceItemId], references: [companyId, id], onDelete: Restrict)
+  outputItem          Item           @relation("RepackingOutputItem", fields: [companyId, outputItemId], references: [companyId, id], onDelete: Restrict)
+  packagingItem       Item           @relation("RepackingPackagingItem", fields: [companyId, packagingItemId], references: [companyId, id], onDelete: Restrict)
+  sourceStack         Stack          @relation("RepackingSourceStack", fields: [companyId, factoryId, sourceStackId], references: [companyId, factoryId, id], onDelete: Restrict)
+  destinationStack    Stack          @relation("RepackingDestinationStack", fields: [companyId, factoryId, destinationStackId], references: [companyId, factoryId, id], onDelete: Restrict)
+  createdBy           User           @relation("RepackingBatchCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  approvedBy          User?          @relation("RepackingBatchApprover", fields: [approvedById], references: [id], onDelete: Restrict)
+  postedBy            User?          @relation("RepackingBatchPoster", fields: [postedById], references: [id], onDelete: Restrict)
+
+  @@unique([companyId, batchNumber])
+  @@unique([companyId, factoryId, id])
+  @@index([companyId, factoryId, status, createdAt])
+}
+
+model SalesQuotation {
+  id                 String         @id @default(cuid())
+  companyId          String
+  factoryId          String
+  customerId         String
+  quotationNumber    String
+  channel            String
+  status             DocumentStatus @default(DRAFT)
+  validUntil         DateTime
+  currency           String         @default("BDT")
+  exchangeRate       Decimal        @default(1) @db.Decimal(12, 4)
+  totalAmount        Decimal        @default(0) @db.Decimal(18, 2)
+  remarks            String?
+  createdById        String
+  approvedById       String?
+  approvedAt         DateTime?
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+  company            Company        @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  factory            Factory        @relation(fields: [companyId, factoryId], references: [companyId, id], onDelete: Restrict)
+  customer           Partner        @relation("SalesQuotationCustomer", fields: [companyId, customerId], references: [companyId, id], onDelete: Restrict)
+  lines              SalesQuotationLine[]
+  salesOrders        SalesOrder[]
+
+  @@unique([companyId, quotationNumber])
+  @@unique([companyId, factoryId, id])
+  @@index([companyId, factoryId, status, createdAt])
+  @@index([companyId, customerId, createdAt])
+}
+
+model SalesQuotationLine {
+  id                 String         @id @default(cuid())
+  companyId          String
+  factoryId          String
+  quotationId        String
+  itemId             String
+  quantityKg         Decimal        @db.Decimal(18, 3)
+  unitRate           Decimal        @db.Decimal(18, 4)
+  lineAmount         Decimal        @db.Decimal(18, 2)
+  company            Company        @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  factory            Factory        @relation(fields: [companyId, factoryId], references: [companyId, id], onDelete: Restrict)
+  quotation          SalesQuotation @relation(fields: [companyId, factoryId, quotationId], references: [companyId, factoryId, id], onDelete: Restrict)
+  item               Item           @relation(fields: [companyId, itemId], references: [companyId, id], onDelete: Restrict)
+
+  @@index([companyId, factoryId, itemId])
+}
+
+model SalesOrder {
+  id                 String         @id @default(cuid())
+  companyId          String
+  factoryId          String
+  customerId         String
+  quotationId        String?
+  orderNumber        String
+  channel            String
+  status             DocumentStatus @default(DRAFT)
+  requestedDelivery  DateTime?
+  currency           String         @default("BDT")
+  exchangeRate       Decimal        @default(1) @db.Decimal(12, 4)
+  exportCountry      String?
+  portOfDischarge    String?
+  lcNumber           String?
+  totalAmount        Decimal        @default(0) @db.Decimal(18, 2)
+  remarks            String?
+  createdById        String
+  approvedById       String?
+  approvedAt         DateTime?
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+  company            Company        @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  factory            Factory        @relation(fields: [companyId, factoryId], references: [companyId, id], onDelete: Restrict)
+  customer           Partner        @relation("SalesOrderCustomer", fields: [companyId, customerId], references: [companyId, id], onDelete: Restrict)
+  quotation          SalesQuotation? @relation(fields: [companyId, factoryId, quotationId], references: [companyId, factoryId, id], onDelete: Restrict)
+  lines              SalesOrderLine[]
+  dispatches         Dispatch[]
+
+  @@unique([companyId, orderNumber])
+  @@unique([companyId, factoryId, id])
+  @@index([companyId, factoryId, status, createdAt])
+  @@index([companyId, customerId, createdAt])
+}
+
+model SalesOrderLine {
+  id              String     @id @default(cuid())
+  companyId       String
+  factoryId       String
+  salesOrderId    String
+  itemId          String
+  stackId         String
+  packagingItemId String?
+  bagCount        Int?
+  quantityKg      Decimal    @db.Decimal(18, 3)
+  unitRate        Decimal    @db.Decimal(18, 4)
+  lineAmount      Decimal    @db.Decimal(18, 2)
+  reservedAt      DateTime?
+  fulfilledKg     Decimal    @default(0) @db.Decimal(18, 3)
+  company         Company    @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  factory         Factory    @relation(fields: [companyId, factoryId], references: [companyId, id], onDelete: Restrict)
+  salesOrder      SalesOrder @relation(fields: [companyId, factoryId, salesOrderId], references: [companyId, factoryId, id], onDelete: Restrict)
+  item            Item       @relation("SalesOrderItem", fields: [companyId, itemId], references: [companyId, id], onDelete: Restrict)
+  packagingItem   Item?      @relation("SalesOrderPackagingItem", fields: [companyId, packagingItemId], references: [companyId, id], onDelete: Restrict)
+  stack           Stack      @relation(fields: [companyId, factoryId, stackId], references: [companyId, factoryId, id], onDelete: Restrict)
+  dispatchLines   DispatchLine[]
+
+  @@unique([companyId, factoryId, id])
+  @@index([companyId, factoryId, itemId, stackId, reservedAt])
+}
+
+model Dispatch {
+  id                 String         @id @default(cuid())
+  companyId          String
+  factoryId          String
+  salesOrderId       String
+  customerId         String
+  challanNumber      String
+  gatePassNumber     String
+  status             DocumentStatus @default(DRAFT)
+  dispatchDate       DateTime       @default(now())
+  vehicleNumber      String
+  driverName         String
+  driverMobile       String?
+  totalBags          Int            @default(0)
+  totalWeightKg      Decimal        @default(0) @db.Decimal(18, 3)
+  remarks            String?
+  createdById        String
+  approvedById       String?
+  approvedAt         DateTime?
+  postedById         String?
+  postedAt           DateTime?
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+  company            Company        @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  factory            Factory        @relation(fields: [companyId, factoryId], references: [companyId, id], onDelete: Restrict)
+  salesOrder         SalesOrder     @relation(fields: [companyId, factoryId, salesOrderId], references: [companyId, factoryId, id], onDelete: Restrict)
+  customer           Partner        @relation("DispatchCustomer", fields: [companyId, customerId], references: [companyId, id], onDelete: Restrict)
+  lines              DispatchLine[]
+
+  @@unique([companyId, challanNumber])
+  @@unique([companyId, gatePassNumber])
+  @@unique([companyId, factoryId, id])
+  @@index([companyId, factoryId, status, createdAt])
+  @@index([companyId, customerId, createdAt])
+  @@index([companyId, salesOrderId])
+}
+
+model DispatchLine {
+  id                 String         @id @default(cuid())
+  companyId          String
+  factoryId          String
+  dispatchId         String
+  salesOrderLineId   String
+  itemId             String
+  stackId            String
+  packagingItemId    String?
+  bagCount           Int            @default(0)
+  grossWeightKg      Decimal?       @db.Decimal(18, 3)
+  tareWeightKg       Decimal?       @db.Decimal(18, 3)
+  netWeightKg        Decimal        @db.Decimal(18, 3)
+  unitRate           Decimal        @db.Decimal(18, 4)
+  lineAmount         Decimal        @db.Decimal(18, 2)
+  company            Company        @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  factory            Factory        @relation(fields: [companyId, factoryId], references: [companyId, id], onDelete: Restrict)
+  dispatch           Dispatch       @relation(fields: [companyId, factoryId, dispatchId], references: [companyId, factoryId, id], onDelete: Restrict)
+  salesOrderLine     SalesOrderLine @relation(fields: [companyId, factoryId, salesOrderLineId], references: [companyId, factoryId, id], onDelete: Restrict)
+  item               Item           @relation("DispatchLineItem", fields: [companyId, itemId], references: [companyId, id], onDelete: Restrict)
+  packagingItem      Item?          @relation("DispatchPackagingItem", fields: [companyId, packagingItemId], references: [companyId, id], onDelete: Restrict)
+  stack              Stack          @relation(fields: [companyId, factoryId, stackId], references: [companyId, factoryId, id], onDelete: Restrict)
+
+  @@index([companyId, factoryId, itemId, stackId])
+}
+
+model ProductionBatch {
+  id                   String             @id @default(cuid())
+  companyId            String
+  factoryId            String
+  productionLineId     String?
+  batchNumber          String
+  inputItemId          String
+  inputStackId         String
+  inputQuantityKg      Decimal            @db.Decimal(18, 3)
+  totalOutputKg        Decimal            @db.Decimal(18, 3)
+  processLossKg        Decimal            @db.Decimal(18, 3)
+  headRiceRecoveryPct  Decimal            @db.Decimal(7, 3)
+  totalRiceRecoveryPct Decimal            @db.Decimal(7, 3)
+  byProductRecoveryPct Decimal            @db.Decimal(7, 3)
+  standardRecoveryPct  Decimal?           @db.Decimal(7, 3)
+  status               DocumentStatus     @default(DRAFT)
+  startedAt            DateTime
+  completedAt          DateTime
+  remarks              String?
+  createdById          String
+  approvedById         String?
+  approvedAt           DateTime?
+  postedById           String?
+  postedAt             DateTime?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+  company              Company            @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  factory              Factory            @relation(fields: [companyId, factoryId], references: [companyId, id], onDelete: Restrict)
+  productionLine       ProductionLine?    @relation(fields: [companyId, factoryId, productionLineId], references: [companyId, factoryId, id], onDelete: Restrict)
+  inputItem            Item               @relation("ProductionInputItem", fields: [companyId, inputItemId], references: [companyId, id], onDelete: Restrict)
+  inputStack           Stack              @relation("ProductionInputStack", fields: [companyId, factoryId, inputStackId], references: [companyId, factoryId, id], onDelete: Restrict)
+  outputs              ProductionOutput[]
+  createdBy            User               @relation("ProductionBatchCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  approvedBy           User?              @relation("ProductionBatchApprover", fields: [approvedById], references: [id], onDelete: Restrict)
+  postedBy             User?              @relation("ProductionBatchPoster", fields: [postedById], references: [id], onDelete: Restrict)
+
+  @@unique([companyId, batchNumber])
+  @@unique([companyId, factoryId, id])
+  @@index([companyId, factoryId, status, createdAt])
+  @@index([companyId, factoryId, productionLineId])
+}
+
+model ProductionOutput {
+  id         String          @id @default(cuid())
+  companyId  String
+  factoryId  String
+  batchId    String
+  itemId     String
+  stackId    String
+  quantityKg Decimal         @db.Decimal(18, 3)
+  batch      ProductionBatch @relation(fields: [companyId, factoryId, batchId], references: [companyId, factoryId, id], onDelete: Restrict)
+  item       Item            @relation(fields: [companyId, itemId], references: [companyId, id], onDelete: Restrict)
+  stack      Stack           @relation(fields: [companyId, factoryId, stackId], references: [companyId, factoryId, id], onDelete: Restrict)
+
+  @@unique([batchId, itemId, stackId])
+  @@index([companyId, factoryId, itemId])
+}
+
+model DryingBatch {
+  id                 String         @id @default(cuid())
+  companyId          String
+  factoryId          String
+  batchNumber        String
+  itemId             String
+  sourceStackId      String
+  destinationStackId String
+  inputQuantityKg    Decimal        @db.Decimal(18, 3)
+  outputQuantityKg   Decimal        @db.Decimal(18, 3)
+  lossKg             Decimal        @db.Decimal(18, 3)
+  moistureBeforePct  Decimal        @db.Decimal(5, 2)
+  moistureAfterPct   Decimal        @db.Decimal(5, 2)
+  dryingMethod       String
+  durationMinutes    Int?
+  fuelQuantity       Decimal?       @db.Decimal(18, 3)
+  electricityKwh     Decimal?       @db.Decimal(18, 3)
+  labourCost         Decimal?       @db.Decimal(18, 2)
+  status             DocumentStatus @default(DRAFT)
+  startedAt          DateTime
+  completedAt        DateTime
+  remarks            String?
+  createdById        String
+  approvedById       String?
+  approvedAt         DateTime?
+  postedById         String?
+  postedAt           DateTime?
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+  company            Company        @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  factory            Factory        @relation(fields: [companyId, factoryId], references: [companyId, id], onDelete: Restrict)
+  item               Item           @relation(fields: [companyId, itemId], references: [companyId, id], onDelete: Restrict)
+  sourceStack        Stack          @relation("DryingInputStack", fields: [companyId, factoryId, sourceStackId], references: [companyId, factoryId, id], onDelete: Restrict)
+  destinationStack   Stack          @relation("DryingOutputStack", fields: [companyId, factoryId, destinationStackId], references: [companyId, factoryId, id], onDelete: Restrict)
+  createdBy          User           @relation("DryingBatchCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  approvedBy         User?          @relation("DryingBatchApprover", fields: [approvedById], references: [id], onDelete: Restrict)
+  postedBy           User?          @relation("DryingBatchPoster", fields: [postedById], references: [id], onDelete: Restrict)
+
+  @@unique([companyId, batchNumber])
+  @@unique([companyId, factoryId, id])
+  @@index([companyId, factoryId, status, createdAt])
+}
+
+model ParboilingBatch {
+  id               String            @id @default(cuid())
+  companyId        String
+  factoryId        String
+  batchNumber      String
+  inputItemId      String
+  outputItemId     String
+  inputStackId     String
+  outputStackId    String
+  inputQuantityKg  Decimal           @db.Decimal(18, 3)
+  outputQuantityKg Decimal           @db.Decimal(18, 3)
+  processLossKg    Decimal           @db.Decimal(18, 3)
+  status           DocumentStatus    @default(DRAFT)
+  startedAt        DateTime
+  completedAt      DateTime
+  remarks          String?
+  createdById      String
+  approvedById     String?
+  approvedAt       DateTime?
+  postedById       String?
+  postedAt         DateTime?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  company          Company           @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  factory          Factory           @relation(fields: [companyId, factoryId], references: [companyId, id], onDelete: Restrict)
+  inputItem        Item              @relation("ParboilingInputItem", fields: [companyId, inputItemId], references: [companyId, id], onDelete: Restrict)
+  outputItem       Item              @relation("ParboilingOutputItem", fields: [companyId, outputItemId], references: [companyId, id], onDelete: Restrict)
+  inputStack       Stack             @relation("ParboilingInputStack", fields: [companyId, factoryId, inputStackId], references: [companyId, factoryId, id], onDelete: Restrict)
+  outputStack      Stack             @relation("ParboilingOutputStack", fields: [companyId, factoryId, outputStackId], references: [companyId, factoryId, id], onDelete: Restrict)
+  stages           ParboilingStage[]
+  createdBy        User              @relation("ParboilingBatchCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  approvedBy       User?             @relation("ParboilingBatchApprover", fields: [approvedById], references: [id], onDelete: Restrict)
+  postedBy         User?             @relation("ParboilingBatchPoster", fields: [postedById], references: [id], onDelete: Restrict)
+
+  @@unique([companyId, batchNumber])
+  @@unique([companyId, factoryId, id])
+  @@index([companyId, factoryId, status, createdAt])
+}
+
+model ParboilingStage {
+  id                String              @id @default(cuid())
+  companyId         String
+  factoryId         String
+  batchId           String
+  stageType         ParboilingStageType
+  sequence          Int
+  startedAt         DateTime
+  completedAt       DateTime
+  inputQuantityKg   Decimal?            @db.Decimal(18, 3)
+  outputQuantityKg  Decimal?            @db.Decimal(18, 3)
+  moistureBeforePct Decimal             @db.Decimal(5, 2)
+  moistureAfterPct  Decimal             @db.Decimal(5, 2)
+  waterQuantity     Decimal?            @db.Decimal(18, 3)
+  temperatureC      Decimal?            @db.Decimal(7, 2)
+  pressureBar       Decimal?            @db.Decimal(7, 2)
+  fuelQuantity      Decimal?            @db.Decimal(18, 3)
+  electricityKwh    Decimal?            @db.Decimal(18, 3)
+  labourCost        Decimal?            @db.Decimal(18, 2)
+  remarks           String?
+  batch             ParboilingBatch     @relation(fields: [companyId, factoryId, batchId], references: [companyId, factoryId, id], onDelete: Restrict)
+
+  @@unique([batchId, stageType])
+  @@unique([batchId, sequence])
+  @@index([companyId, factoryId, stageType, startedAt])
+}
+
+model PurchaseOrder {
+  id                  String         @id @default(cuid())
+  companyId           String
+  factoryId           String
+  orderNumber         String
+  gateEntryId         String
+  supplierId          String
+  brokerId            String?
+  itemId              String
+  destinationGodownId String
+  destinationStackId  String
+  orderedQuantity     Decimal        @db.Decimal(18, 3)
+  unit                UnitOfMeasure  @default(KG)
+  unitRate            Decimal        @db.Decimal(18, 4)
+  brokerCommissionType BrokerCommissionType?
+  brokerCommissionRate Decimal?      @db.Decimal(18, 4)
+  brokerCommissionAmount Decimal?    @db.Decimal(18, 2)
+  status              DocumentStatus @default(DRAFT)
+  remarks             String?
+  createdById         String
+  approvedById        String?
+  approvedAt          DateTime?
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+  payableQuantityKg   Decimal        @db.Decimal(18, 3)
+  adjustedUnitRate    Decimal        @db.Decimal(18, 4)
+  qualitySampleId     String?
+  moisturePolicyId    String?
+  moisturePolicyName  String?
+  moistureReceivedPct Decimal?       @db.Decimal(7, 3)
+  moistureAllowedPct  Decimal?       @db.Decimal(7, 3)
+  moistureTolerancePct Decimal?      @db.Decimal(7, 3)
+  moistureDifferencePct Decimal?     @db.Decimal(7, 3)
+  moistureDeductionFormula MoistureDeductionFormula?
+  moistureDeductionPct Decimal?      @db.Decimal(7, 4)
+  moistureDeductionQuantityKg Decimal? @db.Decimal(18, 3)
+  moistureRateDeductionPct Decimal?  @db.Decimal(7, 4)
+  company             Company        @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  factory             Factory        @relation(fields: [companyId, factoryId], references: [companyId, id], onDelete: Restrict)
+  gateEntry           GateEntry      @relation(fields: [companyId, factoryId, gateEntryId], references: [companyId, factoryId, id], onDelete: Restrict)
+  supplier            Partner        @relation(fields: [companyId, supplierId], references: [companyId, id], onDelete: Restrict)
+  broker              Partner?       @relation("PurchaseBroker", fields: [companyId, brokerId], references: [companyId, id], onDelete: Restrict)
+  qualitySample       QualitySample? @relation(fields: [companyId, factoryId, qualitySampleId], references: [companyId, factoryId, id], onDelete: Restrict)
+  moisturePolicy      MoisturePolicy? @relation(fields: [companyId, moisturePolicyId], references: [companyId, id], onDelete: Restrict)
+  item                Item           @relation(fields: [companyId, itemId], references: [companyId, id], onDelete: Restrict)
+  destinationGodown   Godown         @relation(fields: [companyId, factoryId, destinationGodownId], references: [companyId, factoryId, id], onDelete: Restrict)
+  destinationStack    Stack          @relation(fields: [companyId, factoryId, destinationGodownId, destinationStackId], references: [companyId, factoryId, godownId, id], onDelete: Restrict)
+  createdBy           User           @relation("PurchaseOrderCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  approvedBy          User?          @relation("PurchaseOrderApprover", fields: [approvedById], references: [id], onDelete: Restrict)
+  goodsReceipts       GoodsReceipt[]
+  purchaseInvoices    PurchaseInvoice[]
+  landedCosts         LandedCost[]
+
+  @@unique([companyId, orderNumber])
+  @@unique([companyId, factoryId, id])
+  @@unique([companyId, factoryId, gateEntryId])
+  @@index([companyId, factoryId, status, createdAt])
+  @@index([companyId, moisturePolicyId])
+}
+
+model GoodsReceipt {
+  id                  String         @id @default(cuid())
+  companyId           String
+  factoryId           String
+  receiptNumber       String
+  purchaseOrderId     String
+  destinationGodownId String
+  destinationStackId  String
+  quantity            Decimal        @db.Decimal(18, 3)
+  unit                UnitOfMeasure  @default(KG)
+  status              DocumentStatus @default(DRAFT)
+  remarks             String?
+  createdById         String
+  approvedById        String?
+  approvedAt          DateTime?
+  postedById          String?
+  postedAt            DateTime?
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+  company             Company        @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  factory             Factory        @relation(fields: [companyId, factoryId], references: [companyId, id], onDelete: Restrict)
+  purchaseOrder       PurchaseOrder  @relation(fields: [companyId, factoryId, purchaseOrderId], references: [companyId, factoryId, id], onDelete: Restrict)
+  destinationGodown   Godown         @relation(fields: [companyId, factoryId, destinationGodownId], references: [companyId, factoryId, id], onDelete: Restrict)
+  destinationStack    Stack          @relation(fields: [companyId, factoryId, destinationGodownId, destinationStackId], references: [companyId, factoryId, godownId, id], onDelete: Restrict)
+  createdBy           User           @relation("GoodsReceiptCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  approvedBy          User?          @relation("GoodsReceiptApprover", fields: [approvedById], references: [id], onDelete: Restrict)
+  postedBy            User?          @relation("GoodsReceiptPoster", fields: [postedById], references: [id], onDelete: Restrict)
+  purchaseInvoice     PurchaseInvoice?
+  landedCost          LandedCost?
+
+  @@unique([companyId, receiptNumber])
+  @@unique([companyId, id])
+  @@unique([companyId, factoryId, id])
+  @@index([companyId, factoryId, purchaseOrderId, status])
+}
+
+model PurchaseInvoice {
+  id                     String         @id @default(cuid())
+  companyId              String
+  factoryId              String
+  goodsReceiptId         String
+  purchaseOrderId        String
+  supplierId             String
+  invoiceNumber          String
+  invoiceDate            DateTime
+  physicalQuantityKg     Decimal        @db.Decimal(18, 3)
+  payableQuantityKg      Decimal        @db.Decimal(18, 3)
+  adjustedUnitRate       Decimal        @db.Decimal(18, 4)
+  grossAmount            Decimal        @db.Decimal(18, 2)
+  qualityDeductionAmount Decimal        @default(0) @db.Decimal(18, 2)
+  netSupplierPayable     Decimal        @db.Decimal(18, 2)
+  transportCost          Decimal        @default(0) @db.Decimal(18, 2)
+  loadingCost            Decimal        @default(0) @db.Decimal(18, 2)
+  unloadingCost          Decimal        @default(0) @db.Decimal(18, 2)
+  otherCost              Decimal        @default(0) @db.Decimal(18, 2)
+  status                 DocumentStatus @default(DRAFT)
+  remarks                String?
+  createdById            String
+  approvedById           String?
+  approvedAt             DateTime?
+  postedById             String?
+  postedAt               DateTime?
+  createdAt              DateTime       @default(now())
+  updatedAt              DateTime       @updatedAt
+  company                Company        @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  factory                Factory        @relation(fields: [companyId, factoryId], references: [companyId, id], onDelete: Restrict)
+  goodsReceipt           GoodsReceipt   @relation(fields: [companyId, factoryId, goodsReceiptId], references: [companyId, factoryId, id], onDelete: Restrict)
+  purchaseOrder          PurchaseOrder  @relation(fields: [companyId, factoryId, purchaseOrderId], references: [companyId, factoryId, id], onDelete: Restrict)
+  supplier               Partner        @relation(fields: [companyId, supplierId], references: [companyId, id], onDelete: Restrict)
+  createdBy              User           @relation("PurchaseInvoiceCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  approvedBy             User?          @relation("PurchaseInvoiceApprover", fields: [approvedById], references: [id], onDelete: Restrict)
+  postedBy               User?          @relation("PurchaseInvoicePoster", fields: [postedById], references: [id], onDelete: Restrict)
+  landedCosts            LandedCost[]
+
+  @@unique([companyId, invoiceNumber])
+  @@unique([companyId, goodsReceiptId])
+  @@unique([companyId, factoryId, goodsReceiptId])
+  @@unique([companyId, factoryId, id])
+  @@index([companyId, factoryId, status, invoiceDate])
+  @@index([companyId, supplierId, status])
+}
+
+model Journal {
+  id           String        @id @default(cuid())
+  companyId    String
+  number       String
+  sourceType   String
+  sourceId     String
+  status       JournalStatus @default(DRAFT)
+  currency     String        @default("BDT")
+  postedAt     DateTime?
+  reversalOfId String?
+  createdAt    DateTime      @default(now())
+  company      Company       @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  lines        JournalLine[]
+  reversalOf   Journal?      @relation("JournalReversal", fields: [companyId, reversalOfId], references: [companyId, id], onDelete: Restrict)
+  reversals    Journal[]     @relation("JournalReversal")
+
+  @@unique([companyId, number])
+  @@unique([companyId, id])
+  @@unique([sourceType, sourceId])
+  @@index([companyId, postedAt])
+}
+
+model JournalLine {
+  id          String  @id @default(cuid())
+  journalId   String
+  accountCode String
+  description String?
+  debit       Decimal @default(0) @db.Decimal(18, 2)
+  credit      Decimal @default(0) @db.Decimal(18, 2)
+  journal     Journal @relation(fields: [journalId], references: [id], onDelete: Restrict)
+
+  @@index([accountCode])
+}
+
+model AuditEvent {
+  id         String   @id @default(cuid())
+  companyId  String?
+  userId     String?
+  action     String
+  resource   String
+  resourceId String?
+  requestId  String?
+  before     Json?
+  after      Json?
+  occurredAt DateTime @default(now())
+  company    Company? @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([companyId, occurredAt])
+  @@index([resource, resourceId])
+}
+
+model Vehicle {
+  id                 String      @id @default(cuid())
+  companyId          String
+  vehicleNumber      String
+  registrationNumber String?
+  vehicleType        String
+  ownerName          String?
+  driverName         String?
+  driverMobile       String?
+  fitnessExpiry      DateTime?
+  insuranceExpiry    DateTime?
+  taxTokenExpiry     DateTime?
+  active             Boolean     @default(true)
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+  company            Company     @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  gateEntries        GateEntry[]
+
+  @@unique([companyId, id])
+  @@unique([companyId, vehicleNumber])
+  @@index([companyId, active])
+}
+
+model GateEntry {
+  id                String             @id @default(cuid())
+  companyId         String
+  factoryId         String
+  gateNumber        String
+  direction         GateDirection
+  purpose           GatePurpose
+  status            GateStatus         @default(ENTRY)
+  vehicleId         String?
+  vehicleNumber     String
+  driverName        String?
+  driverMobile      String?
+  partnerId         String?
+  itemId            String?
+  challanNumber     String?
+  referenceNumber   String?
+  remarks           String?
+  enteredAt         DateTime           @default(now())
+  completedAt       DateTime?
+  createdById       String
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  company           Company            @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  factory           Factory            @relation(fields: [companyId, factoryId], references: [companyId, id], onDelete: Restrict)
+  vehicle           Vehicle?           @relation(fields: [companyId, vehicleId], references: [companyId, id], onDelete: Restrict)
+  partner           Partner?           @relation(fields: [companyId, partnerId], references: [companyId, id], onDelete: Restrict)
+  item              Item?              @relation(fields: [companyId, itemId], references: [companyId, id], onDelete: Restrict)
+  createdBy         User               @relation("GateEntryCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  weighbridgeTicket WeighbridgeTicket?
+  qualitySamples    QualitySample[]
+  attachments       GateAttachment[]
+  purchaseOrder     PurchaseOrder?
+
+  @@unique([companyId, factoryId, id])
+  @@unique([companyId, gateNumber])
+  @@index([companyId, factoryId, status, enteredAt])
+  @@index([companyId, vehicleId, enteredAt])
+}
+
+model GateAttachment {
+  id           String   @id @default(cuid())
+  companyId    String
+  factoryId    String
+  gateEntryId  String
+  fileName     String
+  storageKey   String   @unique
+  mimeType     String
+  sizeBytes    Int
+  uploadedById String
+  createdAt    DateTime @default(now())
+  company      Company   @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  factory      Factory   @relation(fields: [companyId, factoryId], references: [companyId, id], onDelete: Restrict)
+  gateEntry    GateEntry @relation(fields: [companyId, factoryId, gateEntryId], references: [companyId, factoryId, id], onDelete: Restrict)
+  uploadedBy   User      @relation("GateAttachmentUploader", fields: [uploadedById], references: [id], onDelete: Restrict)
+
+  @@index([companyId, factoryId, gateEntryId, createdAt])
+}
+
+model WeighbridgeTicket {
+  id             String    @id @default(cuid())
+  companyId      String
+  factoryId      String
+  gateEntryId    String    @unique
+  ticketNumber   String
+  grossWeight    Decimal   @db.Decimal(18, 3)
+  tareWeight     Decimal   @db.Decimal(18, 3)
+  netWeight      Decimal   @db.Decimal(18, 3)
+  firstWeightAt  DateTime
+  secondWeightAt DateTime
+  isManual       Boolean   @default(true)
+  remarks        String?
+  operatorId     String
+  createdAt      DateTime  @default(now())
+  company        Company   @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  factory        Factory   @relation(fields: [companyId, factoryId], references: [companyId, id], onDelete: Restrict)
+  gateEntry      GateEntry @relation(fields: [companyId, factoryId, gateEntryId], references: [companyId, factoryId, id], onDelete: Restrict)
+  operator       User      @relation("WeighbridgeOperator", fields: [operatorId], references: [id], onDelete: Restrict)
+
+  @@unique([companyId, ticketNumber])
+  @@unique([companyId, factoryId, gateEntryId])
+  @@index([companyId, factoryId, firstWeightAt])
+}
+
+model QualitySample {
+  id           String              @id @default(cuid())
+  companyId    String
+  factoryId    String
+  gateEntryId  String
+  sampleNumber String
+  sampleType   QualitySampleType
+  status       QualitySampleStatus @default(SAMPLE)
+  measurements Json                @default("{}")
+  decision     QualityDecision?
+  comments     String?
+  sampledById  String
+  testedById   String?
+  approvedById String?
+  testedAt     DateTime?
+  approvedAt   DateTime?
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+  company      Company             @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  factory      Factory             @relation(fields: [companyId, factoryId], references: [companyId, id], onDelete: Restrict)
+  gateEntry    GateEntry           @relation(fields: [companyId, factoryId, gateEntryId], references: [companyId, factoryId, id], onDelete: Restrict)
+  sampledBy    User                @relation("QualitySampler", fields: [sampledById], references: [id], onDelete: Restrict)
+  testedBy     User?               @relation("QualityTester", fields: [testedById], references: [id], onDelete: Restrict)
+  approvedBy   User?               @relation("QualityApprover", fields: [approvedById], references: [id], onDelete: Restrict)
+  purchaseOrders PurchaseOrder[]
+
+  @@unique([companyId, sampleNumber])
+  @@unique([companyId, factoryId, id])
+  @@index([companyId, factoryId, gateEntryId, createdAt])
+}
+
+model LandedCostComponentConfig {
+  id          String                  @id @default(cuid())
+  companyId   String
+  factoryId   String?
+  name        String
+  code        String
+  type        LandedCostComponentType
+  isActive    Boolean                 @default(true)
+  isRequired  Boolean                 @default(false)
+  sortOrder   Int                     @default(0)
+  createdAt   DateTime                @default(now())
+  updatedAt   DateTime                @updatedAt
+  company     Company                 @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  factory     Factory?                @relation(fields: [companyId, factoryId], references: [companyId, id], onDelete: Restrict)
+
+  @@unique([companyId, code])
+  @@index([companyId, factoryId, isActive])
+  @@map("landed_cost_component_configs")
+}
+
+model LandedCost {
+  id                    String         @id @default(cuid())
+  companyId             String
+  factoryId             String
+  goodsReceiptId        String         @unique
+  purchaseOrderId       String
+  purchaseInvoiceId     String?
+  quantityKg            Decimal        @db.Decimal(18, 3)
+  purchaseCost          Decimal        @db.Decimal(18, 2)
+  transportCost         Decimal        @default(0) @db.Decimal(18, 2)
+  loadingCost           Decimal        @default(0) @db.Decimal(18, 2)
+  unloadingCost         Decimal        @default(0) @db.Decimal(18, 2)
+  commissionCost        Decimal        @default(0) @db.Decimal(18, 2)
+  dryingCost            Decimal        @default(0) @db.Decimal(18, 2)
+  otherDirectCost       Decimal        @default(0) @db.Decimal(18, 2)
+  totalAdditionalCost   Decimal        @db.Decimal(18, 2)
+  landedCostTotal       Decimal        @db.Decimal(18, 2)
+  landedCostPerKg       Decimal        @db.Decimal(18, 4)
+  landedCostPerMon      Decimal        @db.Decimal(18, 4)
+  landedCostPerTon      Decimal        @db.Decimal(18, 4)
+  components            Json?
+  calculatedById        String
+  calculatedAt          DateTime       @default(now())
+  status                DocumentStatus @default(DRAFT)
+  approvedById          String?
+  approvedAt            DateTime?
+  postedById            String?
+  postedAt              DateTime?
+  remarks               String?
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+  company               Company        @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  factory               Factory        @relation(fields: [companyId, factoryId], references: [companyId, id], onDelete: Restrict)
+  goodsReceipt          GoodsReceipt   @relation(fields: [companyId, factoryId, goodsReceiptId], references: [companyId, factoryId, id], onDelete: Restrict)
+  purchaseOrder         PurchaseOrder  @relation(fields: [companyId, factoryId, purchaseOrderId], references: [companyId, factoryId, id], onDelete: Restrict)
+  purchaseInvoice       PurchaseInvoice? @relation(fields: [companyId, factoryId, purchaseInvoiceId], references: [companyId, factoryId, id], onDelete: Restrict)
+  calculatedBy          User           @relation("LandedCostCalculatedBy", fields: [calculatedById], references: [id], onDelete: Restrict)
+  approvedBy            User?          @relation("LandedCostApprover", fields: [approvedById], references: [id], onDelete: Restrict)
+  postedBy              User?          @relation("LandedCostPoster", fields: [postedById], references: [id], onDelete: Restrict)
+
+  @@index([companyId, factoryId])
+  @@index([companyId, purchaseOrderId])
+  @@unique([companyId, factoryId, goodsReceiptId])
+  @@map("landed_costs")
+}
