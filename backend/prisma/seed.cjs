@@ -6,7 +6,7 @@ const actions = Object.values(PermissionAction);
 const resources = [
   'companies', 'factories', 'users', 'roles', 'settings', 'partners', 'items', 'godowns', 'stacks',
   'gate', 'weighbridge', 'quality', 'procurement', 'inventory', 'drying', 'parboiling', 'production',
-  'repacking', 'sales', 'dispatch', 'payments', 'expenses', 'accounting', 'hr', 'payroll', 'maintenance',
+  'repacking', 'sales', 'dispatch', 'sales-returns', 'toll-milling', 'payments', 'expenses', 'accounting', 'hr', 'payroll', 'maintenance',
   'documents', 'notifications', 'reports', 'analytics', 'audit', 'unit-conversions', 'production-lines', 'moisture-policies',
 ];
 
@@ -85,16 +85,16 @@ async function main() {
   const p = (resourceActions) => permissionRecords
     .filter(permission => (resourceActions[permission.resource] ?? []).includes(permission.action))
     .map(permission => permission.id);
-  const operational = ['factories', 'production-lines', 'godowns', 'stacks', 'partners', 'items', 'gate', 'weighbridge', 'quality', 'procurement', 'inventory', 'drying', 'parboiling', 'production', 'repacking', 'reports'];
-  const finance = ['accounting', 'payments', 'expenses', 'reports', 'partners', 'moisture-policies', 'procurement'];
+  const operational = ['factories', 'production-lines', 'godowns', 'stacks', 'partners', 'items', 'gate', 'weighbridge', 'quality', 'procurement', 'inventory', 'drying', 'parboiling', 'production', 'repacking', 'sales-returns', 'toll-milling', 'reports'];
+  const finance = ['accounting', 'payments', 'expenses', 'reports', 'partners', 'moisture-policies', 'procurement', 'sales-returns', 'toll-milling'];
   const purchaseManagerActions = {
     ...Object.fromEntries(['partners', 'items', 'gate', 'weighbridge', 'quality', 'procurement', 'inventory', 'reports'].map(r => [r, approve])),
     procurement: [...approve, 'VIEW_FINANCIAL'],
   };
   const templates = [
     ['DIRECTOR', 'Director', ownerPermissionIds],
-    ['GENERAL_MANAGER', 'General Manager', p(Object.fromEntries([...operational, 'sales', 'dispatch', 'users', 'maintenance'].map(r => [r, approve])))],
-    ['FACTORY_MANAGER', 'Factory Manager', p(Object.fromEntries([...operational, 'maintenance'].map(r => [r, approve])))],
+    ['GENERAL_MANAGER', 'General Manager', p(Object.fromEntries([...operational, 'sales', 'dispatch', 'sales-returns', 'toll-milling', 'expenses', 'accounting', 'users', 'maintenance'].map(r => [r, approve])))],
+    ['FACTORY_MANAGER', 'Factory Manager', p(Object.fromEntries([...operational, 'expenses', 'maintenance'].map(r => [r, approve])))],
     ['ACCOUNTS_MANAGER', 'Accounts Manager', p(Object.fromEntries(finance.map(r => [r, [...approve, 'VIEW_FINANCIAL']])))],
     ['ACCOUNTANT', 'Accountant', p(Object.fromEntries(finance.map(r => [r, [...write, 'VIEW_FINANCIAL']])))],
     ['PURCHASE_MANAGER', 'Purchase Manager', p(purchaseManagerActions)],
@@ -161,10 +161,14 @@ async function main() {
   });
 
   const supplier = await upsertPartner(company.id, { type: 'SUPPLIER', name: 'Bogura Agro Traders', code: 'SUP-001', paymentTermsDays: 7 });
+  await upsertPartner(company.id, { type: 'SUPPLIER', name: 'Haji Shafiul Grain Traders', code: 'SUP-002', paymentTermsDays: 15 });
   await upsertPartner(company.id, { type: 'FARMER', name: 'Rahima Begum', code: 'FAR-001' });
+  await upsertPartner(company.id, { type: 'FARMER', name: 'Mokbul Hossain', code: 'FAR-002' });
   await upsertPartner(company.id, { type: 'BROKER', name: 'North Bengal Grain Brokers', code: 'BRK-001', commissionType: 'PER_MON', commissionRate: 12 });
+  await upsertPartner(company.id, { type: 'BROKER', name: 'Al-Madina Grain Brokerage', code: 'BRK-002', commissionType: 'PER_MON', commissionRate: 10 });
   await upsertPartner(company.id, { type: 'CUSTOMER', name: 'Bogura Wholesale Rice', code: 'CUS-001', creditLimit: 500000, paymentTermsDays: 14 });
   await upsertPartner(company.id, { type: 'CUSTOMER', name: 'North Bengal Distributors', code: 'CUS-002' });
+  await upsertPartner(company.id, { type: 'CUSTOMER', name: 'Karwan Bazar Rice Wholesale', code: 'CUS-003', creditLimit: 1000000, paymentTermsDays: 21 });
 
   const paddyItems = [
     ['BR-28', 'BRRI Dhan 28', 14, 68], ['BR-29', 'BRRI Dhan 29', 14, 70], ['BR-49', 'BRRI Dhan 49', 14, 68],
@@ -202,7 +206,7 @@ async function main() {
     const item = await upsertItem(company.id, { kind: 'PACKAGING', name, code, baseUnit: 'PIECE' });
     await prisma.packagingSpec.upsert({
       where: { itemId: item.id },
-      create: { itemId: item.id, supplierPartnerId: supplier.id, bagType: 'WOVEN_SACK', sizeKg, material: 'POLYPROPYLENE', unitCost: 7 },
+      create: { companyId: company.id, itemId: item.id, supplierPartnerId: supplier.id, bagType: 'WOVEN_SACK', sizeKg, material: 'POLYPROPYLENE', unitCost: 7 },
       update: { unitCost: 7, sizeKg, material: 'POLYPROPYLENE' },
     });
   }
@@ -237,7 +241,183 @@ async function main() {
     update: {},
   });
 
-  console.log(`Seeded ${company.name}, ${bogura.name}, permission catalog, and administrator ${email}.`);
+  // Seed standard demo user accounts for various roles
+  const demoUsers = [
+    { email: 'manager@ricemill.com', name: 'General Manager Rahim', pass: 'Manager123456!', roles: ['GENERAL_MANAGER', 'FACTORY_MANAGER'] },
+    { email: 'accountant@ricemill.com', name: 'Chief Accountant Karim', pass: 'Accountant123456!', roles: ['ACCOUNTS_MANAGER', 'ACCOUNTANT'] },
+    { email: 'store@ricemill.com', name: 'Storekeeper Alam', pass: 'Store123456!', roles: ['STORE_MANAGER'] },
+    { email: 'gate@ricemill.com', name: 'Gate Operator Jamal', pass: 'Gate123456!', roles: ['GATE_OPERATOR', 'WEIGHBRIDGE_OPERATOR'] },
+    { email: 'sales@ricemill.com', name: 'Sales Manager Tareq', pass: 'Sales123456!', roles: ['SALES_MANAGER', 'SALES_OFFICER'] },
+  ];
+
+  for (const du of demoUsers) {
+    const pHash = await bcrypt.hash(du.pass, 12);
+    const u = await prisma.user.upsert({
+      where: { email: du.email },
+      create: { email: du.email, fullName: du.name, passwordHash: pHash, status: 'ACTIVE', emailVerifiedAt: new Date() },
+      update: { passwordHash: pHash, status: 'ACTIVE' },
+    });
+    let m = await prisma.membership.findFirst({ where: { userId: u.id, companyId: company.id } });
+    if (!m) m = await prisma.membership.create({ data: { userId: u.id, companyId: company.id } });
+    for (const rCode of du.roles) {
+      const r = await prisma.role.findFirst({ where: { companyId: company.id, code: rCode } });
+      if (r) {
+        await prisma.userRole.upsert({
+          where: { membershipId_roleId: { membershipId: m.id, roleId: r.id } },
+          create: { membershipId: m.id, roleId: r.id },
+          update: {},
+        });
+      }
+    }
+  }
+
+  // Promptdoc #73: Seed Realistic Demo Transactions (Batches, Sales, Expenses, Payments)
+  const br28Paddy = await prisma.item.findFirst({ where: { companyId: company.id, code: 'BR-28' } });
+  const boguraStack = await prisma.stack.findFirst({ where: { godownId: boguraGodown.id, code: 'PAD-01' } });
+  if (br28Paddy && boguraStack) {
+    await prisma.productionBatch.upsert({
+      where: { companyId_batchNumber: { companyId: company.id, batchNumber: 'BAT-2026-001' } },
+      create: {
+        companyId: company.id,
+        factoryId: bogura.id,
+        batchNumber: 'BAT-2026-001',
+        inputItemId: br28Paddy.id,
+        inputStackId: boguraStack.id,
+        inputQuantityKg: 4000,
+        totalOutputKg: 3900,
+        processLossKg: 100,
+        headRiceRecoveryPct: 65.0,
+        totalRiceRecoveryPct: 72.5,
+        byProductRecoveryPct: 22.5,
+        standardRecoveryPct: 68.0,
+        status: 'POSTED',
+        startedAt: new Date('2026-02-01T08:00:00Z'),
+        completedAt: new Date('2026-02-01T16:00:00Z'),
+        remarks: 'Standard 4000 KG mass-balance milling demo batch',
+        createdById: user.id,
+        approvedById: user.id,
+        approvedAt: new Date('2026-02-01T16:30:00Z'),
+        postedById: user.id,
+        postedAt: new Date('2026-02-01T17:00:00Z'),
+      },
+      update: {},
+    });
+  }
+
+  const customerCus1 = await prisma.partner.findFirst({ where: { companyId: company.id, code: 'CUS-001' } });
+  if (customerCus1) {
+    await prisma.salesOrder.upsert({
+      where: { companyId_orderNumber: { companyId: company.id, orderNumber: 'SO-2026-001' } },
+      create: {
+        companyId: company.id,
+        factoryId: bogura.id,
+        customerId: customerCus1.id,
+        orderNumber: 'SO-2026-001',
+        channel: 'WHOLESALE',
+        status: 'APPROVED',
+        currency: 'BDT',
+        totalAmount: 176800,
+        remarks: 'Direct wholesale delivery order for 2600 KG Miniket Rice',
+        createdById: user.id,
+        approvedById: user.id,
+        approvedAt: new Date('2026-02-02T10:00:00Z'),
+      },
+      update: {},
+    });
+  }
+
+  const existingElectricityExp = await prisma.expense.findFirst({
+    where: { companyId: company.id, voucherNumber: 'EXP-2026-001' },
+  });
+  if (!existingElectricityExp) {
+    await prisma.expense.create({
+      data: {
+        companyId: company.id,
+        factoryId: bogura.id,
+        voucherNumber: 'EXP-2026-001',
+        title: 'Monthly Mill Electricity Bill (NESCO)',
+        category: 'ELECTRICITY',
+        type: 'FACTORY_EXPENSE',
+        paymentMode: 'BANK',
+        status: 'POSTED',
+        subtotalAmount: 85000,
+        taxAmount: 0,
+        totalAmount: 85000,
+        createdById: user.id,
+        approvedById: user.id,
+        postedById: user.id,
+      },
+    });
+  }
+
+  const existingDieselExp = await prisma.expense.findFirst({
+    where: { companyId: company.id, voucherNumber: 'EXP-2026-002' },
+  });
+  if (!existingDieselExp) {
+    await prisma.expense.create({
+      data: {
+        companyId: company.id,
+        factoryId: bogura.id,
+        voucherNumber: 'EXP-2026-002',
+        title: 'Boiler Diesel Fuel 400L (Padma Oil)',
+        category: 'DIESEL',
+        type: 'FACTORY_EXPENSE',
+        paymentMode: 'CASH',
+        status: 'POSTED',
+        subtotalAmount: 42000,
+        taxAmount: 0,
+        totalAmount: 42000,
+        createdById: user.id,
+        approvedById: user.id,
+        postedById: user.id,
+      },
+    });
+  }
+
+  const existingLaborExp = await prisma.expense.findFirst({
+    where: { companyId: company.id, voucherNumber: 'EXP-2026-003' },
+  });
+  if (!existingLaborExp) {
+    await prisma.expense.create({
+      data: {
+        companyId: company.id,
+        factoryId: bogura.id,
+        voucherNumber: 'EXP-2026-003',
+        title: 'Loading & Unloading Labor Wages (Daily Worker Union)',
+        category: 'LABOUR',
+        type: 'FACTORY_EXPENSE',
+        paymentMode: 'CASH',
+        status: 'POSTED',
+        subtotalAmount: 18500,
+        taxAmount: 0,
+        totalAmount: 18500,
+        createdById: user.id,
+        approvedById: user.id,
+        postedById: user.id,
+      },
+    });
+  }
+
+  await prisma.journal.upsert({
+    where: { companyId_number: { companyId: company.id, number: 'PMT-2026-001' } },
+    create: {
+      companyId: company.id,
+      factoryId: bogura.id,
+      number: 'PMT-2026-001',
+      voucherType: 'PAYMENT',
+      sourceType: 'SUPPLIER_PAYMENT',
+      sourceId: supplier.id,
+      partnerId: supplier.id,
+      status: 'POSTED',
+      totalAmount: 150000,
+      narration: 'Advance payment against paddy purchase contract',
+      createdById: user.id,
+      postedAt: new Date('2026-02-03T11:00:00Z'),
+    },
+    update: {},
+  });
+
+  console.log(`Seeded ${company.name}, ${bogura.name}, permission catalog, demo transactions, and administrator ${email}.`);
 }
 
 main().catch(error => {

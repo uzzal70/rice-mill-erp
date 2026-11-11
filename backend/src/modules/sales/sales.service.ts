@@ -387,17 +387,28 @@ export class SalesService {
         if (customer.creditLimit && customer.creditLimit.gt(0)) {
           // If customer has a defined credit limit and order is on credit, validate exposure
           if (dto.channel !== 'CASH') {
-            const openOrders = await tx.salesOrder.findMany({
-              where: {
-                companyId: dto.companyId,
-                customerId: customer.id,
-                status: DocumentStatus.APPROVED,
-              },
-              select: { totalAmount: true },
-            });
+            const [openOrders, postedReturns] = await Promise.all([
+              tx.salesOrder.findMany({
+                where: {
+                  companyId: dto.companyId,
+                  customerId: customer.id,
+                  status: DocumentStatus.APPROVED,
+                },
+                select: { totalAmount: true },
+              }),
+              tx.salesReturn.findMany({
+                where: {
+                  companyId: dto.companyId,
+                  customerId: customer.id,
+                  status: DocumentStatus.POSTED,
+                },
+                select: { totalAmount: true },
+              }),
+            ]);
             const openOrdersTotal = openOrders.reduce((sum, o) => sum.plus(o.totalAmount), new Prisma.Decimal(0));
+            const returnsTotal = postedReturns.reduce((sum, r) => sum.plus(r.totalAmount), new Prisma.Decimal(0));
             const openingDue = customer.openingBalance && customer.openingBalance.gt(0) ? customer.openingBalance : new Prisma.Decimal(0);
-            const totalExposure = openOrdersTotal.plus(openingDue).plus(total);
+            const totalExposure = openOrdersTotal.plus(openingDue).minus(returnsTotal).plus(total);
 
             if (totalExposure.gt(customer.creditLimit)) {
               throw new BadRequestException(

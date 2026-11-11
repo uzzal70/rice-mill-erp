@@ -61,6 +61,9 @@ describe('SalesService', () => {
       stockMovement: {
         aggregate: jest.fn(),
       },
+      salesReturn: {
+        findMany: jest.fn().mockResolvedValue([]),
+      },
       auditEvent: { create: jest.fn().mockResolvedValue({}) },
     };
 

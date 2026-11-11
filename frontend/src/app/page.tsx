@@ -2,7 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  Alert, AppBar, Avatar, Box, Button, Chip, CircularProgress, CssBaseline, Dialog, DialogActions,
+  Alert, AppBar, Avatar, Badge, Box, Button, Chip, CircularProgress, CssBaseline, Dialog, DialogActions,
   DialogContent, DialogTitle, Divider, Drawer, FormControl, IconButton, InputLabel, MenuItem,
   Paper, Select, Snackbar, Stack, Tab, Tabs, TextField, Toolbar, Tooltip, Typography,
 } from '@mui/material';
@@ -18,6 +18,7 @@ import DashboardRoundedIcon from '@mui/icons-material/DashboardRounded';
 import DownloadRoundedIcon from '@mui/icons-material/DownloadRounded';
 import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
 import LanguageRoundedIcon from '@mui/icons-material/LanguageRounded';
+import LocalShippingRoundedIcon from '@mui/icons-material/LocalShippingRounded';
 import LogoutRoundedIcon from '@mui/icons-material/LogoutRounded';
 import MenuRoundedIcon from '@mui/icons-material/MenuRounded';
 import PaletteOutlinedIcon from '@mui/icons-material/PaletteOutlined';
@@ -51,6 +52,56 @@ import { ParboilingPage } from './parboiling-page';
 import { ProductionPage } from './production-page';
 import { RepackingPage } from './repacking-page';
 import { SalesPage } from './sales-page';
+import { DispatchPage } from './dispatch-page';
+import { SalesReturnPage } from './sales-return-page';
+import { TollMillingPage } from './toll-milling-page';
+import { ExpensesPage } from './expenses-page';
+import { AccountingPage } from './accounting-page';
+import { ProfitabilityPage } from './profitability-page';
+import { HrPayrollPage } from './hr-payroll-page';
+import { MachinesPage } from './machines-page';
+import { FleetPage } from './fleet-page';
+import { DocumentsPage } from './documents-page';
+import { ApprovalsPage } from './approvals-page';
+import { AuditPage } from './audit-page';
+import { OwnerDashboardPage } from './owner-dashboard-page';
+import { ManagementAnalyticsPage } from './management-analytics-page';
+import { SmartAlertsPage } from './smart-alerts-page';
+import { AiReadyPage } from './ai-ready-page';
+import { ReportsPage } from './reports-page';
+import { DocumentPrintingPage } from './document-printing-page';
+import { BangladeshConfigPage } from './bangladesh-config-page';
+import { GlobalSearchDialog } from './global-search-dialog';
+import { ExcelImportPage } from './excel-import-page';
+import { NotificationsPage } from './notifications-page';
+import { DataIntegrityPage } from './data-integrity-page';
+import { CalculationEnginePage } from './calculation-engine-page';
+import { MobileOwnerPage } from './mobile-owner-page';
+import { BackupPage } from './backup-page';
+import { TransactionTracePage } from './transaction-trace-page';
+import AccountTreeRoundedIcon from '@mui/icons-material/AccountTreeRounded';
+import StorageRoundedIcon from '@mui/icons-material/StorageRounded';
+import PhoneAndroidRoundedIcon from '@mui/icons-material/PhoneAndroidRounded';
+import CalculateRoundedIcon from '@mui/icons-material/CalculateRounded';
+import ShieldRoundedIcon from '@mui/icons-material/ShieldRounded';
+import NotificationsNoneRoundedIcon from '@mui/icons-material/NotificationsNoneRounded';
+import UploadFileRoundedIcon from '@mui/icons-material/UploadFileRounded';
+import FlagRoundedIcon from '@mui/icons-material/FlagRounded';
+import PrintRoundedIcon from '@mui/icons-material/PrintRounded';
+import AssessmentRoundedIcon from '@mui/icons-material/AssessmentRounded';
+import PsychologyRoundedIcon from '@mui/icons-material/PsychologyRounded';
+import NotificationsActiveRoundedIcon from '@mui/icons-material/NotificationsActiveRounded';
+import InsightsRoundedIcon from '@mui/icons-material/InsightsRounded';
+import LocalGasStationRoundedIcon from '@mui/icons-material/LocalGasStationRounded';
+import FolderSpecialRoundedIcon from '@mui/icons-material/FolderSpecialRounded';
+import FactCheckRoundedIcon from '@mui/icons-material/FactCheckRounded';
+import PolicyRoundedIcon from '@mui/icons-material/PolicyRounded';
+import AssignmentReturnRoundedIcon from '@mui/icons-material/AssignmentReturnRounded';
+import HandshakeRoundedIcon from '@mui/icons-material/HandshakeRounded';
+import AccountBalanceWalletRoundedIcon from '@mui/icons-material/AccountBalanceWalletRounded';
+import AccountBalanceRoundedIcon from '@mui/icons-material/AccountBalanceRounded';
+import TrendingUpRoundedIcon from '@mui/icons-material/TrendingUpRounded';
+import BadgeRoundedIcon from '@mui/icons-material/BadgeRounded';
 
 type Company = { id: string; name: string; code: string };
 type Factory = { id: string; name: string; code: string; productionType: string };
@@ -63,12 +114,12 @@ type InventoryRow = { item: { id: string; code: string; name: string; kind: stri
 type PartnerOption = { id: string; name: string; type: string };
 type ItemOption = { id: string; name: string; kind: string };
 type StackOption = { id: string; code: string; godownId: string; godown: { name: string } };
-type PageKey = 'dashboard' | 'gate' | 'qualityControl' | 'procurement' | 'receipts' | 'purchaseInvoices' | 'landedCosts' | 'drying' | 'parboiling' | 'production' | 'repacking' | 'sales' | 'inventory' | 'roles' | 'companyMaster' | 'factoryMaster' | 'paddyMaster' | 'riceMaster' | 'byProductMaster' | 'packagingMaster' | 'partnerMaster' | 'brokerMaster' | 'vehicleMaster' | 'moisturePolicies';
+type PageKey = 'dashboard' | 'gate' | 'qualityControl' | 'procurement' | 'receipts' | 'purchaseInvoices' | 'landedCosts' | 'drying' | 'parboiling' | 'production' | 'repacking' | 'sales' | 'dispatch' | 'salesReturn' | 'tollMilling' | 'expenses' | 'accounting' | 'profitability' | 'hr' | 'machines' | 'fleet' | 'documents' | 'approvals' | 'audit' | 'analytics' | 'alerts' | 'aiReady' | 'reports' | 'documentPrinting' | 'bangladeshConfig' | 'excelImport' | 'notifications' | 'dataIntegrity' | 'calculations' | 'mobileOwner' | 'backupManagement' | 'transactionTrace' | 'inventory' | 'roles' | 'companyMaster' | 'factoryMaster' | 'paddyMaster' | 'riceMaster' | 'byProductMaster' | 'packagingMaster' | 'partnerMaster' | 'brokerMaster' | 'vehicleMaster' | 'moisturePolicies';
 type DesignMode = 'advanced' | 'classic';
 
 const translations = {
   en: {
-    dashboard: 'Overview', gate: 'Gate & quality', qualityControl: 'Quality lab', procurement: 'Paddy purchases', receipts: 'Goods receipts', purchaseInvoices: 'Purchase invoices', landedCosts: 'Landed cost', drying: 'Drying', parboiling: 'Parboiling', production: 'Milling production', repacking: 'Repacking', sales: 'Sales orders', inventory: 'Stock & warehouse', roles: 'Roles & permissions', companyMaster: 'Company profile', factoryMaster: 'Factories', paddyMaster: 'Paddy varieties', riceMaster: 'Rice products', byProductMaster: 'By-products', packagingMaster: 'Packaging', partnerMaster: 'Customers & suppliers', brokerMaster: 'Brokers', vehicleMaster: 'Vehicles', moisturePolicies: 'Moisture policies',
+    dashboard: 'Overview', gate: 'Gate & quality', qualityControl: 'Quality lab', procurement: 'Paddy purchases', receipts: 'Goods receipts', purchaseInvoices: 'Purchase invoices', landedCosts: 'Landed cost', drying: 'Drying', parboiling: 'Parboiling', production: 'Milling production', repacking: 'Repacking', sales: 'Sales orders', dispatch: 'Dispatch & Challan', salesReturn: 'Sales Returns', tollMilling: 'Toll Milling', expenses: 'Expenses & Overheads', accounting: 'Accounting Engine', profitability: 'Profitability engine', hr: 'HR & Payroll', machines: 'Machines & maintenance', fleet: 'Fleet & Fuel', documents: 'Document Vault', approvals: 'Approvals & Workflow', audit: 'Audit Log', analytics: 'Analytics & BI', analyticsTitle: 'Management Analytics', analyticsSub: 'Strategic KPIs, trends, stock aging, and supplier/customer rankings', alerts: 'Smart alerts', alertsTitle: 'Smart Alerts', alertsSub: 'Automated operational, quality, financial, and compliance alerts', aiReady: 'AI-Ready Studio', aiReadyTitle: 'AI-Ready Architecture', aiReadySub: 'Enterprise ML data pipelines, feature store, and model registry', reports: 'Reports & Statements', reportsTitle: 'Reporting Engine', reportsSub: 'Multi-filter operational and financial statements', documentPrinting: 'Document Printing (A4)', documentPrintingTitle: 'Professional Document Printing', documentPrintingSub: '14 certified enterprise A4 documents and vouchers', bangladeshConfig: 'Bangladesh Standards', bangladeshConfigTitle: 'Bangladesh Standards & Tax Configuration', bangladeshConfigSub: 'Currency defaults (BDT/৳), configurable Mon/Kg conversions, and dynamic VAT/AIT/TDS/VDS tax rules', excelImport: 'Excel Data Import', excelImportTitle: 'Excel & CSV Data Import Hub', excelImportSub: 'Pre-import validation and inline error correction for 7 master domains', notifications: 'Notification Center', notificationsTitle: 'Multi-Channel Notification Center', notificationsSub: 'In-App, Email, SMS-ready, and WhatsApp-ready notifications across 9 operational domains', dataIntegrity: 'Data Integrity', dataIntegrityTitle: 'Critical Data Integrity Shield', dataIntegritySub: '11 autonomous transaction invariants and zero-corruption architecture', calculations: 'Calculation Engine', calculationsTitle: 'Industrial Calculation Engine', calculationsSub: '14 verified enterprise backend services & milling recovery benchmark', mobileOwner: 'Mobile Owner View', mobileOwnerTitle: 'Mobile Owner Cockpit & Approvals', mobileOwnerSub: '7 core executive metrics (Sales, Production, Profit, Stock, Cash, Bank, Due) and 1-tap manager approvals', backupManagement: 'Backup & Recovery', backupManagementTitle: 'Enterprise Backup & Recovery', backupManagementSub: 'Automated database and file backups, retention policies, health verification, and disaster recovery', transactionTrace: 'Transaction Trace', transactionTraceTitle: 'Transaction Trace & Auditability', transactionTraceSub: 'End-to-end visual audit lineage across 11 stages from Supplier to Accounting Journal', inventory: 'Stock & warehouse', roles: 'Roles & permissions', companyMaster: 'Company profile', factoryMaster: 'Factories', paddyMaster: 'Paddy varieties', riceMaster: 'Rice products', byProductMaster: 'By-products', packagingMaster: 'Packaging', partnerMaster: 'Customers & suppliers', brokerMaster: 'Brokers', vehicleMaster: 'Vehicles', moisturePolicies: 'Moisture policies',
     operations: 'OPERATIONS', management: 'MANAGEMENT', workspace: 'Rice Mill ERP', tagline: 'Factory operations, clearly in control',
     signin: 'Sign in to your mill', subtitle: 'A single workspace for procurement, stock, and production.', email: 'Email address', password: 'Password', signIn: 'Sign in',
     forgotPassword: 'Forgot password?', sendReset: 'Send reset link', useOtp: 'Use a sign-in code instead', requestOtp: 'Send sign-in code', verifyOtp: 'Verify and sign in',
@@ -93,7 +144,7 @@ const translations = {
     brokerMasterTitle: 'Broker master', brokerMasterSub: 'Configure broker profiles and protected commission terms.',
     vehicleMasterTitle: 'Vehicle master', vehicleMasterSub: 'Manage registered vehicles, compliance expiry dates, and gate movement history.',
     moisturePoliciesTitle: 'Moisture calculation policies', moisturePoliciesSub: 'Configure and audit moisture-based purchase quantity and rate deductions.',
-    purchaseInvoicesTitle: 'Purchase invoices', purchaseInvoicesSub: 'Create a supplier invoice for each posted GRN and review its payable calculation.', landedCostsTitle: 'Landed cost', landedCostsSub: 'Calculate direct paddy costs and receipt unit cost.', dryingTitle: 'Paddy drying', dryingSub: 'Record moisture and weight before and after drying, then post the stock movement.', parboilingTitle: 'Parboiling', parboilingSub: 'Track soaking, steaming and drying stages with measured weights and operating conditions.', productionTitle: 'Milling production', productionSub: 'Capture batch inputs and outputs, recovery, loss, and stock posting.', repackingTitle: 'Rice repacking', repackingSub: 'Convert bulk rice into packaged finished rice and consume bag stock.', salesTitle: 'Sales orders', salesSub: 'Create customer orders at transaction prices and reserve available stock.',
+    purchaseInvoicesTitle: 'Purchase invoices', purchaseInvoicesSub: 'Create a supplier invoice for each posted GRN and review its payable calculation.', landedCostsTitle: 'Landed cost', landedCostsSub: 'Calculate direct paddy costs and receipt unit cost.', dryingTitle: 'Paddy drying', dryingSub: 'Record moisture and weight before and after drying, then post the stock movement.', parboilingTitle: 'Parboiling', parboilingSub: 'Track soaking, steaming and drying stages with measured weights and operating conditions.', productionTitle: 'Milling production', productionSub: 'Capture batch inputs and outputs, recovery, loss, and stock posting.', repackingTitle: 'Rice repacking', repackingSub: 'Convert bulk rice into packaged finished rice and consume bag stock.', salesTitle: 'Sales orders', salesSub: 'Create customer orders at transaction prices and reserve available stock.', dispatchTitle: 'Sales dispatch & delivery desk', dispatchSub: 'Manage Delivery Challans, Security Gate Passes, and physical stock dispatch.', salesReturnTitle: 'Sales returns & credit notes', salesReturnSub: 'Handle customer full, partial, and damaged product returns, inventory restocking, and credit notes.', tollMillingTitle: 'Commercial & Toll Milling', tollMillingSub: 'Manage customer-owned paddy receive, batch processing, custody reconciliation, and toll fee billing.', expensesTitle: 'Factory & Operations Expenses', expensesSub: 'Manage factory overheads, electricity, fuel, labor wages, approval workflows, and double-entry General Ledger posting.', accountingTitle: 'Double-Entry Accounting & Financial Reports', accountingSub: 'Chart of Accounts, Journal Vouchers, General Ledger, Cash Book, Bank Book, Trial Balance, Profit & Loss, and Balance Sheet.', profitabilityTitle: 'Profitability Engine & Costing', profitabilitySub: 'Multi-dimensional profitability calculations per purchase lot, batch, KG, Mon, Ton, brand, and customer.', hrTitle: 'HR Management & Payroll', hrSub: 'Employee directory, attendance, overtime tracking, loan advances, and automated payroll.', machinesTitle: 'Machine & Equipment Management', machinesSub: 'Machine run hours, maintenance, breakdowns, spare parts usage, and servicing schedules.', fleetTitle: 'Vehicle & Fuel Management Desk', fleetSub: 'Trip tracking, fuel cost/KM, mileage logs, and preventive maintenance.', documentsTitle: 'Document & License Management Vault', documentsSub: 'Upload and track Trade License, TIN, BIN, Factory, Environmental, Insurance, and Quality Certs with expiry alerts.', approvalsTitle: 'Multi-Tier Approval System', approvalsSub: 'DRAFT → SUBMITTED → REVIEWED → APPROVED → POSTED → LOCKED workflow state transitions and immutability governance.', auditTitle: 'Audit Log & Governance Desk', auditSub: 'Immutable tracking of user, action, module, record, old and new values, IP, device, and timestamps.',
     newGate: 'New gate entry', weigh: 'Record weighing', newSample: 'Create sample', results: 'Record test', accept: 'Accept quality', reject: 'Reject quality', complete: 'Complete gate',
     newPurchase: 'Create purchase', broker: 'Broker (optional)', brokerCommission: 'Broker commission', approve: 'Approve', newReceipt: 'Create GRN', post: 'Post stock', transfer: 'Transfer stock', adjust: 'Adjust stock',
     noRows: 'No matching records yet.', tableGate: 'Gate no.', vehicle: 'Vehicle', purpose: 'Purpose', status: 'Status', time: 'Entry time', net: 'Net weight',
@@ -102,7 +153,7 @@ const translations = {
     entryCreated: 'Gate entry created', loggedOut: 'Signed out', banglaUnavailable: 'বাংলা অনুবাদ পর্যায়ক্রমে যোগ করা হবে', security: 'Account security',
   },
   bn: {
-    dashboard: 'সারসংক্ষেপ', gate: 'গেট ও মান', qualityControl: 'মান নিয়ন্ত্রণ', procurement: 'ধান ক্রয়', receipts: 'পণ্য গ্রহণ', purchaseInvoices: 'ক্রয় ইনভয়েস', landedCosts: 'প্রকৃত ক্রয় খরচ', drying: 'ধান শুকানো', parboiling: 'সিদ্ধকরণ', production: 'মাড়াই উৎপাদন', repacking: 'পুনঃপ্যাক', sales: 'বিক্রয় আদেশ', inventory: 'মজুদ ও গুদাম', roles: 'রোল ও অনুমতি', companyMaster: 'কোম্পানি প্রোফাইল', factoryMaster: 'কারখানা', paddyMaster: 'ধানের জাত', riceMaster: 'চালের পণ্য', byProductMaster: 'উপজাত পণ্য', packagingMaster: 'প্যাকেজিং', partnerMaster: 'ক্রেতা ও সরবরাহকারী', brokerMaster: 'ব্রোকার', vehicleMaster: 'যানবাহন', moisturePolicies: 'আর্দ্রতা নীতি',
+    dashboard: 'সারসংক্ষেপ', gate: 'গেট ও মান', qualityControl: 'মান নিয়ন্ত্রণ', procurement: 'ধান ক্রয়', receipts: 'পণ্য গ্রহণ', purchaseInvoices: 'ক্রয় ইনভয়েস', landedCosts: 'প্রকৃত ক্রয় খরচ', drying: 'ধান শুকানো', parboiling: 'সিদ্ধকরণ', production: 'মাড়াই উৎপাদন', repacking: 'পুনঃপ্যাক', sales: 'বিক্রয় আদেশ', dispatch: 'পণ্য চালান ও গেট পাস', salesReturn: 'বিক্রয় ফেরত ও ক্রেডিট নোট', tollMilling: 'টোল / কমার্শিয়াল হাস্কিং', expenses: 'ব্যয় ও ওভারহেড', accounting: 'অ্যাকাউন্টিং ইঞ্জিন', profitability: 'লাভজনকতা ইঞ্জিন', hr: 'এইচআর ও পেরোল', machines: 'যন্ত্রপাতি ও রক্ষণাবেক্ষণ', fleet: 'যানবাহন ও জ্বালানি', documents: 'নথিপত্র ও লাইসেন্স', approvals: 'অনুমোদন ও ওয়ার্কফ্লো', audit: 'অডিট লগ', analytics: 'অ্যানালিটিক্স ও ইনসাইট', analyticsTitle: 'ম্যানেজমেন্ট অ্যানালিটিক্স', analyticsSub: 'কৌশলগত কেপিআই, ট্রেন্ড, স্টক এজিং ও সাপ্লায়ার/ক্রেতা বিশ্লেষণ', alerts: 'স্মার্ট এলার্ট', alertsTitle: 'স্মার্ট এলার্ট', alertsSub: 'স্বয়ংক্রিয় কার্যক্রম, মান, আর্থিক ও কমপ্লায়েন্স সংক্রান্ত এলার্ট', aiReady: 'এআই-রেডি স্টুডিও', aiReadyTitle: 'এআই-রেডি আর্কিটেকচার', aiReadySub: 'বাস্তব মেশিন লার্নিং ফিচার স্টোর ও মডেল রেজিস্ট্রি', reports: 'রিপোর্ট ও বিবরণী', reportsTitle: 'রিপোর্টিং ইঞ্জিন', reportsSub: '১০টি ফিল্টার ভিত্তিক মিল পরিচালনা ও আর্থিক বিবরণী', documentPrinting: 'নথি প্রিন্টিং (A4)', documentPrintingTitle: 'পেশাদার এ৪ নথি প্রিন্টিং', documentPrintingSub: '১৪টি প্রত্যয়িত প্রাতিষ্ঠানিক এ৪ ডকুমেন্টস ও ভাউচার', bangladeshConfig: 'বাংলাদেশ ও কর', bangladeshConfigTitle: 'বাংলাদেশ স্ট্যান্ডার্ড ও কর কনফিগারেশন', bangladeshConfigSub: 'মুদ্রা (BDT/৳), মণ-কেজি রূপান্তর ও ভ্যাট/এআইটি/টিডিএস/ভিডিএস নিয়মাবলী', excelImport: 'এক্সেল ডেটা ইমপোর্ট', excelImportTitle: 'এক্সেল ও সিএসভি ডেটা ইমপোর্ট হাব', excelImportSub: '৭টি মাস্টার ডেটার প্রি-ইমপোর্ট ভ্যালিডেশন ও তাৎক্ষণিক ত্রুটি সংশোধন', notifications: 'নোটিফিকেশন সেন্টার', notificationsTitle: 'মাল্টি-চ্যানেল নোটিফিকেশন সেন্টার', notificationsSub: 'ইন-অ্যাপ, ইমেইল, এসএমএস ও হোয়াটসঅ্যাপ বার্তা: ৯টি কার্যক্ষেত্রের সতর্কতা', dataIntegrity: 'ডেটা অখণ্ডতা', dataIntegrityTitle: 'জরুরি ডেটা অখণ্ডতা সুরক্ষা', dataIntegritySub: '১১টি স্বয়ংক্রিয় লেনদেন নিয়ম এবং জিরো-করাপশন আর্কিটেকচার', calculations: 'গণনা ইঞ্জিন', calculationsTitle: 'শিল্প গণনা ইঞ্জিন', calculationsSub: '১৪টি প্রত্যয়িত ব্যবসায়িক হিসাব এবং মাড়াই উৎপাদন রিকভারি বেঞ্চমার্ক', mobileOwner: 'মোবাইল ওনার ভিউ', mobileOwnerTitle: 'মোবাইল ওনার ককপিট ও অনুমোদন', mobileOwnerSub: '৭টি মূল ব্যবসায়িক মেট্রিক (বিক্রয়, উৎপাদন, লাভ, মজুদ, নগদ, ব্যাংক, বকেয়া) এবং ১-ট্যাপ অনুমোদন', backupManagement: 'ব্যাকআপ ও পুনরুদ্ধার', backupManagementTitle: 'এন্টারপ্রাইজ ব্যাকআপ ও রিকভারি', backupManagementSub: 'স্বয়ংক্রিয় ডাটাবেজ ও ফাইল ব্যাকআপ, ধারণ নীতি, স্থিতি যাচাই এবং দুর্যোগ পুনরুদ্ধার', transactionTrace: 'লেনদেন ট্রেস ও নিরীক্ষা', transactionTraceTitle: 'লেনদেন ট্রেস ও নিরীক্ষা চেইন', transactionTraceSub: 'সরবরাহকারী থেকে অ্যাকাউন্টিং জার্নাল পর্যন্ত ১১-ধাপের সম্পূর্ণ অডিট চেইন ও সত্যতা যাচাই', inventory: 'মজুদ ও গুদাম', roles: 'রোল ও অনুমতি', companyMaster: 'কোম্পানি প্রোফাইল', factoryMaster: 'কারখানা', paddyMaster: 'ধানের জাত', riceMaster: 'চালের পণ্য', byProductMaster: 'উপজাত পণ্য', packagingMaster: 'প্যাকেজিং', partnerMaster: 'ক্রেতা ও সরবরাহকারী', brokerMaster: 'ব্রোকার', vehicleMaster: 'যানবাহন', moisturePolicies: 'আর্দ্রতা নীতি',
     operations: 'কার্যক্রম', management: 'ব্যবস্থাপনা', workspace: 'রাইস মিল ERP', tagline: 'কারখানার কার্যক্রম, নিয়ন্ত্রণে',
     signin: 'আপনার মিলে প্রবেশ করুন', subtitle: 'ক্রয়, মজুদ ও উৎপাদনের জন্য একটি কর্মক্ষেত্র।', email: 'ইমেইল ঠিকানা', password: 'পাসওয়ার্ড', signIn: 'প্রবেশ',
     forgotPassword: 'পাসওয়ার্ড ভুলে গেছেন?', sendReset: 'রিসেট লিংক পাঠান', useOtp: 'সাইন-ইন কোড ব্যবহার করুন', requestOtp: 'সাইন-ইন কোড পাঠান', verifyOtp: 'যাচাই করে প্রবেশ',
@@ -127,7 +178,7 @@ const translations = {
     brokerMasterTitle: 'ব্রোকার মাস্টার', brokerMasterSub: 'ব্রোকার প্রোফাইল ও সুরক্ষিত কমিশন শর্ত নির্ধারণ করুন।',
     vehicleMasterTitle: 'যানবাহন মাস্টার', vehicleMasterSub: 'নিবন্ধিত যানবাহন, মেয়াদ এবং গেট চলাচলের ইতিহাস পরিচালনা করুন।',
     moisturePoliciesTitle: 'আর্দ্রতা হিসাব নীতি', moisturePoliciesSub: 'আর্দ্রতার ভিত্তিতে ক্রয় পরিমাণ ও দর কর্তন নির্ধারণ এবং নিরীক্ষা করুন।',
-    purchaseInvoicesTitle: 'ক্রয় ইনভয়েস', purchaseInvoicesSub: 'প্রতিটি পোস্টকৃত GRN-এর সরবরাহকারী ইনভয়েস তৈরি ও প্রদেয় হিসাব পর্যালোচনা করুন।', landedCostsTitle: 'প্রকৃত ক্রয় খরচ', landedCostsSub: 'ধানের সরাসরি খরচ এবং প্রতি একক প্রাপ্তি খরচ হিসাব করুন।', dryingTitle: 'ধান শুকানো', dryingSub: 'শুকানোর আগে ও পরে আর্দ্রতা এবং ওজন নথিভুক্ত করে মজুদ পোস্ট করুন।', parboilingTitle: 'সিদ্ধকরণ', parboilingSub: 'ভেজানো, বাষ্প, শুকানো ধাপ, ওজন এবং প্রক্রিয়ার পরিমাপ নথিভুক্ত করুন।', productionTitle: 'মাড়াই উৎপাদন', productionSub: 'ব্যাচ ইনপুট ও আউটপুট, রিকভারি, ক্ষতি এবং মজুদ পোস্টিং রেকর্ড করুন।', repackingTitle: 'চাল পুনঃপ্যাক', repackingSub: 'বাল্ক চাল থেকে প্যাকেটজাত চাল তৈরি এবং প্যাকেজিং মজুদ ব্যবহার করুন।', salesTitle: 'বিক্রয় আদেশ', salesSub: 'লেনদেন দর দিয়ে ক্রেতার আদেশ তৈরি ও মজুদ সংরক্ষণ করুন।',
+    purchaseInvoicesTitle: 'ক্রয় ইনভয়েস', purchaseInvoicesSub: 'প্রতিটি পোস্টকৃত GRN-এর সরবরাহকারী ইনভয়েস তৈরি ও প্রদেয় হিসাব পর্যালোচনা করুন।', landedCostsTitle: 'প্রকৃত ক্রয় খরচ', landedCostsSub: 'ধানের সরাসরি খরচ এবং প্রতি একক প্রাপ্তি খরচ হিসাব করুন।', dryingTitle: 'ধান শুকানো', dryingSub: 'শুকানোর আগে ও পরে আর্দ্রতা এবং ওজন নথিভুক্ত করে মজুদ পোস্ট করুন।', parboilingTitle: 'সিদ্ধকরণ', parboilingSub: 'ভেজানো, বাষ্প, শুকানো ধাপ, ওজন এবং প্রক্রিয়ার পরিমাপ নথিভুক্ত করুন।', productionTitle: 'মাড়াই উৎপাদন', productionSub: 'ব্যাচ ইনপুট ও আউটপুট, রিকভারি, ক্ষতি এবং মজুদ পোস্টিং রেকর্ড করুন।', repackingTitle: 'চাল পুনঃপ্যাক', repackingSub: 'বাল্ক চাল থেকে প্যাকেটজাত চাল তৈরি এবং প্যাকেজিং মজুদ ব্যবহার করুন।', salesTitle: 'বিক্রয় আদেশ', salesSub: 'লেনদেন দর দিয়ে ক্রেতার আদেশ তৈরি ও মজুদ সংরক্ষণ করুন।', dispatchTitle: 'বিক্রয় চালান ও গেট পাস ডেস্ক', dispatchSub: 'ডেলিভারি চালান, সিকিউরিটি গেট পাস এবং ভৌত মজুদ ডেলিভারি পরিচালনা করুন।', salesReturnTitle: 'বিক্রয় ফেরত ও ক্রেডিট নোট ডেস্ক', salesReturnSub: 'পূর্ণাঙ্গ, আংশিক ও ক্ষতিগ্রস্ত পণ্য ফেরত, মজুদ পুনরুদ্ধার এবং ক্রেডিট নোট সমন্বয় করুন।', tollMillingTitle: 'টোল ও কমার্শিয়াল হাস্কিং ডেস্ক', tollMillingSub: 'গ্রাহকের নিজস্ব ধান গ্রহণ, মাড়াই উৎপাদন, আলাদা হেফাজত হিসাব এবং সার্ভিস বিল পরিচালনা করুন।', expensesTitle: 'কারখানা ও পরিচালন ব্যয় ডেস্ক', expensesSub: 'কারখানা ওভারহেড, বিদ্যুৎ বিল, ডিজেল, শ্রমিক মজুরি, অনুমোদন এবং দ্বৈত হিসাব লেজার পোস্টিং পরিচালনা করুন।', accountingTitle: 'দ্বৈত হিসাব ও আর্থিক প্রতিবেদন', accountingSub: 'চার্ট অব অ্যাকাউন্টস, জার্নাল ও পেমেন্ট ভাউচার, খতিয়ান, রেওয়ামিল এবং ব্যালেন্স শিট পরিচালনা করুন।', profitabilityTitle: 'লাভজনকতা ইঞ্জিন ও খরচ বিশ্লেষণ', profitabilitySub: 'ক্রয়, উৎপাদন ব্যাচ, কেজি, মণ, টন, ব্র্যান্ড ও গ্রাহকভিত্তিক বহু-মাত্রিক লাভ-ক্ষতি ও মার্জিন বিশ্লেষণ।', hrTitle: 'এইচআর ও পেরোল ব্যবস্থাপনা', hrSub: 'কর্মকর্তা-কর্মচারী প্রোফাইল, উপস্থিতি, ওভারটাইম, বেতন অগ্রিম ও দ্বৈত হিসাব পেরোল।', machinesTitle: 'যন্ত্রপাতি ও রক্ষণাবেক্ষণ ডেস্ক', machinesSub: 'মেশিনের কর্মঘণ্টা, নিয়মিত সার্ভিস, হঠাৎ ব্রেকডাউন এবং খুচরা যন্ত্রাংশের খরচ।', fleetTitle: 'যানবাহন ও জ্বালানি ব্যবস্থাপনা ডেস্ক', fleetSub: 'ট্রিপ ট্র্যাকিং, জ্বালানি খরচ/কিমি, মাইলেজ ও মেইনটেন্যান্স হিসাব।', documentsTitle: 'নথিপত্র ও লাইসেন্স ব্যবস্থাপনা ভল্ট', documentsSub: 'ট্রেড লাইসেন্স, টিআইএন, ভ্যাট, কারখানা, পরিবেশ ও কোয়ালিটি সনদ সংরক্ষণ এবং মেয়াদ সতর্কতা।', approvalsTitle: 'মাল্টি-টায়ার অনুমোদন ও ওয়ার্কফ্লো সিস্টেম', approvalsSub: 'DRAFT → SUBMITTED → REVIEWED → APPROVED → POSTED → LOCKED লেনদেন রূপান্তর ও অডিট সুরক্ষা।', auditTitle: 'সিস্টেম অডিট লগ ও ট্রায়াল ডেস্ক', auditSub: 'ব্যবহারকারী, অ্যাকশন, মডিউল, পূর্বের ও নতুন মান, আইপি, ডিভাইস এবং সময়সূচির স্থায়ী অপরিবর্তনীয় অডিট লগ।',
     newGate: 'নতুন গেট এন্ট্রি', weigh: 'ওজন যোগ', newSample: 'নমুনা তৈরি', results: 'পরীক্ষার ফল', accept: 'মান গ্রহণ', reject: 'মান বাতিল', complete: 'গেট সম্পন্ন',
     newPurchase: 'ক্রয় তৈরি', broker: 'ব্রোকার (ঐচ্ছিক)', brokerCommission: 'ব্রোকার কমিশন', approve: 'অনুমোদন', newReceipt: 'GRN তৈরি', post: 'মজুদ পোস্ট', transfer: 'মজুদ স্থানান্তর', adjust: 'মজুদ সমন্বয়',
     noRows: 'এখনও কোনো রেকর্ড নেই।', tableGate: 'গেট নং', vehicle: 'গাড়ি', purpose: 'উদ্দেশ্য', status: 'অবস্থা', time: 'প্রবেশের সময়', net: 'নিট ওজন',
@@ -150,7 +201,32 @@ const navigation: Array<{ key: PageKey; icon: typeof DashboardRoundedIcon; secti
   { key: 'production', icon: PrecisionManufacturingRoundedIcon, section: 'operations' },
   { key: 'repacking', icon: Inventory2OutlinedIcon, section: 'operations' },
   { key: 'sales', icon: ReceiptLongRoundedIcon, section: 'operations' },
+  { key: 'dispatch', icon: LocalShippingRoundedIcon, section: 'operations' },
+  { key: 'salesReturn', icon: AssignmentReturnRoundedIcon, section: 'operations' },
+  { key: 'tollMilling', icon: HandshakeRoundedIcon, section: 'operations' },
+  { key: 'expenses', icon: AccountBalanceWalletRoundedIcon, section: 'operations' },
+  { key: 'accounting', icon: AccountBalanceRoundedIcon, section: 'operations' },
+  { key: 'profitability', icon: TrendingUpRoundedIcon, section: 'operations' },
+  { key: 'machines', icon: PrecisionManufacturingRoundedIcon, section: 'operations' },
+  { key: 'fleet', icon: LocalGasStationRoundedIcon, section: 'operations' },
+  { key: 'approvals', icon: FactCheckRoundedIcon, section: 'operations' },
+  { key: 'alerts', icon: NotificationsActiveRoundedIcon, section: 'operations' },
   { key: 'inventory', icon: WarehouseOutlinedIcon, section: 'management' },
+  { key: 'analytics', icon: InsightsRoundedIcon, section: 'management' },
+  { key: 'aiReady', icon: PsychologyRoundedIcon, section: 'management' },
+  { key: 'reports', icon: AssessmentRoundedIcon, section: 'management' },
+  { key: 'documentPrinting', icon: PrintRoundedIcon, section: 'management' },
+  { key: 'bangladeshConfig', icon: FlagRoundedIcon, section: 'management' },
+  { key: 'excelImport', icon: UploadFileRoundedIcon, section: 'management' },
+  { key: 'notifications', icon: NotificationsActiveRoundedIcon, section: 'management' },
+  { key: 'dataIntegrity', icon: ShieldRoundedIcon, section: 'management' },
+  { key: 'calculations', icon: CalculateRoundedIcon, section: 'management' },
+  { key: 'mobileOwner', icon: PhoneAndroidRoundedIcon, section: 'management' },
+  { key: 'backupManagement', icon: StorageRoundedIcon, section: 'management' },
+  { key: 'transactionTrace', icon: AccountTreeRoundedIcon, section: 'management' },
+  { key: 'hr', icon: BadgeRoundedIcon, section: 'management' },
+  { key: 'documents', icon: FolderSpecialRoundedIcon, section: 'management' },
+  { key: 'audit', icon: PolicyRoundedIcon, section: 'management' },
   { key: 'paddyMaster', icon: AgricultureRoundedIcon, section: 'management' },
   { key: 'riceMaster', icon: Inventory2OutlinedIcon, section: 'management' },
   { key: 'byProductMaster', icon: Inventory2OutlinedIcon, section: 'management' },
@@ -502,8 +578,20 @@ export default function HomePage() {
   const [action, setAction] = useState<{ title: string; fields: Array<{ name: string; label: string; type?: 'text' | 'number' | 'datetime-local' | 'select'; options?: Array<{ value: string; label: string }>; required?: boolean; defaultValue?: string }>; run: (values: Record<string, string>) => Promise<void> } | null>(null);
   const [actionTarget, setActionTarget] = useState('');
   const [search, setSearch] = useState('');
+  const [isGlobalSearchOpen, setIsGlobalSearchOpen] = useState(false);
   const t = translations[language];
   const isClassic = design === 'classic';
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) {
+        e.preventDefault();
+        setIsGlobalSearchOpen(prev => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   useEffect(() => {
     setSession(readSession());
@@ -797,6 +885,30 @@ export default function HomePage() {
               <InputLabel>{t.factory}</InputLabel>
               <Select label={t.factory} value={factoryId} onChange={event => setFactoryId(event.target.value)}>{factories.map(row => <MenuItem key={row.id} value={row.id}>{row.name}</MenuItem>)}</Select>
             </FormControl>
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={() => setIsGlobalSearchOpen(true)}
+              startIcon={<SearchRoundedIcon />}
+              sx={{
+                textTransform: 'none',
+                color: 'text.secondary',
+                borderColor: 'divider',
+                px: 1.5,
+                borderRadius: 2,
+                display: { xs: 'none', md: 'inline-flex' },
+                fontSize: 12,
+              }}
+            >
+              Search... <kbd style={{ marginLeft: 6, fontSize: 10, padding: '1px 5px', background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: 4, color: '#64748b' }}>Ctrl K</kbd>
+            </Button>
+            <Tooltip title={t.notifications}>
+              <IconButton onClick={() => setPage('notifications')} color={page === 'notifications' ? 'primary' : 'default'}>
+                <Badge badgeContent={3} color="error">
+                  <NotificationsNoneRoundedIcon />
+                </Badge>
+              </IconButton>
+            </Tooltip>
             <Tooltip title={t.design}><IconButton onClick={toggleDesign} sx={{ display: { xs: 'none', sm: 'inline-flex' } }}><PaletteOutlinedIcon /></IconButton></Tooltip>
             <Tooltip title={t.language}><IconButton onClick={toggleLanguage}><LanguageRoundedIcon /></IconButton></Tooltip>
           </Toolbar>
@@ -804,14 +916,14 @@ export default function HomePage() {
         <Box sx={{ p: { xs: 2, sm: 3, lg: 4 }, maxWidth: 1600, mx: 'auto' }}>
           {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>{error}</Alert>}
           <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ xs: 'stretch', sm: 'center' }} gap={2} mb={3}>
-            <Box><Typography className="brand-font" variant="h4" fontWeight={800} letterSpacing="-1.4px">{page === 'dashboard' ? t.dashboardTitle : page === 'companyMaster' ? t.companyMasterTitle : page === 'factoryMaster' ? t.factoryMasterTitle : page === 'paddyMaster' ? t.paddyMasterTitle : page === 'riceMaster' ? t.riceMasterTitle : page === 'byProductMaster' ? t.byProductMasterTitle : page === 'packagingMaster' ? t.packagingMasterTitle : page === 'partnerMaster' ? t.partnerMasterTitle : page === 'brokerMaster' ? t.brokerMasterTitle : page === 'vehicleMaster' ? t.vehicleMasterTitle : page === 'qualityControl' ? t.qualityControlTitle : t[`${page}Title` as 'gateTitle' | 'purchasesTitle' | 'receiptsTitle' | 'inventoryTitle' | 'rolesTitle' | 'moisturePoliciesTitle' | 'purchaseInvoicesTitle' | 'landedCostsTitle' | 'dryingTitle' | 'parboilingTitle' | 'productionTitle' | 'repackingTitle' | 'salesTitle']}</Typography><Typography color="text.secondary" fontSize={13} mt={.5}>{page === 'dashboard' ? t.dashboardSub : page === 'roles' ? t.rolesSub : page === 'companyMaster' ? t.companyMasterSub : page === 'factoryMaster' ? t.factoryMasterSub : page === 'paddyMaster' ? t.paddyMasterSub : page === 'riceMaster' ? t.riceMasterSub : page === 'byProductMaster' ? t.byProductMasterSub : page === 'packagingMaster' ? t.packagingMasterSub : page === 'partnerMaster' ? t.partnerMasterSub : page === 'brokerMaster' ? t.brokerMasterSub : page === 'vehicleMaster' ? t.vehicleMasterSub : page === 'qualityControl' ? t.qualityControlSub : page === 'moisturePolicies' ? t.moisturePoliciesSub : page === 'purchaseInvoices' ? t.purchaseInvoicesSub : page === 'landedCosts' ? t.landedCostsSub : page === 'drying' ? t.dryingSub : page === 'parboiling' ? t.parboilingSub : page === 'production' ? t.productionSub : page === 'repacking' ? t.repackingSub : page === 'sales' ? t.salesSub : `${selectedFactory?.name ?? ''} · ${selectedCompany?.code ?? ''}`}</Typography></Box>
+            <Box><Typography className="brand-font" variant="h4" fontWeight={800} letterSpacing="-1.4px">{page === 'dashboard' ? t.dashboardTitle : page === 'analytics' ? t.analyticsTitle : page === 'alerts' ? t.alertsTitle : page === 'aiReady' ? t.aiReadyTitle : page === 'reports' ? t.reportsTitle : page === 'documentPrinting' ? t.documentPrintingTitle : page === 'bangladeshConfig' ? t.bangladeshConfigTitle : page === 'excelImport' ? t.excelImportTitle : page === 'notifications' ? t.notificationsTitle : page === 'dataIntegrity' ? t.dataIntegrityTitle : page === 'calculations' ? t.calculationsTitle : page === 'mobileOwner' ? t.mobileOwnerTitle : page === 'backupManagement' ? t.backupManagementTitle : page === 'transactionTrace' ? t.transactionTraceTitle : page === 'companyMaster' ? t.companyMasterTitle : page === 'factoryMaster' ? t.factoryMasterTitle : page === 'paddyMaster' ? t.paddyMasterTitle : page === 'riceMaster' ? t.riceMasterTitle : page === 'byProductMaster' ? t.byProductMasterTitle : page === 'packagingMaster' ? t.packagingMasterTitle : page === 'partnerMaster' ? t.partnerMasterTitle : page === 'brokerMaster' ? t.brokerMasterTitle : page === 'vehicleMaster' ? t.vehicleMasterTitle : page === 'qualityControl' ? t.qualityControlTitle : t[`${page}Title` as 'gateTitle' | 'purchasesTitle' | 'receiptsTitle' | 'inventoryTitle' | 'rolesTitle' | 'moisturePoliciesTitle' | 'purchaseInvoicesTitle' | 'landedCostsTitle' | 'dryingTitle' | 'parboilingTitle' | 'productionTitle' | 'repackingTitle' | 'salesTitle' | 'dispatchTitle' | 'salesReturnTitle' | 'tollMillingTitle' | 'expensesTitle' | 'accountingTitle' | 'profitabilityTitle' | 'hrTitle' | 'machinesTitle' | 'fleetTitle' | 'documentsTitle' | 'approvalsTitle' | 'auditTitle' | 'analyticsTitle' | 'alertsTitle' | 'aiReadyTitle' | 'reportsTitle']}</Typography><Typography color="text.secondary" fontSize={13} mt={.5}>{page === 'dashboard' ? t.dashboardSub : page === 'analytics' ? t.analyticsSub : page === 'alerts' ? t.alertsSub : page === 'aiReady' ? t.aiReadySub : page === 'reports' ? t.reportsSub : page === 'documentPrinting' ? t.documentPrintingSub : page === 'bangladeshConfig' ? t.bangladeshConfigSub : page === 'excelImport' ? t.excelImportSub : page === 'notifications' ? t.notificationsSub : page === 'dataIntegrity' ? t.dataIntegritySub : page === 'calculations' ? t.calculationsSub : page === 'mobileOwner' ? t.mobileOwnerSub : page === 'backupManagement' ? t.backupManagementSub : page === 'transactionTrace' ? t.transactionTraceSub : page === 'roles' ? t.rolesSub : page === 'companyMaster' ? t.companyMasterSub : page === 'factoryMaster' ? t.factoryMasterSub : page === 'paddyMaster' ? t.paddyMasterSub : page === 'riceMaster' ? t.riceMasterSub : page === 'byProductMaster' ? t.byProductMasterSub : page === 'packagingMaster' ? t.packagingMasterSub : page === 'partnerMaster' ? t.partnerMasterSub : page === 'brokerMaster' ? t.brokerMasterSub : page === 'vehicleMaster' ? t.vehicleMasterSub : page === 'qualityControl' ? t.qualityControlSub : page === 'moisturePolicies' ? t.moisturePoliciesSub : page === 'purchaseInvoices' ? t.purchaseInvoicesSub : page === 'landedCosts' ? t.landedCostsSub : page === 'drying' ? t.dryingSub : page === 'parboiling' ? t.parboilingSub : page === 'production' ? t.productionSub : page === 'repacking' ? t.repackingSub : page === 'sales' ? t.salesSub : page === 'dispatch' ? t.dispatchSub : page === 'salesReturn' ? t.salesReturnSub : page === 'tollMilling' ? t.tollMillingSub : page === 'expenses' ? t.expensesSub : page === 'accounting' ? t.accountingSub : page === 'profitability' ? t.profitabilitySub : page === 'hr' ? t.hrSub : page === 'machines' ? t.machinesSub : page === 'fleet' ? t.fleetSub : page === 'documents' ? t.documentsSub : page === 'approvals' ? t.approvalsSub : page === 'audit' ? t.auditSub : `${selectedFactory?.name ?? ''} · ${selectedCompany?.code ?? ''}`}</Typography></Box>
             <Stack direction="row" spacing={1} alignItems="center">
-              {page !== 'dashboard' && page !== 'roles' && page !== 'companyMaster' && page !== 'factoryMaster' && page !== 'paddyMaster' && page !== 'riceMaster' && page !== 'byProductMaster' && page !== 'packagingMaster' && page !== 'partnerMaster' && page !== 'brokerMaster' && page !== 'vehicleMaster' && page !== 'qualityControl' && page !== 'moisturePolicies' && page !== 'purchaseInvoices' && page !== 'landedCosts' && page !== 'drying' && page !== 'parboiling' && page !== 'production' && page !== 'repacking' && page !== 'sales' && <TextField size="small" placeholder={t.search} value={search} onChange={event => setSearch(event.target.value)} InputProps={{ startAdornment: <SearchRoundedIcon fontSize="small" sx={{ mr: 1, color: 'text.secondary' }} /> }} sx={{ width: { xs: 150, sm: 220 } }} />}
-              {page !== 'roles' && page !== 'companyMaster' && page !== 'factoryMaster' && page !== 'paddyMaster' && page !== 'riceMaster' && page !== 'byProductMaster' && page !== 'packagingMaster' && page !== 'partnerMaster' && page !== 'brokerMaster' && page !== 'vehicleMaster' && page !== 'qualityControl' && page !== 'moisturePolicies' && page !== 'purchaseInvoices' && page !== 'landedCosts' && page !== 'drying' && page !== 'parboiling' && page !== 'production' && page !== 'repacking' && page !== 'sales' && <Button variant="outlined" startIcon={busy ? <CircularProgress size={15} /> : <AutorenewRoundedIcon />} onClick={loadData} disabled={busy}>{t.refresh}</Button>}
+              {page !== 'dashboard' && page !== 'analytics' && page !== 'alerts' && page !== 'aiReady' && page !== 'reports' && page !== 'documentPrinting' && page !== 'bangladeshConfig' && page !== 'excelImport' && page !== 'notifications' && page !== 'dataIntegrity' && page !== 'calculations' && page !== 'mobileOwner' && page !== 'backupManagement' && page !== 'transactionTrace' && page !== 'roles' && page !== 'companyMaster' && page !== 'factoryMaster' && page !== 'paddyMaster' && page !== 'riceMaster' && page !== 'byProductMaster' && page !== 'packagingMaster' && page !== 'partnerMaster' && page !== 'brokerMaster' && page !== 'vehicleMaster' && page !== 'qualityControl' && page !== 'moisturePolicies' && page !== 'purchaseInvoices' && page !== 'landedCosts' && page !== 'drying' && page !== 'parboiling' && page !== 'production' && page !== 'repacking' && page !== 'sales' && page !== 'dispatch' && page !== 'salesReturn' && page !== 'tollMilling' && page !== 'expenses' && page !== 'accounting' && page !== 'profitability' && page !== 'hr' && page !== 'machines' && page !== 'fleet' && page !== 'documents' && page !== 'approvals' && page !== 'audit' && <TextField size="small" placeholder={t.search} value={search} onChange={event => setSearch(event.target.value)} InputProps={{ startAdornment: <SearchRoundedIcon fontSize="small" sx={{ mr: 1, color: 'text.secondary' }} /> }} sx={{ width: { xs: 150, sm: 220 } }} />}
+              {page !== 'roles' && page !== 'companyMaster' && page !== 'factoryMaster' && page !== 'paddyMaster' && page !== 'riceMaster' && page !== 'byProductMaster' && page !== 'packagingMaster' && page !== 'partnerMaster' && page !== 'brokerMaster' && page !== 'vehicleMaster' && page !== 'qualityControl' && page !== 'moisturePolicies' && page !== 'purchaseInvoices' && page !== 'landedCosts' && page !== 'drying' && page !== 'parboiling' && page !== 'production' && page !== 'repacking' && page !== 'sales' && page !== 'dispatch' && page !== 'salesReturn' && page !== 'tollMilling' && page !== 'expenses' && page !== 'accounting' && page !== 'profitability' && page !== 'hr' && page !== 'machines' && page !== 'fleet' && page !== 'documents' && page !== 'approvals' && page !== 'audit' && page !== 'alerts' && page !== 'aiReady' && page !== 'reports' && page !== 'documentPrinting' && page !== 'bangladeshConfig' && page !== 'excelImport' && page !== 'notifications' && page !== 'dataIntegrity' && page !== 'calculations' && page !== 'mobileOwner' && page !== 'backupManagement' && page !== 'transactionTrace' && <Button variant="outlined" startIcon={busy ? <CircularProgress size={15} /> : <AutorenewRoundedIcon />} onClick={loadData} disabled={busy}>{t.refresh}</Button>}
             </Stack>
           </Stack>
 
-          {page === 'dashboard' && <DashboardPage t={t} gateEntries={gateEntries} openGates={openGates} openPurchases={openPurchases} unpostedReceipts={unpostedReceipts} inventory={inventory} factorySummaries={factorySummaries} factoryComparisonRestricted={factoryComparisonRestricted} onNavigate={setPage} />}
+          {page === 'dashboard' && <DashboardPage t={t} companyId={companyId} factoryId={factoryId} language={language} gateEntries={gateEntries} openGates={openGates} openPurchases={openPurchases} unpostedReceipts={unpostedReceipts} inventory={inventory} factorySummaries={factorySummaries} factoryComparisonRestricted={factoryComparisonRestricted} onNavigate={setPage} />}
           {page === 'gate' && <GatePage t={t} entries={filteredGates} onNew={() => setEntryDialog(true)} onAction={actionForGate} onUploadAttachment={uploadGateAttachment} onDownloadAttachment={downloadGateAttachment} />}
           {page === 'procurement' && <ProcurementPage t={t} purchases={filteredPurchases} receipts={receipts} onNewReceipt={startReceipt} onApprove={purchase => apiRequest(`/procurement/purchases/${purchase.id}/approve`, { method: 'POST', body: JSON.stringify({ companyId, factoryId }) }).then(() => { setToast('Purchase approved'); loadData(); }).catch(reason => setError(messageOf(reason)))} />}
           {page === 'receipts' && <ReceiptsPage t={t} receipts={filteredReceipts} onApprove={receipt => apiRequest(`/goods-receipts/${receipt.id}/approve`, { method: 'POST', body: JSON.stringify({ companyId, factoryId }) }).then(() => { setToast('GRN approved'); loadData(); }).catch(reason => setError(messageOf(reason)))} onPost={receipt => apiRequest(`/goods-receipts/${receipt.id}/post`, { method: 'POST', body: JSON.stringify({ companyId, factoryId }) }).then(() => { setToast('Stock posted from GRN'); loadData(); }).catch(reason => setError(messageOf(reason)))} />}
@@ -832,6 +944,31 @@ export default function HomePage() {
           {page === 'production' && <ProductionPage companyId={companyId} factoryId={factoryId} language={language} onSaved={setToast} />}
           {page === 'repacking' && <RepackingPage companyId={companyId} factoryId={factoryId} language={language} onSaved={setToast} />}
           {page === 'sales' && <SalesPage companyId={companyId} factoryId={factoryId} language={language} onSaved={setToast} />}
+          {page === 'dispatch' && <DispatchPage companyId={companyId} factoryId={factoryId} language={language} onSaved={setToast} />}
+          {page === 'salesReturn' && <SalesReturnPage companyId={companyId} factoryId={factoryId} language={language} onSaved={setToast} />}
+          {page === 'tollMilling' && <TollMillingPage companyId={companyId} factoryId={factoryId} language={language} onSaved={setToast} />}
+          {page === 'expenses' && <ExpensesPage companyId={companyId} factoryId={factoryId} language={language} onSaved={setToast} />}
+          {page === 'accounting' && <AccountingPage companyId={companyId} factoryId={factoryId} language={language} onSaved={setToast} />}
+          {page === 'profitability' && <ProfitabilityPage companyId={companyId} factoryId={factoryId} language={language} onSaved={setToast} />}
+          {page === 'hr' && <HrPayrollPage companyId={companyId} factoryId={factoryId} language={language} onSaved={setToast} />}
+          {page === 'machines' && <MachinesPage companyId={companyId} factoryId={factoryId} language={language} onSaved={setToast} />}
+          {page === 'fleet' && <FleetPage companyId={companyId} factoryId={factoryId} language={language} onSaved={setToast} />}
+          {page === 'documents' && <DocumentsPage companyId={companyId} factoryId={factoryId} language={language} onSaved={setToast} />}
+          {page === 'approvals' && <ApprovalsPage companyId={companyId} factoryId={factoryId} language={language} onSaved={setToast} />}
+          {page === 'audit' && <AuditPage companyId={companyId} language={language} onSaved={setToast} />}
+          {page === 'analytics' && <ManagementAnalyticsPage companyId={companyId} factoryId={factoryId} language={language} />}
+          {page === 'alerts' && <SmartAlertsPage companyId={companyId} factoryId={factoryId} language={language} onSaved={setToast} />}
+          {page === 'aiReady' && <AiReadyPage companyId={companyId} language={language} onSaved={setToast} />}
+          {page === 'reports' && <ReportsPage companyId={companyId} factoryId={factoryId} language={language} onSaved={setToast} />}
+          {page === 'documentPrinting' && <DocumentPrintingPage />}
+          {page === 'bangladeshConfig' && <BangladeshConfigPage companyId={companyId} language={language} onSaved={setToast} />}
+          {page === 'excelImport' && <ExcelImportPage companyId={companyId} language={language} onSaved={setToast} />}
+          {page === 'notifications' && <NotificationsPage companyId={companyId} language={language} onSaved={setToast} />}
+          {page === 'dataIntegrity' && <DataIntegrityPage />}
+          {page === 'calculations' && <CalculationEnginePage />}
+          {page === 'mobileOwner' && <MobileOwnerPage companyId={companyId} language={language} />}
+          {page === 'backupManagement' && <BackupPage companyId={companyId} language={language} />}
+          {page === 'transactionTrace' && <TransactionTracePage companyId={companyId} language={language} />}
           {page === 'roles' && <RolesPage companyId={companyId} language={language} onSaved={setToast} onError={setError} />}
           {page === 'companyMaster' && <CompanyPage
             companies={companies}
@@ -860,6 +997,13 @@ export default function HomePage() {
         </Box>
       </Box>
       <EntryDialog open={entryDialog} onClose={() => setEntryDialog(false)} companyId={companyId} factoryId={factoryId} onSaved={() => { setToast(t.entryCreated); loadData(); }} t={t} />
+      <GlobalSearchDialog
+        isOpen={isGlobalSearchOpen}
+        onClose={() => setIsGlobalSearchOpen(false)}
+        onNavigate={(key) => setPage(key as PageKey)}
+        companyId={companyId}
+        language={language}
+      />
       {session && <AuthSessionsDialog
         open={securityOpen}
         onClose={() => setSecurityOpen(false)}
@@ -879,9 +1023,10 @@ export default function HomePage() {
   </ThemeProvider>;
 }
 
-function DashboardPage({ t, gateEntries, openGates, openPurchases, unpostedReceipts, inventory, factorySummaries, factoryComparisonRestricted, onNavigate }: {
-  t: Translation; gateEntries: GateEntry[]; openGates: GateEntry[]; openPurchases: Purchase[]; unpostedReceipts: GoodsReceipt[]; inventory: InventoryRow[]; factorySummaries: FactorySummary[]; factoryComparisonRestricted: boolean; onNavigate: (page: PageKey) => void;
+function DashboardPage({ t, companyId, factoryId, language, gateEntries, openGates, openPurchases, unpostedReceipts, inventory, factorySummaries, factoryComparisonRestricted, onNavigate }: {
+  t: Translation; companyId: string; factoryId?: string; language: 'en' | 'bn'; gateEntries: GateEntry[]; openGates: GateEntry[]; openPurchases: Purchase[]; unpostedReceipts: GoodsReceipt[]; inventory: InventoryRow[]; factorySummaries: FactorySummary[]; factoryComparisonRestricted: boolean; onNavigate: (page: PageKey) => void;
 }) {
+  const [dashboardTab, setDashboardTab] = useState(0);
   const metrics = [
     { label: t.gateQueue, value: gateEntries.length, icon: ScaleRoundedIcon, tint: '#eaf3ed', color: '#347453', note: `${openGates.length} active in workflow` },
     { label: t.openPurchases, value: openPurchases.length, icon: AgricultureRoundedIcon, tint: '#fcf2e3', color: '#b67a23', note: 'Not fully received' },
@@ -890,21 +1035,41 @@ function DashboardPage({ t, gateEntries, openGates, openPurchases, unpostedRecei
   ];
   const priority = openGates.slice(0, 5);
   return <Stack spacing={3}>
-    <Stack direction="row" alignItems="center" spacing={1}><Chip icon={<CheckCircleOutlineRoundedIcon />} label={t.live} size="small" color="success" variant="outlined" /><Typography color="text.secondary" fontSize={12}>{t.today} · Operational records only</Typography></Stack>
-    <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr 1fr', lg: 'repeat(4,1fr)' }, gap: 1.5 }}>
-      {metrics.map((metric, index) => {
-        const Icon = metric.icon;
-        return <Paper key={metric.label} className="metric-card" elevation={0} sx={{ p: { xs: 1.8, sm: 2.3 }, animation: `rise .35s ease ${index * 70}ms both` }}>
-          <Stack direction="row" alignItems="center" justifyContent="space-between" mb={2}>
-            <Box sx={{ width: 40, height: 40, borderRadius: 2.5, display: 'grid', placeItems: 'center', bgcolor: metric.tint, color: metric.color }}><Icon fontSize="small" /></Box>
-            <AssessmentOutlinedIcon sx={{ color: '#c5d0c8', fontSize: 18 }} />
-          </Stack>
-          <Typography className="brand-font" fontSize={{ xs: 25, sm: 30 }} fontWeight={800}>{metric.value}</Typography>
-          <Typography fontSize={12} fontWeight={700} mt={.3}>{metric.label}</Typography>
-          <Typography fontSize={10} color="text.secondary" mt={.5}>{metric.note}</Typography>
-        </Paper>;
-      })}
-    </Box>
+    <Paper sx={{ p: 1, borderRadius: 2 }}>
+      <Tabs value={dashboardTab} onChange={(_, val) => setDashboardTab(val)} indicatorColor="primary" textColor="primary">
+        <Tab label={language === 'bn' ? 'মালিকানা এক্সিকিউটিভ ড্যাশবোর্ড' : 'Executive Overview'} />
+        <Tab label={language === 'bn' ? 'ম্যানেজমেন্ট অ্যানালিটিক্স' : 'Management Analytics'} />
+        <Tab label={language === 'bn' ? 'কারখানা পরিচালনা ও কাউন্টার' : 'Plant Operations & Gates'} />
+      </Tabs>
+    </Paper>
+
+    {dashboardTab === 0 && (
+      <OwnerDashboardPage companyId={companyId} factoryId={factoryId} language={language} />
+    )}
+
+    {dashboardTab === 1 && (
+      <ManagementAnalyticsPage companyId={companyId} factoryId={factoryId} language={language} />
+    )}
+
+    {dashboardTab === 2 && (
+      <Stack spacing={3}>
+        <Stack direction="row" alignItems="center" spacing={1}><Chip icon={<CheckCircleOutlineRoundedIcon />} label={t.live} size="small" color="success" variant="outlined" /><Typography color="text.secondary" fontSize={12}>{t.today} · Operational records only</Typography></Stack>
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr 1fr', lg: 'repeat(4,1fr)' }, gap: 1.5 }}>
+          {metrics.map((metric, index) => {
+            const Icon = metric.icon;
+            return <Paper key={metric.label} className="metric-card" elevation={0} sx={{ p: { xs: 1.8, sm: 2.3 }, animation: `rise .35s ease ${index * 70}ms both` }}>
+              <Stack direction="row" alignItems="center" justifyContent="space-between" mb={2}>
+                <Box sx={{ width: 40, height: 40, borderRadius: 2.5, display: 'grid', placeItems: 'center', bgcolor: metric.tint, color: metric.color }}><Icon fontSize="small" /></Box>
+                <AssessmentOutlinedIcon sx={{ color: '#c5d0c8', fontSize: 18 }} />
+              </Stack>
+              <Typography className="brand-font" fontSize={{ xs: 25, sm: 30 }} fontWeight={800}>{metric.value}</Typography>
+              <Typography fontSize={12} fontWeight={700} mt={.3}>{metric.label}</Typography>
+              <Typography fontSize={10} color="text.secondary" mt={.5}>{metric.note}</Typography>
+            </Paper>;
+          })}
+        </Box>
+      </Stack>
+    )}
     <Paper className="workspace-card" elevation={0} sx={{ p: 2.5 }}>
       <Box mb={2}><Typography className="brand-font" fontWeight={800}>{t.factoryComparison}</Typography><Typography fontSize={11} color="text.secondary">{t.factoryComparisonSub}</Typography></Box>
       {factoryComparisonRestricted && <Alert severity="info" sx={{ mb: 1.5 }}>{t.factoryComparisonRestricted}</Alert>}

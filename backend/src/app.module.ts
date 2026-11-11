@@ -20,6 +20,32 @@ import { ParboilingModule } from './modules/parboiling/parboiling.module';
 import { RepackingModule } from './modules/repacking/repacking.module';
 import { SalesModule } from './modules/sales/sales.module';
 import { DispatchModule } from './modules/dispatch/dispatch.module';
+import { SalesReturnModule } from './modules/sales-return/sales-return.module';
+import { TollMillingModule } from './modules/toll-milling/toll-milling.module';
+import { ExpensesModule } from './modules/expenses/expenses.module';
+import { AccountingModule } from './modules/accounting/accounting.module';
+import { ProfitabilityModule } from './modules/profitability/profitability.module';
+import { HrModule } from './modules/hr/hr.module';
+import { MachinesModule } from './modules/machines/machines.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
-@Module({ imports: [DatabaseModule, AuthModule, CompaniesModule, FactoriesModule, UsersModule, RolesModule, SettingsModule, PartnersModule, ItemsModule, UnitConversionsModule, GateModule, InventoryModule, ProcurementModule, ProductionModule, DryingModule, ParboilingModule, RepackingModule, SalesModule, DispatchModule, DashboardModule], providers: [{ provide: APP_GUARD, useClass: AccessGuard }] })
+import { FleetModule } from './modules/fleet/fleet.module';
+import { DocumentsModule } from './modules/documents/documents.module';
+import { ApprovalsModule } from './modules/approvals/approvals.module';
+import { AuditModule } from './modules/audit/audit.module';
+import { AlertsModule } from './modules/alerts/alerts.module';
+import { AiReadyModule } from './modules/ai-ready/ai-ready.module';
+import { ReportsModule } from './modules/reports/reports.module';
+import { PrintModule } from './modules/print/print.module';
+import { BangladeshModule } from './modules/bangladesh/bangladesh.module';
+import { SearchModule } from './modules/search/search.module';
+import { ImportModule } from './modules/import/import.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
+import { IntegrityModule } from './modules/integrity/integrity.module';
+import { CalculationEngineModule } from './modules/calculations/calculation-engine.module';
+import { I18nModule } from './modules/i18n/i18n.module';
+import { MobileModule } from './modules/mobile/mobile.module';
+import { PerformanceModule } from './modules/performance/performance.module';
+import { BackupModule } from './modules/backup/backup.module';
+import { TraceModule } from './modules/trace/trace.module';
+@Module({ imports: [DatabaseModule, AuthModule, CompaniesModule, FactoriesModule, UsersModule, RolesModule, SettingsModule, PartnersModule, ItemsModule, UnitConversionsModule, GateModule, InventoryModule, ProcurementModule, ProductionModule, DryingModule, ParboilingModule, RepackingModule, SalesModule, DispatchModule, SalesReturnModule, TollMillingModule, ExpensesModule, AccountingModule, ProfitabilityModule, HrModule, MachinesModule, FleetModule, DocumentsModule, ApprovalsModule, AuditModule, DashboardModule, AlertsModule, AiReadyModule, ReportsModule, PrintModule, BangladeshModule, SearchModule, ImportModule, NotificationsModule, IntegrityModule, CalculationEngineModule, I18nModule, MobileModule, PerformanceModule, BackupModule, TraceModule], providers: [{ provide: APP_GUARD, useClass: AccessGuard }] })
 export class AppModule {}

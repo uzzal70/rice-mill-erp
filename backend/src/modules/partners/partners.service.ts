@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { BrokerCommissionType, DocumentStatus, PartnerType, Prisma } from '@prisma/client';
+import { BrokerCommissionType, DocumentStatus, PartnerType, Prisma, TollOrderStatus } from '@prisma/client';
 import { PrismaService } from '../../common/prisma.service';
 import { CreateBrokerDto, CreatePartnerDto, ListPartnerLedgerDto, ListPartnersDto, PartnerFinancialDto, UpdatePartnerDto } from './partners.dto';
 
@@ -170,7 +170,7 @@ export class PartnersService {
       customerId: id,
     };
 
-    const [orders, total, approvedOrders] = await Promise.all([
+    const [orders, total, approvedOrders, postedReturns, tollOrders] = await Promise.all([
       this.prisma.salesOrder.findMany({
         where,
         include: {
@@ -187,6 +187,22 @@ export class PartnersService {
         where: { ...where, status: DocumentStatus.APPROVED },
         select: { totalAmount: true },
       }),
+      this.prisma.salesReturn.findMany({
+        where: {
+          companyId: query.companyId,
+          customerId: id,
+          status: DocumentStatus.POSTED,
+        },
+        select: { totalAmount: true },
+      }),
+      this.prisma.tollOrder.findMany({
+        where: {
+          companyId: query.companyId,
+          customerId: id,
+          status: { in: [TollOrderStatus.RECEIVED, TollOrderStatus.IN_PROCESS, TollOrderStatus.COMPLETED] },
+        },
+        select: { totalAmount: true },
+      }),
     ]);
 
     const openingBalance = partner.openingBalance ?? new Prisma.Decimal(0);
@@ -194,9 +210,17 @@ export class PartnersService {
       (sum, o) => sum.plus(o.totalAmount),
       new Prisma.Decimal(0),
     );
+    const totalReturns = postedReturns.reduce(
+      (sum, r) => sum.plus(r.totalAmount),
+      new Prisma.Decimal(0),
+    );
+    const totalTollCharges = tollOrders.reduce(
+      (sum, t) => sum.plus(t.totalAmount),
+      new Prisma.Decimal(0),
+    );
     const totalInvoiced = new Prisma.Decimal(0);
     const totalPaid = new Prisma.Decimal(0);
-    const totalDue = openingBalance.plus(totalApprovedOrders).minus(totalPaid);
+    const totalDue = openingBalance.plus(totalApprovedOrders).plus(totalTollCharges).minus(totalPaid).minus(totalReturns);
     const availableCredit = partner.creditLimit ? partner.creditLimit.minus(totalDue) : null;
 
     return {
@@ -219,6 +243,8 @@ export class PartnersService {
       summary: {
         openingBalance,
         totalApprovedOrders,
+        totalTollCharges,
+        totalReturns,
         totalInvoiced,
         totalPaid,
         totalDue,

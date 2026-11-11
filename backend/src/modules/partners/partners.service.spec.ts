@@ -12,6 +12,8 @@ describe('PartnersService', () => {
     goodsReceipt: { findMany: jest.fn(), count: jest.fn() },
     purchaseInvoice: { aggregate: jest.fn() },
     salesOrder: { findMany: jest.fn(), count: jest.fn() },
+    salesReturn: { findMany: jest.fn() },
+    tollOrder: { findMany: jest.fn() },
     $queryRaw: jest.fn(),
     $transaction: jest.fn(),
   };
@@ -20,6 +22,8 @@ describe('PartnersService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     prisma.purchaseInvoice.aggregate.mockResolvedValue({ _count: { _all: 0 }, _sum: {} });
+    prisma.salesReturn.findMany.mockResolvedValue([]);
+    prisma.tollOrder.findMany.mockResolvedValue([]);
   });
 
   it('redacts bank and financial fields from ordinary partner reads', async () => {
@@ -181,6 +185,29 @@ describe('PartnersService', () => {
     expect(result.summary.totalDue).toEqual(new Prisma.Decimal('125000.00'));
     expect(result.summary.availableCredit).toEqual(new Prisma.Decimal('375000.00'));
     expect(result.data).toHaveLength(1);
+  });
+
+  it('credits posted sales returns against customer ledger total due and restores available credit', async () => {
+    prisma.partner.findFirst.mockResolvedValue({
+      id: 'customer-1',
+      type: PartnerType.CUSTOMER,
+      name: 'Retail Customer',
+      code: 'CUST-01',
+      creditLimit: new Prisma.Decimal('500000.00'),
+      openingBalance: new Prisma.Decimal('25000.00'),
+    });
+    prisma.salesOrder.findMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ totalAmount: new Prisma.Decimal('100000.00') }]);
+    prisma.salesOrder.count.mockResolvedValue(0);
+    prisma.salesReturn.findMany.mockResolvedValueOnce([{ totalAmount: new Prisma.Decimal('15000.00') }]);
+
+    const result = await service.listCustomerLedger('customer-1', { companyId: 'company-1', page: 1, pageSize: 25 });
+    expect(result.summary.totalReturns).toEqual(new Prisma.Decimal('15000.00'));
+    // totalDue = 25000 + 100000 - 15000 = 110000
+    expect(result.summary.totalDue).toEqual(new Prisma.Decimal('110000.00'));
+    // availableCredit = 500000 - 110000 = 390000
+    expect(result.summary.availableCredit).toEqual(new Prisma.Decimal('390000.00'));
   });
 
   it('rejects customer-ledger access for non-customer partners', async () => {
