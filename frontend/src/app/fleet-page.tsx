@@ -383,7 +383,7 @@ export function FleetPage({
 
       {/* Tab 0: Trips & Mileage */}
       {activeTab === 0 && (
-        <Paper sx={{ p: 2 }}>
+        <Paper sx={{ p: 2, overflowX: 'auto' }}>
           <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
             <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
               {isBn ? 'সর্বশেষ ট্রিপ ও মাইলেজ হিসাব' : 'Recent Vehicle Trips & Distance Records'}
@@ -392,19 +392,19 @@ export function FleetPage({
               {isBn ? '+ ট্রিপ যোগ করুন' : '+ Record Trip'}
             </Button>
           </Stack>
-          <Table size="small">
+          <Table size="small" sx={{ minWidth: 1100 }}>
             <TableHead sx={{ backgroundColor: 'action.hover' }}>
               <TableRow>
-                <TableCell><strong>{isBn ? 'ট্রিপ নং' : 'Trip #'}</strong></TableCell>
-                <TableCell><strong>{isBn ? 'তারিখ' : 'Date'}</strong></TableCell>
-                <TableCell><strong>{isBn ? 'গাড়ি ও চালক' : 'Vehicle & Driver'}</strong></TableCell>
-                <TableCell><strong>{isBn ? 'রুট (উৎস → গন্তব্য)' : 'Route'}</strong></TableCell>
-                <TableCell align="right"><strong>{isBn ? 'ওডোমিটার (কিমি)' : 'Odometer (KM)'}</strong></TableCell>
-                <TableCell align="right"><strong>{isBn ? 'দূরত্ব' : 'Distance'}</strong></TableCell>
-                <TableCell align="right"><strong>{isBn ? 'জ্বালানি খরচ' : 'Fuel Cost'}</strong></TableCell>
-                <TableCell align="right"><strong>{isBn ? 'জ্বালানি/কিমি' : 'Fuel/KM'}</strong></TableCell>
-                <TableCell align="right"><strong>{isBn ? 'পরিবহন/কিমি' : 'Cost/KM'}</strong></TableCell>
-                <TableCell><strong>{isBn ? 'স্ট্যাটাস' : 'Status'}</strong></TableCell>
+                <TableCell sx={{ whiteSpace: 'nowrap' }}><strong>{isBn ? 'ট্রিপ নং' : 'Trip #'}</strong></TableCell>
+                <TableCell sx={{ whiteSpace: 'nowrap' }}><strong>{isBn ? 'তারিখ' : 'Date'}</strong></TableCell>
+                <TableCell sx={{ whiteSpace: 'nowrap' }}><strong>{isBn ? 'গাড়ি ও চালক' : 'Vehicle & Driver'}</strong></TableCell>
+                <TableCell sx={{ whiteSpace: 'nowrap' }}><strong>{isBn ? 'রুট (উৎস → গন্তব্য)' : 'Route'}</strong></TableCell>
+                <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}><strong>{isBn ? 'ওডোমিটার (কিমি)' : 'Odometer (KM)'}</strong></TableCell>
+                <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}><strong>{isBn ? 'দূরত্ব' : 'Distance'}</strong></TableCell>
+                <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}><strong>{isBn ? 'জ্বালানি খরচ' : 'Fuel Cost'}</strong></TableCell>
+                <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}><strong>{isBn ? 'জ্বালানি/কিমি' : 'Fuel/KM'}</strong></TableCell>
+                <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}><strong>{isBn ? 'পরিবহন/কিমি' : 'Cost/KM'}</strong></TableCell>
+                <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}><strong>{isBn ? 'স্ট্যাটাস' : 'Status'}</strong></TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -417,19 +417,19 @@ export function FleetPage({
               ) : (
                 trips.map((t) => (
                   <TableRow key={t.id} hover>
-                    <TableCell sx={{ fontWeight: 600 }}>{t.tripNumber}</TableCell>
-                    <TableCell>{new Date(t.tripDate).toLocaleDateString()}</TableCell>
-                    <TableCell>
-                      <Typography variant="body2" sx={{ fontWeight: 600 }}>{t.vehicle?.vehicleNumber || 'N/A'}</Typography>
-                      <Typography variant="caption" color="text.secondary">{t.driverName}</Typography>
+                    <TableCell sx={{ fontWeight: 600, fontFamily: 'monospace', whiteSpace: 'nowrap' }}>{t.tripNumber}</TableCell>
+                    <TableCell sx={{ whiteSpace: 'nowrap' }}>{new Date(t.tripDate).toLocaleDateString()}</TableCell>
+                    <TableCell sx={{ maxWidth: 180 }}>
+                      <Typography variant="body2" sx={{ fontWeight: 600 }} noWrap>{t.vehicle?.vehicleNumber || 'N/A'}</Typography>
+                      <Typography variant="caption" color="text.secondary" noWrap>{t.driverName}</Typography>
                     </TableCell>
-                    <TableCell>{t.origin} → {t.destination}</TableCell>
-                    <TableCell align="right">{Number(t.startOdometer)} - {Number(t.endOdometer)}</TableCell>
-                    <TableCell align="right" sx={{ fontWeight: 600 }}>{Number(t.distanceKm)} KM</TableCell>
-                    <TableCell align="right">৳{Number(t.fuelCost).toLocaleString()}</TableCell>
-                    <TableCell align="right">৳{Number(t.fuelCostPerKm).toFixed(2)}</TableCell>
-                    <TableCell align="right">৳{Number(t.transportCostPerKm).toFixed(2)}</TableCell>
-                    <TableCell>
+                    <TableCell sx={{ maxWidth: 200 }}><Typography variant="body2" noWrap title={`${t.origin} → ${t.destination}`}>{t.origin} → {t.destination}</Typography></TableCell>
+                    <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{Number(t.startOdometer)} - {Number(t.endOdometer)}</TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 600, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{Number(t.distanceKm)} KM</TableCell>
+                    <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>৳ {Number(t.fuelCost).toLocaleString()}</TableCell>
+                    <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>৳ {Number(t.fuelCostPerKm).toFixed(2)}</TableCell>
+                    <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>৳ {Number(t.transportCostPerKm).toFixed(2)}</TableCell>
+                    <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}>
                       <Chip size="small" color="success" label={t.status} />
                     </TableCell>
                   </TableRow>
@@ -442,7 +442,7 @@ export function FleetPage({
 
       {/* Tab 1: Fuel Log */}
       {activeTab === 1 && (
-        <Paper sx={{ p: 2 }}>
+        <Paper sx={{ p: 2, overflowX: 'auto' }}>
           <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
             <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
               {isBn ? 'জ্বালানি ভাউচার ও তেলের খরচ লগ' : 'Fuel Purchase & Dispense Records'}
@@ -451,17 +451,17 @@ export function FleetPage({
               {isBn ? '+ জ্বালানি ভাউচার' : '+ Add Fuel Voucher'}
             </Button>
           </Stack>
-          <Table size="small">
+          <Table size="small" sx={{ minWidth: 980 }}>
             <TableHead sx={{ backgroundColor: 'action.hover' }}>
               <TableRow>
-                <TableCell><strong>{isBn ? 'তারিখ' : 'Date'}</strong></TableCell>
-                <TableCell><strong>{isBn ? 'গাড়ি / ইকুইপমেন্ট' : 'Vehicle / Equipment'}</strong></TableCell>
-                <TableCell><strong>{isBn ? 'তেলের ধরন' : 'Fuel Type'}</strong></TableCell>
-                <TableCell align="right"><strong>{isBn ? 'পরিমাণ (লিটার)' : 'Quantity (L)'}</strong></TableCell>
-                <TableCell align="right"><strong>{isBn ? 'দর (৳/লিটার)' : 'Rate (৳/L)'}</strong></TableCell>
-                <TableCell align="right"><strong>{isBn ? 'মোট খরচ' : 'Total Cost'}</strong></TableCell>
-                <TableCell><strong>{isBn ? 'পাম্প / ফিলিং স্টেশন' : 'Filling Station'}</strong></TableCell>
-                <TableCell><strong>{isBn ? 'স্লিপ নং' : 'Slip #'}</strong></TableCell>
+                <TableCell sx={{ whiteSpace: 'nowrap' }}><strong>{isBn ? 'তারিখ' : 'Date'}</strong></TableCell>
+                <TableCell sx={{ whiteSpace: 'nowrap' }}><strong>{isBn ? 'গাড়ি / ইকুইপমেন্ট' : 'Vehicle / Equipment'}</strong></TableCell>
+                <TableCell sx={{ whiteSpace: 'nowrap' }}><strong>{isBn ? 'তেলের ধরন' : 'Fuel Type'}</strong></TableCell>
+                <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}><strong>{isBn ? 'পরিমাণ (লিটার)' : 'Quantity (L)'}</strong></TableCell>
+                <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}><strong>{isBn ? 'দর (৳/লিটার)' : 'Rate (৳/L)'}</strong></TableCell>
+                <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}><strong>{isBn ? 'মোট খরচ' : 'Total Cost'}</strong></TableCell>
+                <TableCell sx={{ whiteSpace: 'nowrap' }}><strong>{isBn ? 'পাম্প / ফিলিং স্টেশন' : 'Filling Station'}</strong></TableCell>
+                <TableCell sx={{ whiteSpace: 'nowrap' }}><strong>{isBn ? 'স্লিপ নং' : 'Slip #'}</strong></TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -474,10 +474,10 @@ export function FleetPage({
               ) : (
                 fuelLogs.map((f) => (
                   <TableRow key={f.id} hover>
-                    <TableCell>{new Date(f.logDate).toLocaleDateString()}</TableCell>
-                    <TableCell sx={{ fontWeight: 600 }}>{f.vehicle?.vehicleNumber || (f.machineId ? `Machine: ${f.machineId}` : 'Plant Generator')}</TableCell>
-                    <TableCell><Chip size="small" label={f.fuelType} /></TableCell>
-                    <TableCell align="right" sx={{ fontWeight: 600 }}>{Number(f.quantityLiters).toFixed(2)} L</TableCell>
+                    <TableCell sx={{ whiteSpace: 'nowrap' }}>{new Date(f.logDate).toLocaleDateString()}</TableCell>
+                    <TableCell sx={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{f.vehicle?.vehicleNumber || (f.machineId ? `Machine: ${f.machineId}` : 'Plant Generator')}</TableCell>
+                    <TableCell sx={{ whiteSpace: 'nowrap' }}><Chip size="small" label={f.fuelType} /></TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 600, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{Number(f.quantityLiters).toFixed(2)} L</TableCell>
                     <TableCell align="right">৳{Number(f.ratePerLiter).toFixed(2)}</TableCell>
                     <TableCell align="right" sx={{ fontWeight: 700, color: 'primary.main' }}>৳{Number(f.totalCost).toLocaleString()}</TableCell>
                     <TableCell>{f.fillingStation || '-'}</TableCell>
@@ -492,7 +492,7 @@ export function FleetPage({
 
       {/* Tab 2: Vehicle Directory */}
       {activeTab === 2 && (
-        <Paper sx={{ p: 2 }}>
+        <Paper sx={{ p: 2, overflowX: 'auto' }}>
           <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
             <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
               {isBn ? 'যানবাহন মাস্টার তালিকা ও কাগজপত্র' : 'Company Fleet & Vehicle Directory'}
@@ -501,17 +501,17 @@ export function FleetPage({
               {isBn ? '+ নতুন গাড়ি যোগ' : '+ Add Vehicle'}
             </Button>
           </Stack>
-          <Table size="small">
+          <Table size="small" sx={{ minWidth: 980 }}>
             <TableHead sx={{ backgroundColor: 'action.hover' }}>
               <TableRow>
-                <TableCell><strong>{isBn ? 'যানবাহন নম্বর' : 'Vehicle Number'}</strong></TableCell>
-                <TableCell><strong>{isBn ? 'ধরন' : 'Type'}</strong></TableCell>
-                <TableCell><strong>{isBn ? 'নিয়মিত চালক' : 'Assigned Driver'}</strong></TableCell>
-                <TableCell><strong>{isBn ? 'মোবাইল' : 'Contact'}</strong></TableCell>
-                <TableCell><strong>{isBn ? 'ফিটনেস মেয়াদ' : 'Fitness Expiry'}</strong></TableCell>
-                <TableCell><strong>{isBn ? 'বীমা মেয়াদ' : 'Insurance Expiry'}</strong></TableCell>
-                <TableCell><strong>{isBn ? 'ট্যাক্স টোকেন' : 'Tax Token'}</strong></TableCell>
-                <TableCell><strong>{isBn ? 'স্ট্যাটাস' : 'Status'}</strong></TableCell>
+                <TableCell sx={{ whiteSpace: 'nowrap' }}><strong>{isBn ? 'যানবাহন নম্বর' : 'Vehicle Number'}</strong></TableCell>
+                <TableCell sx={{ whiteSpace: 'nowrap' }}><strong>{isBn ? 'ধরন' : 'Type'}</strong></TableCell>
+                <TableCell sx={{ whiteSpace: 'nowrap' }}><strong>{isBn ? 'নিয়মিত চালক' : 'Assigned Driver'}</strong></TableCell>
+                <TableCell sx={{ whiteSpace: 'nowrap' }}><strong>{isBn ? 'মোবাইল' : 'Contact'}</strong></TableCell>
+                <TableCell sx={{ whiteSpace: 'nowrap' }}><strong>{isBn ? 'ফিটনেস মেয়াদ' : 'Fitness Expiry'}</strong></TableCell>
+                <TableCell sx={{ whiteSpace: 'nowrap' }}><strong>{isBn ? 'বীমা মেয়াদ' : 'Insurance Expiry'}</strong></TableCell>
+                <TableCell sx={{ whiteSpace: 'nowrap' }}><strong>{isBn ? 'ট্যাক্স টোকেন' : 'Tax Token'}</strong></TableCell>
+                <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}><strong>{isBn ? 'স্ট্যাটাস' : 'Status'}</strong></TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -524,14 +524,14 @@ export function FleetPage({
               ) : (
                 vehicles.map((v) => (
                   <TableRow key={v.id} hover>
-                    <TableCell sx={{ fontWeight: 600 }}>{v.vehicleNumber}</TableCell>
-                    <TableCell><Chip size="small" label={v.vehicleType} /></TableCell>
-                    <TableCell>{v.driverName || '-'}</TableCell>
-                    <TableCell>{v.driverMobile || '-'}</TableCell>
-                    <TableCell>{v.fitnessExpiry ? new Date(v.fitnessExpiry).toLocaleDateString() : '-'}</TableCell>
-                    <TableCell>{v.insuranceExpiry ? new Date(v.insuranceExpiry).toLocaleDateString() : '-'}</TableCell>
-                    <TableCell>{v.taxTokenExpiry ? new Date(v.taxTokenExpiry).toLocaleDateString() : '-'}</TableCell>
-                    <TableCell>
+                    <TableCell sx={{ fontWeight: 600, fontFamily: 'monospace', whiteSpace: 'nowrap' }}>{v.vehicleNumber}</TableCell>
+                    <TableCell sx={{ whiteSpace: 'nowrap' }}><Chip size="small" label={v.vehicleType} /></TableCell>
+                    <TableCell sx={{ maxWidth: 160 }}><Typography variant="body2" noWrap title={v.driverName || '-'}>{v.driverName || '-'}</Typography></TableCell>
+                    <TableCell sx={{ whiteSpace: 'nowrap' }}>{v.driverMobile || '-'}</TableCell>
+                    <TableCell sx={{ whiteSpace: 'nowrap' }}>{v.fitnessExpiry ? new Date(v.fitnessExpiry).toLocaleDateString() : '-'}</TableCell>
+                    <TableCell sx={{ whiteSpace: 'nowrap' }}>{v.insuranceExpiry ? new Date(v.insuranceExpiry).toLocaleDateString() : '-'}</TableCell>
+                    <TableCell sx={{ whiteSpace: 'nowrap' }}>{v.taxTokenExpiry ? new Date(v.taxTokenExpiry).toLocaleDateString() : '-'}</TableCell>
+                    <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}>
                       <Chip size="small" color={v.active ? 'success' : 'default'} label={v.active ? 'Active' : 'Inactive'} />
                     </TableCell>
                   </TableRow>
@@ -544,7 +544,7 @@ export function FleetPage({
 
       {/* Tab 3: Maintenance & Servicing */}
       {activeTab === 3 && (
-        <Paper sx={{ p: 2 }}>
+        <Paper sx={{ p: 2, overflowX: 'auto' }}>
           <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
             <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
               {isBn ? 'যানবাহন মেরামত ও পর্যায়ক্রমিক সার্ভিসিং লগ' : 'Vehicle Maintenance & Workshop Repairs'}
@@ -553,17 +553,17 @@ export function FleetPage({
               {isBn ? '+ সার্ভিসিং এন্ট্রি' : '+ Record Maintenance'}
             </Button>
           </Stack>
-          <Table size="small">
+          <Table size="small" sx={{ minWidth: 1050 }}>
             <TableHead sx={{ backgroundColor: 'action.hover' }}>
               <TableRow>
-                <TableCell><strong>{isBn ? 'তারিখ' : 'Service Date'}</strong></TableCell>
-                <TableCell><strong>{isBn ? 'যানবাহন' : 'Vehicle'}</strong></TableCell>
-                <TableCell><strong>{isBn ? 'সার্ভিস টাইপ' : 'Type'}</strong></TableCell>
-                <TableCell align="right"><strong>{isBn ? 'ওডোমিটার (কিমি)' : 'Odometer'}</strong></TableCell>
-                <TableCell align="right"><strong>{isBn ? 'মোট খরচ' : 'Cost'}</strong></TableCell>
-                <TableCell><strong>{isBn ? 'ওয়ার্কশপ' : 'Workshop / Center'}</strong></TableCell>
-                <TableCell><strong>{isBn ? 'বিবরণ' : 'Description'}</strong></TableCell>
-                <TableCell align="right"><strong>{isBn ? 'পরবর্তী সার্ভিস (কিমি)' : 'Next Due (KM)'}</strong></TableCell>
+                <TableCell sx={{ whiteSpace: 'nowrap' }}><strong>{isBn ? 'তারিখ' : 'Service Date'}</strong></TableCell>
+                <TableCell sx={{ whiteSpace: 'nowrap' }}><strong>{isBn ? 'যানবাহন' : 'Vehicle'}</strong></TableCell>
+                <TableCell sx={{ whiteSpace: 'nowrap' }}><strong>{isBn ? 'সার্ভিস টাইপ' : 'Type'}</strong></TableCell>
+                <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}><strong>{isBn ? 'ওডোমিটার (কিমি)' : 'Odometer'}</strong></TableCell>
+                <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}><strong>{isBn ? 'মোট খরচ' : 'Cost'}</strong></TableCell>
+                <TableCell sx={{ whiteSpace: 'nowrap' }}><strong>{isBn ? 'ওয়ার্কশপ' : 'Workshop / Center'}</strong></TableCell>
+                <TableCell sx={{ whiteSpace: 'nowrap' }}><strong>{isBn ? 'বিবরণ' : 'Description'}</strong></TableCell>
+                <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}><strong>{isBn ? 'পরবর্তী সার্ভিস (কিমি)' : 'Next Due (KM)'}</strong></TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -576,14 +576,14 @@ export function FleetPage({
               ) : (
                 maintenances.map((m) => (
                   <TableRow key={m.id} hover>
-                    <TableCell>{new Date(m.serviceDate).toLocaleDateString()}</TableCell>
-                    <TableCell sx={{ fontWeight: 600 }}>{m.vehicle?.vehicleNumber || 'N/A'}</TableCell>
-                    <TableCell><Chip size="small" label={m.maintenanceType} /></TableCell>
-                    <TableCell align="right">{m.odometerReading ? `${Number(m.odometerReading)} KM` : '-'}</TableCell>
-                    <TableCell align="right" sx={{ fontWeight: 700, color: 'error.main' }}>৳{Number(m.cost).toLocaleString()}</TableCell>
-                    <TableCell>{m.serviceCenter || '-'}</TableCell>
-                    <TableCell>{m.description || '-'}</TableCell>
-                    <TableCell align="right">{m.nextServiceDueKm ? `${Number(m.nextServiceDueKm)} KM` : '-'}</TableCell>
+                    <TableCell sx={{ whiteSpace: 'nowrap' }}>{new Date(m.serviceDate).toLocaleDateString()}</TableCell>
+                    <TableCell sx={{ fontWeight: 600, fontFamily: 'monospace', whiteSpace: 'nowrap' }}>{m.vehicle?.vehicleNumber || 'N/A'}</TableCell>
+                    <TableCell sx={{ whiteSpace: 'nowrap' }}><Chip size="small" label={m.maintenanceType} /></TableCell>
+                    <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{m.odometerReading ? `${Number(m.odometerReading)} KM` : '-'}</TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 700, color: 'error.main', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>৳ {Number(m.cost).toLocaleString()}</TableCell>
+                    <TableCell sx={{ maxWidth: 180 }}><Typography variant="body2" noWrap title={m.serviceCenter || '-'}>{m.serviceCenter || '-'}</Typography></TableCell>
+                    <TableCell sx={{ maxWidth: 220 }}><Typography variant="body2" noWrap title={m.description || '-'}>{m.description || '-'}</Typography></TableCell>
+                    <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{m.nextServiceDueKm ? `${Number(m.nextServiceDueKm)} KM` : '-'}</TableCell>
                   </TableRow>
                 ))
               )}

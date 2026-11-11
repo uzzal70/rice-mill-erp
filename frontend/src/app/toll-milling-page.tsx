@@ -523,21 +523,21 @@ export function TollMillingPage({ companyId, factoryId, language, onSaved }: Tol
           </Paper>
 
           {/* Orders Table */}
-          <Paper sx={{ borderRadius: 2, overflow: 'hidden' }}>
-            <Table size="small">
+          <Paper sx={{ borderRadius: 2, overflowX: 'auto' }}>
+            <Table size="small" sx={{ minWidth: 1250 }}>
               <TableHead sx={{ bgcolor: 'action.hover' }}>
                 <TableRow>
-                  <TableCell><strong>{isBn ? 'আদেশ নং' : 'Order No'}</strong></TableCell>
-                  <TableCell><strong>{isBn ? 'তারিখ' : 'Date'}</strong></TableCell>
-                  <TableCell><strong>{isBn ? 'গ্রাহক' : 'Customer'}</strong></TableCell>
-                  <TableCell><strong>{isBn ? 'ধানের জাত' : 'Paddy Item'}</strong></TableCell>
-                  <TableCell align="right"><strong>{isBn ? 'প্রাপ্ত ধান (কেজি)' : 'Paddy Received'}</strong></TableCell>
-                  <TableCell align="right"><strong>{isBn ? 'প্রসেসকৃত (কেজি)' : 'Processed KG'}</strong></TableCell>
-                  <TableCell align="right"><strong>{isBn ? 'চাল তৈরি (কেজি)' : 'Rice Produced'}</strong></TableCell>
-                  <TableCell align="right"><strong>{isBn ? 'চাল ডেলিভারি' : 'Rice Delivered'}</strong></TableCell>
-                  <TableCell align="right"><strong>{isBn ? 'সার্ভিস চার্জ (৳)' : 'Toll Fee (৳)'}</strong></TableCell>
-                  <TableCell align="center"><strong>{isBn ? 'অবস্থা' : 'Status'}</strong></TableCell>
-                  <TableCell align="right"><strong>{isBn ? 'কার্যক্রম' : 'Actions'}</strong></TableCell>
+                  <TableCell sx={{ whiteSpace: 'nowrap' }}><strong>{isBn ? 'আদেশ নং' : 'Order No'}</strong></TableCell>
+                  <TableCell sx={{ whiteSpace: 'nowrap' }}><strong>{isBn ? 'তারিখ' : 'Date'}</strong></TableCell>
+                  <TableCell sx={{ whiteSpace: 'nowrap' }}><strong>{isBn ? 'গ্রাহক' : 'Customer'}</strong></TableCell>
+                  <TableCell sx={{ whiteSpace: 'nowrap' }}><strong>{isBn ? 'ধানের জাত' : 'Paddy Item'}</strong></TableCell>
+                  <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}><strong>{isBn ? 'প্রাপ্ত ধান (কেজি)' : 'Paddy Received'}</strong></TableCell>
+                  <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}><strong>{isBn ? 'প্রসেসকৃত (কেজি)' : 'Processed KG'}</strong></TableCell>
+                  <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}><strong>{isBn ? 'চাল তৈরি (কেজি)' : 'Rice Produced'}</strong></TableCell>
+                  <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}><strong>{isBn ? 'চাল ডেলিভারি' : 'Rice Delivered'}</strong></TableCell>
+                  <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}><strong>{isBn ? 'সার্ভিস চার্জ (৳)' : 'Toll Fee (৳)'}</strong></TableCell>
+                  <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}><strong>{isBn ? 'অবস্থা' : 'Status'}</strong></TableCell>
+                  <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}><strong>{isBn ? 'কার্যক্রম' : 'Actions'}</strong></TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -556,14 +556,14 @@ export function TollMillingPage({ companyId, factoryId, language, onSaved }: Tol
                 ) : (
                   orders.map((ord) => (
                     <TableRow key={ord.id} hover>
-                      <TableCell sx={{ fontWeight: 600 }}>{ord.orderNumber}</TableCell>
-                      <TableCell>{ord.receivedAt ? new Date(ord.receivedAt).toLocaleDateString() : '—'}</TableCell>
-                      <TableCell>
-                        <Typography variant="body2" fontWeight={600}>
+                      <TableCell sx={{ fontWeight: 600, fontFamily: 'monospace', whiteSpace: 'nowrap' }}>{ord.orderNumber}</TableCell>
+                      <TableCell sx={{ whiteSpace: 'nowrap' }}>{ord.receivedAt ? new Date(ord.receivedAt).toLocaleDateString() : '—'}</TableCell>
+                      <TableCell sx={{ maxWidth: 180 }}>
+                        <Typography variant="body2" fontWeight={600} noWrap title={ord.customer?.name}>
                           {ord.customer?.name}
                         </Typography>
                         {ord.customer?.phone && (
-                          <Typography variant="caption" color="text.secondary">
+                          <Typography variant="caption" color="text.secondary" noWrap title={ord.customer.phone}>
                             {ord.customer.phone}
                           </Typography>
                         )}

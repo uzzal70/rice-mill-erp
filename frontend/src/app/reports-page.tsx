@@ -513,27 +513,47 @@ export function ReportsPage({
         <Divider sx={{ mb: 2 }} />
 
         {/* Report Table */}
-        <TableContainer>
-          <Table size="small" sx={{ minWidth: 650 }}>
+        <TableContainer sx={{ overflowX: 'auto', maxWidth: '100%' }}>
+          <Table size="small" sx={{ minWidth: Math.max(750, (reportData?.headers?.length || 5) * 130) }}>
             <TableHead>
-              <TableRow sx={{ bgcolor: '#eceff1' }}>
-                {(reportData?.headers || []).map((h, idx) => (
-                  <TableCell key={idx} sx={{ fontWeight: 700, fontSize: 12 }}>
-                    {h}
-                  </TableCell>
-                ))}
+              <TableRow sx={{ bgcolor: '#f8fafc' }}>
+                {(reportData?.headers || []).map((h, idx) => {
+                  const sampleVal = reportData?.rows?.[0] ? Object.values(reportData.rows[0])[idx] : undefined;
+                  const isNum = typeof sampleVal === 'number' || /bdt|kg|amount|rate|qty|total|debit|credit|balance|টাকা|ওজন|পরিমাণ|মূল্য|ব্যালেন্স/i.test(h);
+                  return (
+                    <TableCell
+                      key={idx}
+                      align={isNum ? 'right' : 'left'}
+                      sx={{ fontWeight: 700, fontSize: 11.5, whiteSpace: 'nowrap' }}
+                    >
+                      {h}
+                    </TableCell>
+                  );
+                })}
               </TableRow>
             </TableHead>
             <TableBody>
               {(reportData?.rows || []).map((row, rIdx) => (
                 <TableRow key={rIdx} hover>
-                  {Object.values(row).map((val: any, cIdx) => (
-                    <TableCell key={cIdx} sx={{ fontSize: 12 }}>
-                      {typeof val === 'number'
-                        ? val.toLocaleString('en-IN')
-                        : String(val ?? '—')}
-                    </TableCell>
-                  ))}
+                  {Object.values(row).map((val: any, cIdx) => {
+                    const isNum = typeof val === 'number';
+                    return (
+                      <TableCell
+                        key={cIdx}
+                        align={isNum ? 'right' : 'left'}
+                        sx={{
+                          fontSize: 12,
+                          whiteSpace: 'nowrap',
+                          ...(isNum ? { fontVariantNumeric: 'tabular-nums', fontFamily: 'monospace' } : { maxWidth: 260, textOverflow: 'ellipsis', overflow: 'hidden' }),
+                        }}
+                        title={String(val ?? '')}
+                      >
+                        {isNum
+                          ? val.toLocaleString('en-IN')
+                          : String(val ?? '—')}
+                      </TableCell>
+                    );
+                  })}
                 </TableRow>
               ))}
 

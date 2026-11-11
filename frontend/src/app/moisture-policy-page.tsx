@@ -151,21 +151,30 @@ export function MoisturePolicyPage({
         <Box><Typography fontWeight={800}>{t.title}</Typography><Typography color="text.secondary" fontSize={12}>{t.subtitle}</Typography></Box>
         <Button variant="contained" onClick={() => edit()}>{t.add}</Button>
       </Stack>
-      <Box sx={{ overflowX: 'auto' }}>
-        <Table size="small">
-          <TableHead><TableRow>{[t.name, t.priority, t.scope, t.formula, t.allowed, t.rateDeduction, t.status, t.actions].map(label => <TableCell key={label}>{label}</TableCell>)}</TableRow></TableHead>
+      <Box sx={{ overflowX: 'auto', width: '100%' }}>
+        <Table size="small" sx={{ minWidth: 950 }}>
+          <TableHead><TableRow>{[
+            { label: t.name, align: 'left' },
+            { label: t.priority, align: 'center' },
+            { label: t.scope, align: 'left' },
+            { label: t.formula, align: 'left' },
+            { label: t.allowed, align: 'right' },
+            { label: t.rateDeduction, align: 'right' },
+            { label: t.status, align: 'center' },
+            { label: t.actions, align: 'right' },
+          ].map(col => <TableCell key={col.label} align={col.align as any} sx={{ whiteSpace: 'nowrap' }}>{col.label}</TableCell>)}</TableRow></TableHead>
           <TableBody>
-            {policies.map(policy => <TableRow key={policy.id}>
-              <TableCell>{policy.name}</TableCell>
-              <TableCell>{policy.priority}</TableCell>
-              <TableCell>{policy.factoryId ? t.factory : t.allFactories}{policy.paddyItemId ? ` · ${paddy.find(row => row.id === policy.paddyItemId)?.name ?? ''}` : ''}{policy.supplierPartnerId ? ` · ${suppliers.find(row => row.id === policy.supplierPartnerId)?.name ?? ''}` : ''}</TableCell>
-              <TableCell>{policy.formula === 'DRY_MATTER_CORRECTION' ? t.dry : t.slabFormula}</TableCell>
-              <TableCell>{policy.allowedMoisturePct}% ± {policy.tolerancePct}%</TableCell>
-              <TableCell>{policy.rateDeductionPct}%</TableCell>
-              <TableCell><Chip size="small" color={policy.active ? 'success' : 'default'} label={policy.active ? t.enabled : t.disabled} /></TableCell>
-              <TableCell><Button size="small" onClick={() => edit(policy)}>{language === 'bn' ? 'সম্পাদনা' : 'Edit'}</Button></TableCell>
+            {policies.map(policy => <TableRow key={policy.id} hover>
+              <TableCell sx={{ maxWidth: 200 }}><Typography variant="body2" fontWeight={600} noWrap title={policy.name}>{policy.name}</Typography></TableCell>
+              <TableCell align="center" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{policy.priority}</TableCell>
+              <TableCell sx={{ maxWidth: 220 }}><Typography variant="body2" noWrap title={`${policy.factoryId ? t.factory : t.allFactories}${policy.paddyItemId ? ` · ${paddy.find(row => row.id === policy.paddyItemId)?.name ?? ''}` : ''}${policy.supplierPartnerId ? ` · ${suppliers.find(row => row.id === policy.supplierPartnerId)?.name ?? ''}` : ''}`}>{policy.factoryId ? t.factory : t.allFactories}{policy.paddyItemId ? ` · ${paddy.find(row => row.id === policy.paddyItemId)?.name ?? ''}` : ''}{policy.supplierPartnerId ? ` · ${suppliers.find(row => row.id === policy.supplierPartnerId)?.name ?? ''}` : ''}</Typography></TableCell>
+              <TableCell sx={{ whiteSpace: 'nowrap' }}>{policy.formula === 'DRY_MATTER_CORRECTION' ? t.dry : t.slabFormula}</TableCell>
+              <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{policy.allowedMoisturePct}% ± {policy.tolerancePct}%</TableCell>
+              <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>{policy.rateDeductionPct}%</TableCell>
+              <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}><Chip size="small" color={policy.active ? 'success' : 'default'} label={policy.active ? t.enabled : t.disabled} /></TableCell>
+              <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}><Button size="small" onClick={() => edit(policy)}>{language === 'bn' ? 'সম্পাদনা' : 'Edit'}</Button></TableCell>
             </TableRow>)}
-            {!policies.length && <TableRow><TableCell colSpan={8} align="center">{t.noRows}</TableCell></TableRow>}
+            {!policies.length && <TableRow><TableCell colSpan={8} align="center" sx={{ py: 3, color: 'text.secondary' }}>{t.noRows}</TableCell></TableRow>}
           </TableBody>
         </Table>
       </Box>

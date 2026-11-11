@@ -494,17 +494,30 @@ export function SupplierFarmerMasterPage({
       </FormControl>
     </Stack>
     {partnersQuery.error && <Alert severity="error">{errorText(partnersQuery.error, t.failed)}</Alert>}
-    <Paper variant="outlined" sx={{ overflow: 'auto' }}>
+    <Paper variant="outlined" sx={{ overflowX: 'auto' }}>
       {partnersQuery.isLoading
         ? <Stack direction="row" spacing={1} alignItems="center" p={3}><CircularProgress size={18} /><Typography>{t.loading}</Typography></Stack>
-        : <Table size="small">
-          <TableHead><TableRow>{[t.name, t.code, t.businessName, t.phone, t.email, t.address, t.status, t.actions].map(label => <TableCell key={label}>{label}</TableCell>)}</TableRow></TableHead>
+        : <Table size="small" sx={{ minWidth: 1050 }}>
+          <TableHead><TableRow>{[
+            { label: t.name, align: 'left' },
+            { label: t.code, align: 'left' },
+            { label: t.businessName, align: 'left' },
+            { label: t.phone, align: 'left' },
+            { label: t.email, align: 'left' },
+            { label: t.address, align: 'left' },
+            { label: t.status, align: 'center' },
+            { label: t.actions, align: 'right' },
+          ].map(col => <TableCell key={col.label} align={col.align as any} sx={{ whiteSpace: 'nowrap' }}>{col.label}</TableCell>)}</TableRow></TableHead>
           <TableBody>
             {partners.map(partner => <TableRow key={partner.id} hover>
-              <TableCell>{partner.name}</TableCell><TableCell>{partner.code}</TableCell><TableCell>{partner.businessName || '—'}</TableCell>
-              <TableCell>{partner.phone || '—'}</TableCell><TableCell>{partner.email || '—'}</TableCell><TableCell>{partner.address || '—'}</TableCell>
-              <TableCell><Chip size="small" color={partner.active ? 'success' : 'default'} label={partner.active ? t.active : t.inactive} /></TableCell>
-              <TableCell><Stack direction="row" spacing={0.5}>
+              <TableCell sx={{ maxWidth: 190 }}><Typography variant="body2" fontWeight={600} noWrap title={partner.name}>{partner.name}</Typography></TableCell>
+              <TableCell sx={{ whiteSpace: 'nowrap', fontFamily: 'monospace' }}>{partner.code}</TableCell>
+              <TableCell sx={{ maxWidth: 180 }}><Typography variant="body2" noWrap title={partner.businessName || '—'}>{partner.businessName || '—'}</Typography></TableCell>
+              <TableCell sx={{ whiteSpace: 'nowrap' }}>{partner.phone || '—'}</TableCell>
+              <TableCell sx={{ whiteSpace: 'nowrap' }}>{partner.email || '—'}</TableCell>
+              <TableCell sx={{ maxWidth: 200 }}><Typography variant="body2" noWrap title={partner.address || '—'}>{partner.address || '—'}</Typography></TableCell>
+              <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}><Chip size="small" color={partner.active ? 'success' : 'default'} label={partner.active ? t.active : t.inactive} /></TableCell>
+              <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}><Stack direction="row" spacing={0.5} justifyContent="flex-end">
                 <Button size="small" onClick={() => startEdit(partner)}>{language === 'bn' ? 'সম্পাদনা' : 'Edit'}</Button>
                 <Button size="small" onClick={() => { setFinancial(blankFinancial); setFinancialPartner(partner); setFinancialError(''); }}>{t.financial}</Button>
                 <Button size="small" onClick={() => { setLedgerPage(1); setLedgerPartner(partner); }}>{partner.type === 'CUSTOMER' ? t.customerLedger : t.ledger}</Button>
@@ -598,29 +611,29 @@ export function SupplierFarmerMasterPage({
                   </Paper>
                 )}
               </Stack>
-              <Paper variant="outlined" sx={{ overflow: 'auto' }}>
-                <Table size="small">
+              <Paper variant="outlined" sx={{ overflowX: 'auto' }}>
+                <Table size="small" sx={{ minWidth: 950 }}>
                   <TableHead>
                     <TableRow>
-                      <TableCell><strong>{t.orderNo}</strong></TableCell>
-                      <TableCell><strong>{t.factory}</strong></TableCell>
-                      <TableCell><strong>{t.channel}</strong></TableCell>
-                      <TableCell><strong>{t.items}</strong></TableCell>
-                      <TableCell><strong>{t.amount}</strong></TableCell>
-                      <TableCell><strong>{t.status}</strong></TableCell>
-                      <TableCell><strong>{t.postedAt}</strong></TableCell>
+                      <TableCell sx={{ whiteSpace: 'nowrap' }}><strong>{t.orderNo}</strong></TableCell>
+                      <TableCell sx={{ whiteSpace: 'nowrap' }}><strong>{t.factory}</strong></TableCell>
+                      <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}><strong>{t.channel}</strong></TableCell>
+                      <TableCell sx={{ whiteSpace: 'nowrap' }}><strong>{t.items}</strong></TableCell>
+                      <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}><strong>{t.amount}</strong></TableCell>
+                      <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}><strong>{t.status}</strong></TableCell>
+                      <TableCell sx={{ whiteSpace: 'nowrap' }}><strong>{t.postedAt}</strong></TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
                     {ledgerQuery.data.data.map((order: any) => (
                       <TableRow key={order.id} hover>
-                        <TableCell><strong>{order.orderNumber}</strong></TableCell>
-                        <TableCell>{order.factory?.name || '—'}</TableCell>
-                        <TableCell><Chip label={order.channel} size="small" variant="outlined" /></TableCell>
-                        <TableCell>{order.lines.map((l: any) => `${l.item.name} (${Number(l.quantityKg).toLocaleString()} KG)`).join(', ')}</TableCell>
-                        <TableCell><strong>৳ {Number(order.totalAmount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></TableCell>
-                        <TableCell><Chip label={order.status} size="small" color={order.status === 'APPROVED' ? 'success' : order.status === 'CANCELLED' ? 'error' : 'default'} /></TableCell>
-                        <TableCell>{order.createdAt ? new Date(order.createdAt).toLocaleDateString() : '—'}</TableCell>
+                        <TableCell sx={{ fontFamily: 'monospace', fontWeight: 600, whiteSpace: 'nowrap' }}><strong>{order.orderNumber}</strong></TableCell>
+                        <TableCell sx={{ whiteSpace: 'nowrap' }}>{order.factory?.name || '—'}</TableCell>
+                        <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}><Chip label={order.channel} size="small" variant="outlined" /></TableCell>
+                        <TableCell sx={{ maxWidth: 220 }}><Typography variant="body2" noWrap title={order.lines.map((l: any) => `${l.item.name} (${Number(l.quantityKg).toLocaleString()} KG)`).join(', ')}>{order.lines.map((l: any) => `${l.item.name} (${Number(l.quantityKg).toLocaleString()} KG)`).join(', ')}</Typography></TableCell>
+                        <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}><strong>৳ {Number(order.totalAmount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></TableCell>
+                        <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}><Chip label={order.status} size="small" color={order.status === 'APPROVED' ? 'success' : order.status === 'CANCELLED' ? 'error' : 'default'} /></TableCell>
+                        <TableCell sx={{ whiteSpace: 'nowrap' }}>{order.createdAt ? new Date(order.createdAt).toLocaleDateString() : '—'}</TableCell>
                       </TableRow>
                     ))}
                     {!ledgerQuery.data.data.length && <TableRow><TableCell colSpan={7} align="center" sx={{ py: 3, color: 'text.secondary' }}>{t.noRows}</TableCell></TableRow>}
@@ -669,20 +682,36 @@ export function SupplierFarmerMasterPage({
                   <Typography variant="h6" fontWeight={800}>৳ {Number(ledgerQuery.data.purchases.separateOperatingCosts).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Typography>
                 </Paper>
               </Stack>
-              <Paper variant="outlined" sx={{ overflow: 'auto' }}>
-                <Table size="small">
-                  <TableHead><TableRow>{[t.receipt, t.purchaseOrder, t.factory, t.material, t.quantity, t.payableQuantity, t.rate, t.amount, t.invoice, t.qualityDeductions, t.invoicePayable, t.postedAt].map(label => <TableCell key={label}>{label}</TableCell>)}</TableRow></TableHead>
+              <Paper variant="outlined" sx={{ overflowX: 'auto' }}>
+                <Table size="small" sx={{ minWidth: 1350 }}>
+                  <TableHead><TableRow>{[
+                    { label: t.receipt, align: 'left' },
+                    { label: t.purchaseOrder, align: 'left' },
+                    { label: t.factory, align: 'left' },
+                    { label: t.material, align: 'left' },
+                    { label: t.quantity, align: 'right' },
+                    { label: t.payableQuantity, align: 'right' },
+                    { label: t.rate, align: 'right' },
+                    { label: t.amount, align: 'right' },
+                    { label: t.invoice, align: 'left' },
+                    { label: t.qualityDeductions, align: 'right' },
+                    { label: t.invoicePayable, align: 'right' },
+                    { label: t.postedAt, align: 'left' },
+                  ].map(col => <TableCell key={col.label} align={col.align as any} sx={{ whiteSpace: 'nowrap' }}>{col.label}</TableCell>)}</TableRow></TableHead>
                   <TableBody>
-                    {ledgerQuery.data.data.map((row: any) => <TableRow key={row.id}>
-                      <TableCell>{row.receiptNumber}</TableCell><TableCell>{row.purchaseOrderNumber}</TableCell><TableCell>{row.factory.name}</TableCell>
-                      <TableCell>{row.item.name}</TableCell><TableCell>{Number(row.quantity).toLocaleString()} {row.unit}</TableCell>
-                      <TableCell>{Number(row.payableQuantity).toLocaleString(undefined, { maximumFractionDigits: 3 })} KG</TableCell>
-                      <TableCell>{Number(row.unitRate).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}</TableCell>
-                      <TableCell>{Number(row.grossAmount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
-                      <TableCell>{row.purchaseInvoice?.invoiceNumber ?? '—'}</TableCell>
-                      <TableCell>{row.purchaseInvoice ? Number(row.purchaseInvoice.qualityDeductionAmount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}</TableCell>
-                      <TableCell>{row.purchaseInvoice ? Number(row.purchaseInvoice.netSupplierPayable).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}</TableCell>
-                      <TableCell>{row.postedAt ? new Date(row.postedAt).toLocaleString() : '—'}</TableCell>
+                    {ledgerQuery.data.data.map((row: any) => <TableRow key={row.id} hover>
+                      <TableCell sx={{ fontFamily: 'monospace', fontWeight: 600, whiteSpace: 'nowrap' }}>{row.receiptNumber}</TableCell>
+                      <TableCell sx={{ fontFamily: 'monospace', whiteSpace: 'nowrap' }}>{row.purchaseOrderNumber}</TableCell>
+                      <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.factory.name}</TableCell>
+                      <TableCell sx={{ maxWidth: 160 }}><Typography variant="body2" noWrap title={row.item.name}>{row.item.name}</Typography></TableCell>
+                      <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{Number(row.quantity).toLocaleString()} {row.unit}</TableCell>
+                      <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>{Number(row.payableQuantity).toLocaleString(undefined, { maximumFractionDigits: 3 })} KG</TableCell>
+                      <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>৳ {Number(row.unitRate).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}</TableCell>
+                      <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>৳ {Number(row.grossAmount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                      <TableCell sx={{ fontFamily: 'monospace', whiteSpace: 'nowrap' }}>{row.purchaseInvoice?.invoiceNumber ?? '—'}</TableCell>
+                      <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums', color: 'error.main' }}>{row.purchaseInvoice ? `৳ ${Number(row.purchaseInvoice.qualityDeductionAmount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}</TableCell>
+                      <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums', fontWeight: 800, color: 'primary.dark' }}>{row.purchaseInvoice ? `৳ ${Number(row.purchaseInvoice.netSupplierPayable).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}</TableCell>
+                      <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.postedAt ? new Date(row.postedAt).toLocaleString() : '—'}</TableCell>
                     </TableRow>)}
                     {!ledgerQuery.data.data.length && <TableRow><TableCell colSpan={12} align="center" sx={{ py: 3, color: 'text.secondary' }}>{t.noRows}</TableCell></TableRow>}
                   </TableBody>

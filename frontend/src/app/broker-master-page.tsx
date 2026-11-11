@@ -177,18 +177,27 @@ export function BrokerMasterPage({
     </Stack>
     {brokersQuery.error && <Alert severity="error">{messageOf(brokersQuery.error, t.failed)}</Alert>}
     {statusError && <Alert severity="error" onClose={() => setStatusError('')}>{statusError}</Alert>}
-    <Paper variant="outlined" sx={{ overflow: 'auto' }}>
+    <Paper variant="outlined" sx={{ overflowX: 'auto' }}>
       {brokersQuery.isLoading
         ? <Stack direction="row" spacing={1} alignItems="center" p={3}><CircularProgress size={18} /><Typography>{t.loading}</Typography></Stack>
-        : <Table size="small">
-          <TableHead><TableRow>{[t.name, t.code, t.phone, t.status, t.commissionType, t.actions].map(label => <TableCell key={label}>{label}</TableCell>)}</TableRow></TableHead>
+        : <Table size="small" sx={{ minWidth: 850 }}>
+          <TableHead><TableRow>{[
+            { label: t.name, align: 'left' },
+            { label: t.code, align: 'left' },
+            { label: t.phone, align: 'left' },
+            { label: t.status, align: 'center' },
+            { label: t.commissionType, align: 'center' },
+            { label: t.actions, align: 'right' },
+          ].map(col => <TableCell key={col.label} align={col.align as any} sx={{ whiteSpace: 'nowrap' }}>{col.label}</TableCell>)}</TableRow></TableHead>
           <TableBody>
             {brokers.map(broker => <TableRow key={broker.id} hover>
-              <TableCell>{broker.name}</TableCell><TableCell>{broker.code}</TableCell><TableCell>{broker.phone || '—'}</TableCell>
-              <TableCell><Chip size="small" color={broker.active ? 'success' : 'default'} label={broker.active ? t.active : t.inactive} /></TableCell>
-              <TableCell>{broker.hasCommission ? t.commissionConfigured : t.commissionMissing}</TableCell>
-              <TableCell><Stack direction="row" spacing={0.5}>
-                <Button size="small" onClick={() => openCommission(broker)}>{t.editCommission}</Button>
+              <TableCell sx={{ maxWidth: 200 }}><Typography variant="body2" fontWeight={600} noWrap title={broker.name}>{broker.name}</Typography></TableCell>
+              <TableCell sx={{ whiteSpace: 'nowrap', fontFamily: 'monospace' }}>{broker.code}</TableCell>
+              <TableCell sx={{ whiteSpace: 'nowrap' }}>{broker.phone || '—'}</TableCell>
+              <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}><Chip size="small" color={broker.active ? 'success' : 'default'} label={broker.active ? t.active : t.inactive} /></TableCell>
+              <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}>{broker.hasCommission ? <Chip size="small" variant="outlined" color="success" label={t.commissionConfigured} /> : <Chip size="small" variant="outlined" color="warning" label={t.commissionMissing} />}</TableCell>
+              <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}><Stack direction="row" spacing={0.5} justifyContent="flex-end">
+                <Button size="small" variant="outlined" onClick={() => openCommission(broker)}>{t.editCommission}</Button>
                 <Button size="small" color={broker.active ? 'warning' : 'success'} disabled={statusMutation.isPending} onClick={() => { setStatusError(''); statusMutation.mutate(broker); }}>{broker.active ? t.deactivate : t.activate}</Button>
               </Stack></TableCell>
             </TableRow>)}

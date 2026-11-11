@@ -1,7 +1,7 @@
 'use client';
 
 import { FormEvent, useState } from 'react';
-import { Alert, Button, Paper, Stack, Table, TableBody, TableCell, TableHead, TableRow, TextField, Typography } from '@mui/material';
+import { Alert, Button, Chip, Paper, Stack, Table, TableBody, TableCell, TableHead, TableRow, TextField, Typography } from '@mui/material';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiRequest, queryString } from '@/lib/api';
 
@@ -62,9 +62,34 @@ export function ParboilingPage({ companyId, factoryId, language, onSaved }: { co
         <TextField size="small" label={t.remarks} value={s.remarks} onChange={e => patchStage(i, { remarks: e.target.value })} />
       </Stack></Paper>)}</Stack><Button type="submit" variant="contained" sx={{ mt: 2 }}>{t.create}</Button>
     </Paper>
-    <Paper className="workspace-card" elevation={0} sx={{ p: 2, overflowX: 'auto' }}><Table size="small"><TableHead><TableRow>{[t.batch, t.inputItem, t.outputItem, t.input, t.output, 'Loss KG', 'Stages', t.status, ''].map(x => <TableCell key={x}>{x}</TableCell>)}</TableRow></TableHead><TableBody>
-      {rows.map(row => <TableRow key={row.id}><TableCell>{row.batchNumber}</TableCell><TableCell>{row.inputItem.name}</TableCell><TableCell>{row.outputItem.name}</TableCell><TableCell>{row.inputQuantityKg}</TableCell><TableCell>{row.outputQuantityKg}</TableCell><TableCell>{row.processLossKg}</TableCell><TableCell>{row.stages.map(s => `${s.stageType}: ${s.inputQuantityKg}→${s.outputQuantityKg} KG`).join(' · ')}</TableCell><TableCell>{row.status}</TableCell><TableCell>{row.status === 'DRAFT' ? <Button size="small" onClick={() => action(row, 'approve')}>{t.approve}</Button> : row.status === 'APPROVED' ? <Button size="small" onClick={() => action(row, 'post')}>{t.post}</Button> : '—'}</TableCell></TableRow>)}
-      {!rows.length && <TableRow><TableCell colSpan={9} align="center">{bn ? 'সিদ্ধকরণ ব্যাচ নেই।' : 'No parboiling batches recorded.'}</TableCell></TableRow>}
-    </TableBody></Table></Paper>
+    <Paper className="workspace-card" elevation={0} sx={{ p: 2, overflowX: 'auto' }}>
+      <Table size="small" sx={{ minWidth: 1050 }}>
+        <TableHead><TableRow>
+          <TableCell sx={{ whiteSpace: 'nowrap' }}>{t.batch}</TableCell>
+          <TableCell sx={{ whiteSpace: 'nowrap' }}>{t.inputItem}</TableCell>
+          <TableCell sx={{ whiteSpace: 'nowrap' }}>{t.outputItem}</TableCell>
+          <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>{t.input}</TableCell>
+          <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>{t.output}</TableCell>
+          <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>Loss KG</TableCell>
+          <TableCell sx={{ whiteSpace: 'nowrap' }}>Stages</TableCell>
+          <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}>{t.status}</TableCell>
+          <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}></TableCell>
+        </TableRow></TableHead>
+        <TableBody>
+          {rows.map(row => <TableRow key={row.id} hover>
+            <TableCell sx={{ fontFamily: 'monospace', fontWeight: 600, whiteSpace: 'nowrap' }}>{row.batchNumber}</TableCell>
+            <TableCell sx={{ maxWidth: 160 }}><Typography variant="body2" noWrap title={row.inputItem.name}>{row.inputItem.name}</Typography></TableCell>
+            <TableCell sx={{ maxWidth: 160 }}><Typography variant="body2" noWrap title={row.outputItem.name}>{row.outputItem.name}</Typography></TableCell>
+            <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{row.inputQuantityKg} KG</TableCell>
+            <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>{row.outputQuantityKg} KG</TableCell>
+            <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums', color: 'error.main' }}>{row.processLossKg} KG</TableCell>
+            <TableCell sx={{ maxWidth: 220 }}><Typography variant="body2" noWrap title={row.stages.map(s => `${s.stageType}: ${s.inputQuantityKg}→${s.outputQuantityKg} KG`).join(' · ')}>{row.stages.map(s => `${s.stageType}: ${s.inputQuantityKg}→${s.outputQuantityKg} KG`).join(' · ')}</Typography></TableCell>
+            <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}><Chip size="small" label={row.status} color={row.status === 'POSTED' ? 'success' : 'default'} /></TableCell>
+            <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>{row.status === 'DRAFT' ? <Button size="small" variant="outlined" onClick={() => action(row, 'approve')}>{t.approve}</Button> : row.status === 'APPROVED' ? <Button size="small" variant="contained" onClick={() => action(row, 'post')}>{t.post}</Button> : '—'}</TableCell>
+          </TableRow>)}
+          {!rows.length && <TableRow><TableCell colSpan={9} align="center" sx={{ color: 'text.secondary', py: 3 }}>{bn ? 'সিদ্ধকরণ ব্যাচ নেই।' : 'No parboiling batches recorded.'}</TableCell></TableRow>}
+        </TableBody>
+      </Table>
+    </Paper>
   </Stack>;
 }

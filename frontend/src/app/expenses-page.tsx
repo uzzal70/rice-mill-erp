@@ -790,24 +790,24 @@ export function ExpensesPage({
       </Paper>
 
       {/* Expense Vouchers Table */}
-      <Paper variant="outlined" sx={{ borderRadius: 2.5, overflow: 'hidden' }}>
-        <Table size="small">
+      <Paper variant="outlined" sx={{ borderRadius: 2.5, overflowX: 'auto' }}>
+        <Table size="small" sx={{ minWidth: 1100 }}>
           <TableHead sx={{ bgcolor: 'action.hover' }}>
             <TableRow>
-              <TableCell sx={{ fontWeight: 600 }}>{isBn ? 'ভাউচার নং' : 'Voucher #'}</TableCell>
-              <TableCell sx={{ fontWeight: 600 }}>{isBn ? 'তারিখ' : 'Date'}</TableCell>
-              <TableCell sx={{ fontWeight: 600 }}>{isBn ? 'শিরোনাম ও বিবরণ' : 'Title & Purpose'}</TableCell>
-              <TableCell sx={{ fontWeight: 600 }}>{isBn ? 'ক্যাটাগরি' : 'Category'}</TableCell>
-              <TableCell sx={{ fontWeight: 600 }}>{isBn ? 'ব্যয়ের ধরন' : 'Cost Center'}</TableCell>
-              <TableCell sx={{ fontWeight: 600 }}>{isBn ? 'প্রাপক / ভেন্ডর' : 'Payee / Vendor'}</TableCell>
-              <TableCell sx={{ fontWeight: 600 }}>{isBn ? 'পরিশোধ মাধ্যম' : 'Payment Mode'}</TableCell>
-              <TableCell align="right" sx={{ fontWeight: 600 }}>
+              <TableCell sx={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{isBn ? 'ভাউচার নং' : 'Voucher #'}</TableCell>
+              <TableCell sx={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{isBn ? 'তারিখ' : 'Date'}</TableCell>
+              <TableCell sx={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{isBn ? 'শিরোনাম ও বিবরণ' : 'Title & Purpose'}</TableCell>
+              <TableCell sx={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{isBn ? 'ক্যাটাগরি' : 'Category'}</TableCell>
+              <TableCell sx={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{isBn ? 'ব্যয়ের ধরন' : 'Cost Center'}</TableCell>
+              <TableCell sx={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{isBn ? 'প্রাপক / ভেন্ডর' : 'Payee / Vendor'}</TableCell>
+              <TableCell sx={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{isBn ? 'পরিশোধ মাধ্যম' : 'Payment Mode'}</TableCell>
+              <TableCell align="right" sx={{ fontWeight: 600, whiteSpace: 'nowrap' }}>
                 {isBn ? 'মোট টাকা' : 'Total (BDT)'}
               </TableCell>
-              <TableCell align="center" sx={{ fontWeight: 600 }}>
+              <TableCell align="center" sx={{ fontWeight: 600, whiteSpace: 'nowrap' }}>
                 {isBn ? 'স্ট্যাটাস' : 'Status'}
               </TableCell>
-              <TableCell align="center" sx={{ fontWeight: 600 }}>
+              <TableCell align="center" sx={{ fontWeight: 600, whiteSpace: 'nowrap' }}>
                 {isBn ? 'পদক্ষেপ' : 'Actions'}
               </TableCell>
             </TableRow>
@@ -822,44 +822,46 @@ export function ExpensesPage({
             ) : (
               filteredExpenses.map((exp) => (
                 <TableRow key={exp.id} hover>
-                  <TableCell sx={{ fontWeight: 600 }}>{exp.voucherNumber}</TableCell>
-                  <TableCell>{new Date(exp.expenseDate).toLocaleDateString()}</TableCell>
-                  <TableCell>
-                    <Typography variant="body2" fontWeight={600}>
+                  <TableCell sx={{ fontWeight: 600, fontFamily: 'monospace', whiteSpace: 'nowrap' }}>{exp.voucherNumber}</TableCell>
+                  <TableCell sx={{ whiteSpace: 'nowrap' }}>{new Date(exp.expenseDate).toLocaleDateString()}</TableCell>
+                  <TableCell sx={{ maxWidth: 200 }}>
+                    <Typography variant="body2" fontWeight={600} noWrap title={exp.title}>
                       {exp.title}
                     </Typography>
                     {exp.billReference && (
-                      <Typography variant="caption" color="text.secondary">
+                      <Typography variant="caption" color="text.secondary" noWrap title={exp.billReference}>
                         Ref: {exp.billReference}
                       </Typography>
                     )}
                   </TableCell>
-                  <TableCell>
+                  <TableCell sx={{ whiteSpace: 'nowrap' }}>
                     <Chip
                       size="small"
                       label={CATEGORY_LABELS[exp.category]?.[isBn ? 'bn' : 'en'] || exp.category}
                       variant="outlined"
                     />
                   </TableCell>
-                  <TableCell>
+                  <TableCell sx={{ whiteSpace: 'nowrap' }}>
                     <Typography variant="caption" color="text.secondary">
                       {TYPE_LABELS[exp.type]?.[isBn ? 'bn' : 'en'] || exp.type}
                     </Typography>
                   </TableCell>
-                  <TableCell>
-                    {exp.payeePartner?.name || exp.payeeName || '—'}
+                  <TableCell sx={{ maxWidth: 180 }}>
+                    <Typography variant="body2" noWrap title={exp.payeePartner?.name || exp.payeeName || '—'}>
+                      {exp.payeePartner?.name || exp.payeeName || '—'}
+                    </Typography>
                   </TableCell>
-                  <TableCell>
+                  <TableCell sx={{ whiteSpace: 'nowrap' }}>
                     <Chip
                       size="small"
                       label={PAYMENT_MODE_LABELS[exp.paymentMode]?.[isBn ? 'bn' : 'en'] || exp.paymentMode}
                       sx={{ fontSize: 11 }}
                     />
                   </TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 700 }}>
+                  <TableCell align="right" sx={{ fontWeight: 700, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
                     ৳ {Number(exp.totalAmount).toLocaleString()}
                   </TableCell>
-                  <TableCell align="center">
+                  <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}>
                     <Chip
                       size="small"
                       label={exp.status}

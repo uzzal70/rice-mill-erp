@@ -568,30 +568,34 @@ export function DispatchPage({
           {bn ? 'চালান ও গেট পাস রেজিস্টার' : 'Dispatch & Gate Pass Register'}
         </Typography>
 
-        <Table size="small">
+        <Table size="small" sx={{ minWidth: 1100 }}>
           <TableHead>
             <TableRow>
-              <TableCell><strong>{text.challanNo}</strong></TableCell>
-              <TableCell><strong>{text.gatePassNo}</strong></TableCell>
-              <TableCell><strong>{text.order}</strong></TableCell>
-              <TableCell><strong>{text.customer}</strong></TableCell>
-              <TableCell><strong>{text.vehicle}</strong></TableCell>
-              <TableCell><strong>{text.driver}</strong></TableCell>
-              <TableCell><strong>{text.totalBags}</strong></TableCell>
-              <TableCell><strong>{text.totalWeight}</strong></TableCell>
-              <TableCell><strong>{text.status}</strong></TableCell>
-              <TableCell align="right"><strong>{text.actions}</strong></TableCell>
+              <TableCell sx={{ whiteSpace: 'nowrap' }}><strong>{text.challanNo}</strong></TableCell>
+              <TableCell sx={{ whiteSpace: 'nowrap' }}><strong>{text.gatePassNo}</strong></TableCell>
+              <TableCell sx={{ whiteSpace: 'nowrap' }}><strong>{text.order}</strong></TableCell>
+              <TableCell sx={{ whiteSpace: 'nowrap' }}><strong>{text.customer}</strong></TableCell>
+              <TableCell sx={{ whiteSpace: 'nowrap' }}><strong>{text.vehicle}</strong></TableCell>
+              <TableCell sx={{ whiteSpace: 'nowrap' }}><strong>{text.driver}</strong></TableCell>
+              <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}><strong>{text.totalBags}</strong></TableCell>
+              <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}><strong>{text.totalWeight}</strong></TableCell>
+              <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}><strong>{text.status}</strong></TableCell>
+              <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}><strong>{text.actions}</strong></TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {(dispatches.data?.data ?? []).map((d) => (
               <TableRow key={d.id} hover>
-                <TableCell><strong>{d.challanNumber}</strong></TableCell>
-                <TableCell><strong>{d.gatePassNumber}</strong></TableCell>
-                <TableCell>{d.salesOrder.orderNumber}</TableCell>
-                <TableCell>{d.customer.name}</TableCell>
-                <TableCell>{d.vehicleNumber}</TableCell>
-                <TableCell>
+                <TableCell sx={{ whiteSpace: 'nowrap' }}><strong style={{ fontFamily: 'monospace' }}>{d.challanNumber}</strong></TableCell>
+                <TableCell sx={{ whiteSpace: 'nowrap' }}><strong style={{ fontFamily: 'monospace' }}>{d.gatePassNumber}</strong></TableCell>
+                <TableCell sx={{ whiteSpace: 'nowrap', fontFamily: 'monospace' }}>{d.salesOrder.orderNumber}</TableCell>
+                <TableCell sx={{ maxWidth: 200 }}>
+                  <Typography variant="body2" fontWeight={600} noWrap title={d.customer.name}>
+                    {d.customer.name}
+                  </Typography>
+                </TableCell>
+                <TableCell sx={{ whiteSpace: 'nowrap', fontWeight: 600 }}>{d.vehicleNumber}</TableCell>
+                <TableCell sx={{ whiteSpace: 'nowrap' }}>
                   {d.driverName}
                   {d.driverMobile && (
                     <Typography variant="caption" display="block" color="text.secondary">
@@ -599,11 +603,11 @@ export function DispatchPage({
                     </Typography>
                   )}
                 </TableCell>
-                <TableCell>{d.totalBags}</TableCell>
-                <TableCell>
+                <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{d.totalBags}</TableCell>
+                <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
                   <strong>{Number(d.totalWeightKg).toLocaleString()} KG</strong>
                 </TableCell>
-                <TableCell>
+                <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}>
                   <Chip
                     label={d.status}
                     size="small"
@@ -618,7 +622,7 @@ export function DispatchPage({
                     }
                   />
                 </TableCell>
-                <TableCell align="right">
+                <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
                   <Stack direction="row" spacing={0.5} justifyContent="flex-end">
                     <Button
                       size="small"

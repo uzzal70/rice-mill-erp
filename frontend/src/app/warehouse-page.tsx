@@ -251,29 +251,43 @@ export function WarehousePage({
       </Stack>
     </Paper>
     {!godowns.length && <Paper variant="outlined" sx={{ p: 4, textAlign: 'center' }}><Typography color="text.secondary">{t.empty}</Typography></Paper>}
-    {godowns.map(godown => <Paper key={godown.id} variant="outlined" sx={{ overflow: 'hidden' }}>
+    {godowns.map(godown => <Paper key={godown.id} variant="outlined" sx={{ overflowX: 'auto' }}>
       <Box display="flex" justifyContent="space-between" alignItems="center" p={2} bgcolor="action.hover">
         <Box><Typography fontWeight={800}>{godown.name}</Typography><Typography variant="caption" color="text.secondary">{godown.code}</Typography></Box>
-        {godown.active && <Button size="small" onClick={() => openNewStack(godown.id)}>{t.addStack}</Button>}
+        {godown.active && <Button size="small" variant="contained" onClick={() => openNewStack(godown.id)}>{t.addStack}</Button>}
       </Box>
-      <Table size="small">
-        <TableHead><TableRow>{[t.code, t.material, t.variety, t.cropYear, t.batch, t.lot, t.receivedAt, t.occupied, t.capacity, t.available, t.occupancy, t.age].map(label => <TableCell key={label}>{label}</TableCell>)}<TableCell /></TableRow></TableHead>
+      <Table size="small" sx={{ minWidth: 1250 }}>
+        <TableHead><TableRow>{[
+          { label: t.code, align: 'left' },
+          { label: t.material, align: 'left' },
+          { label: t.variety, align: 'left' },
+          { label: t.cropYear, align: 'left' },
+          { label: t.batch, align: 'left' },
+          { label: t.lot, align: 'left' },
+          { label: t.receivedAt, align: 'left' },
+          { label: t.occupied, align: 'right' },
+          { label: t.capacity, align: 'right' },
+          { label: t.available, align: 'right' },
+          { label: t.occupancy, align: 'center' },
+          { label: t.age, align: 'center' },
+          { label: '', align: 'right' },
+        ].map((col, idx) => <TableCell key={idx} align={col.align as any} sx={{ whiteSpace: 'nowrap' }}>{col.label}</TableCell>)}</TableRow></TableHead>
         <TableBody>{godown.stacks.map(stack => <TableRow key={stack.id} hover>
-          <TableCell>{stack.code}</TableCell>
-          <TableCell>{stack.materialItem?.name ?? t.noMaterial}</TableCell>
-          <TableCell>{stack.varietyName ?? stack.materialItem?.variety ?? '—'}</TableCell>
-          <TableCell>{stack.cropYear ?? stack.materialItem?.cropYear ?? '—'}</TableCell>
-          <TableCell>{stack.batchNumber ?? '—'}</TableCell>
-          <TableCell>{stack.lotNumber ?? '—'}</TableCell>
-          <TableCell>{stack.receivedAt ? new Date(stack.receivedAt).toLocaleDateString(language === 'bn' ? 'bn-BD' : 'en-BD') : '—'}</TableCell>
-          <TableCell>{Number(stack.onHand).toLocaleString()} KG</TableCell>
-          <TableCell>{Number(stack.capacityKg).toLocaleString()} KG</TableCell>
-          <TableCell>{Number(stack.availableCapacityKg).toLocaleString()} KG</TableCell>
-          <TableCell sx={{ minWidth: 140 }}><Stack spacing={0.5}><LinearProgress variant="determinate" value={stack.occupancyPercent} color={stack.occupancyPercent >= 90 ? 'warning' : 'primary'} /><Typography variant="caption">{stack.occupancyPercent.toFixed(1)}%</Typography></Stack></TableCell>
-          <TableCell>{stack.ageDays === null ? t.noAge : `${stack.ageDays} ${t.days}`}</TableCell>
-          <TableCell><Button size="small" onClick={() => openEditStack(stack, godown.id)}>{language === 'bn' ? 'সম্পাদনা' : 'Edit'}</Button></TableCell>
+          <TableCell sx={{ fontFamily: 'monospace', fontWeight: 600, whiteSpace: 'nowrap' }}>{stack.code}</TableCell>
+          <TableCell sx={{ maxWidth: 180 }}><Typography variant="body2" fontWeight={600} noWrap title={stack.materialItem?.name ?? t.noMaterial}>{stack.materialItem?.name ?? t.noMaterial}</Typography></TableCell>
+          <TableCell sx={{ whiteSpace: 'nowrap' }}>{stack.varietyName ?? stack.materialItem?.variety ?? '—'}</TableCell>
+          <TableCell sx={{ whiteSpace: 'nowrap' }}>{stack.cropYear ?? stack.materialItem?.cropYear ?? '—'}</TableCell>
+          <TableCell sx={{ whiteSpace: 'nowrap', fontFamily: 'monospace' }}>{stack.batchNumber ?? '—'}</TableCell>
+          <TableCell sx={{ whiteSpace: 'nowrap', fontFamily: 'monospace' }}>{stack.lotNumber ?? '—'}</TableCell>
+          <TableCell sx={{ whiteSpace: 'nowrap' }}>{stack.receivedAt ? new Date(stack.receivedAt).toLocaleDateString(language === 'bn' ? 'bn-BD' : 'en-BD') : '—'}</TableCell>
+          <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>{Number(stack.onHand).toLocaleString()} KG</TableCell>
+          <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{Number(stack.capacityKg).toLocaleString()} KG</TableCell>
+          <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{Number(stack.availableCapacityKg).toLocaleString()} KG</TableCell>
+          <TableCell align="center" sx={{ minWidth: 140, whiteSpace: 'nowrap' }}><Stack spacing={0.5}><LinearProgress variant="determinate" value={stack.occupancyPercent} color={stack.occupancyPercent >= 90 ? 'warning' : 'primary'} /><Typography variant="caption">{stack.occupancyPercent.toFixed(1)}%</Typography></Stack></TableCell>
+          <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}>{stack.ageDays === null ? t.noAge : `${stack.ageDays} ${t.days}`}</TableCell>
+          <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}><Button size="small" onClick={() => openEditStack(stack, godown.id)}>{language === 'bn' ? 'সম্পাদনা' : 'Edit'}</Button></TableCell>
         </TableRow>)}
-          {!godown.stacks.length && <TableRow><TableCell colSpan={13} align="center">—</TableCell></TableRow>}
+          {!godown.stacks.length && <TableRow><TableCell colSpan={13} align="center" sx={{ py: 3, color: 'text.secondary' }}>—</TableCell></TableRow>}
         </TableBody>
       </Table>
     </Paper>)}

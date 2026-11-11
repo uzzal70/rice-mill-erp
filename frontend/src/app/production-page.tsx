@@ -1,7 +1,7 @@
 'use client';
 
 import { FormEvent, useState } from 'react';
-import { Alert, Button, IconButton, Paper, Stack, Table, TableBody, TableCell, TableHead, TableRow, TextField, Typography } from '@mui/material';
+import { Alert, Button, Chip, IconButton, Paper, Stack, Table, TableBody, TableCell, TableHead, TableRow, TextField, Typography } from '@mui/material';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -62,9 +62,36 @@ export function ProductionPage({ companyId, factoryId, language, onSaved }: { co
       </Stack>)}
       <Stack direction="row" spacing={1} mt={1}><Button startIcon={<AddRoundedIcon />} onClick={() => setForm({ ...form, outputs: [...form.outputs, { itemId: '', stackId: '', quantityKg: '' }] })}>{t.add}</Button><Button type="submit" variant="contained">{t.create}</Button></Stack>
     </Paper>
-    <Paper className="workspace-card" elevation={0} sx={{ p: 2, overflowX: 'auto' }}><Table size="small"><TableHead><TableRow>{[t.batch, t.inputItem, t.input, t.output, t.loss, t.headRecovery, t.totalRecovery, t.byRecovery, 'Status', ''].map(x => <TableCell key={x}>{x}</TableCell>)}</TableRow></TableHead><TableBody>
-      {rows.map(row => <TableRow key={row.id}><TableCell>{row.batchNumber}</TableCell><TableCell>{row.inputItem.name}</TableCell><TableCell>{row.inputQuantityKg}</TableCell><TableCell>{row.outputs.map(o => `${o.item.name}: ${o.quantityKg} KG`).join(' · ')}</TableCell><TableCell>{row.processLossKg} KG</TableCell><TableCell>{row.headRiceRecoveryPct}%</TableCell><TableCell>{row.totalRiceRecoveryPct}%</TableCell><TableCell>{row.byProductRecoveryPct}%</TableCell><TableCell>{row.status}{row.belowStandardRecovery && <Typography color="warning.main" variant="caption" display="block">{t.warning}</Typography>}</TableCell><TableCell>{row.status === 'DRAFT' ? <Button size="small" onClick={() => action(row, 'approve')}>{t.approve}</Button> : row.status === 'APPROVED' ? <Button size="small" onClick={() => action(row, 'post')}>{t.post}</Button> : '—'}</TableCell></TableRow>)}
-      {!rows.length && <TableRow><TableCell colSpan={10} align="center">{bn ? 'উৎপাদন ব্যাচ নেই।' : 'No production batches recorded.'}</TableCell></TableRow>}
-    </TableBody></Table></Paper>
+    <Paper className="workspace-card" elevation={0} sx={{ p: 2, overflowX: 'auto' }}>
+      <Table size="small" sx={{ minWidth: 1150 }}>
+        <TableHead><TableRow>
+          <TableCell sx={{ whiteSpace: 'nowrap' }}>{t.batch}</TableCell>
+          <TableCell sx={{ whiteSpace: 'nowrap' }}>{t.inputItem}</TableCell>
+          <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>{t.input}</TableCell>
+          <TableCell sx={{ whiteSpace: 'nowrap' }}>{t.output}</TableCell>
+          <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>{t.loss}</TableCell>
+          <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>{t.headRecovery}</TableCell>
+          <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>{t.totalRecovery}</TableCell>
+          <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>{t.byRecovery}</TableCell>
+          <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}>Status</TableCell>
+          <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}></TableCell>
+        </TableRow></TableHead>
+        <TableBody>
+          {rows.map(row => <TableRow key={row.id} hover>
+            <TableCell sx={{ fontFamily: 'monospace', fontWeight: 600, whiteSpace: 'nowrap' }}>{row.batchNumber}</TableCell>
+            <TableCell sx={{ maxWidth: 180 }}><Typography variant="body2" noWrap title={row.inputItem.name}>{row.inputItem.name}</Typography></TableCell>
+            <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{row.inputQuantityKg} KG</TableCell>
+            <TableCell sx={{ maxWidth: 220 }}><Typography variant="body2" noWrap title={row.outputs.map(o => `${o.item.name}: ${o.quantityKg} KG`).join(' · ')}>{row.outputs.map(o => `${o.item.name}: ${o.quantityKg} KG`).join(' · ')}</Typography></TableCell>
+            <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums', color: 'error.main' }}>{row.processLossKg} KG</TableCell>
+            <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>{row.headRiceRecoveryPct}%</TableCell>
+            <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>{row.totalRiceRecoveryPct}%</TableCell>
+            <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{row.byProductRecoveryPct}%</TableCell>
+            <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}><Chip size="small" label={row.status} color={row.status === 'POSTED' ? 'success' : 'default'} />{row.belowStandardRecovery && <Typography color="warning.main" variant="caption" display="block">{t.warning}</Typography>}</TableCell>
+            <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>{row.status === 'DRAFT' ? <Button size="small" variant="outlined" onClick={() => action(row, 'approve')}>{t.approve}</Button> : row.status === 'APPROVED' ? <Button size="small" variant="contained" onClick={() => action(row, 'post')}>{t.post}</Button> : '—'}</TableCell>
+          </TableRow>)}
+          {!rows.length && <TableRow><TableCell colSpan={10} align="center" sx={{ color: 'text.secondary', py: 3 }}>{bn ? 'উৎপাদন ব্যাচ নেই।' : 'No production batches recorded.'}</TableCell></TableRow>}
+        </TableBody>
+      </Table>
+    </Paper>
   </Stack>;
 }

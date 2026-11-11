@@ -1,7 +1,7 @@
 'use client';
 
 import { FormEvent, useState } from 'react';
-import { Alert, Button, Paper, Stack, Table, TableBody, TableCell, TableHead, TableRow, TextField, Typography } from '@mui/material';
+import { Alert, Button, Chip, Paper, Stack, Table, TableBody, TableCell, TableHead, TableRow, TextField, Typography } from '@mui/material';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiRequest, queryString } from '@/lib/api';
 
@@ -63,10 +63,39 @@ export function DryingPage({ companyId, factoryId, language, onSaved }: { compan
       </Stack>
     </Paper>
     <Paper className="workspace-card" elevation={0} sx={{ p: 2, overflowX: 'auto' }}>
-      <Table size="small"><TableHead><TableRow>{[label.batch, label.item, label.source, label.destination, label.input, label.output, label.loss, label.before, label.after, label.method, 'Status', ''].map(x => <TableCell key={x}>{x}</TableCell>)}</TableRow></TableHead><TableBody>
-        {rows.map(row => <TableRow key={row.id}><TableCell>{row.batchNumber}</TableCell><TableCell>{row.item.name}</TableCell><TableCell>{row.sourceStack.code}</TableCell><TableCell>{row.destinationStack.code}</TableCell><TableCell>{row.inputQuantityKg}</TableCell><TableCell>{row.outputQuantityKg}</TableCell><TableCell>{row.lossKg}</TableCell><TableCell>{row.moistureBeforePct}%</TableCell><TableCell>{row.moistureAfterPct}%</TableCell><TableCell>{row.dryingMethod}</TableCell><TableCell>{row.status}</TableCell><TableCell>{row.status === 'DRAFT' ? <Button size="small" onClick={() => action(row, 'approve')}>{label.approve}</Button> : row.status === 'APPROVED' ? <Button size="small" onClick={() => action(row, 'post')}>{label.post}</Button> : '—'}</TableCell></TableRow>)}
-        {!rows.length && <TableRow><TableCell colSpan={12} align="center">{bn ? 'শুকানোর ব্যাচ নেই।' : 'No drying batches recorded.'}</TableCell></TableRow>}
-      </TableBody></Table>
+      <Table size="small" sx={{ minWidth: 1150 }}>
+        <TableHead><TableRow>
+          <TableCell sx={{ whiteSpace: 'nowrap' }}>{label.batch}</TableCell>
+          <TableCell sx={{ whiteSpace: 'nowrap' }}>{label.item}</TableCell>
+          <TableCell sx={{ whiteSpace: 'nowrap' }}>{label.source}</TableCell>
+          <TableCell sx={{ whiteSpace: 'nowrap' }}>{label.destination}</TableCell>
+          <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>{label.input}</TableCell>
+          <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>{label.output}</TableCell>
+          <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>{label.loss}</TableCell>
+          <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>{label.before}</TableCell>
+          <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>{label.after}</TableCell>
+          <TableCell sx={{ whiteSpace: 'nowrap' }}>{label.method}</TableCell>
+          <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}>Status</TableCell>
+          <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}></TableCell>
+        </TableRow></TableHead>
+        <TableBody>
+          {rows.map(row => <TableRow key={row.id} hover>
+            <TableCell sx={{ fontFamily: 'monospace', fontWeight: 600, whiteSpace: 'nowrap' }}>{row.batchNumber}</TableCell>
+            <TableCell sx={{ maxWidth: 180 }}><Typography variant="body2" noWrap title={row.item.name}>{row.item.name}</Typography></TableCell>
+            <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.sourceStack.code}</TableCell>
+            <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.destinationStack.code}</TableCell>
+            <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{row.inputQuantityKg} KG</TableCell>
+            <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{row.outputQuantityKg} KG</TableCell>
+            <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums', color: 'error.main' }}>{row.lossKg} KG</TableCell>
+            <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{row.moistureBeforePct}%</TableCell>
+            <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>{row.moistureAfterPct}%</TableCell>
+            <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.dryingMethod}</TableCell>
+            <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}><Chip size="small" label={row.status} color={row.status === 'POSTED' ? 'success' : 'default'} /></TableCell>
+            <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>{row.status === 'DRAFT' ? <Button size="small" variant="outlined" onClick={() => action(row, 'approve')}>{label.approve}</Button> : row.status === 'APPROVED' ? <Button size="small" variant="contained" onClick={() => action(row, 'post')}>{label.post}</Button> : '—'}</TableCell>
+          </TableRow>)}
+          {!rows.length && <TableRow><TableCell colSpan={12} align="center" sx={{ color: 'text.secondary', py: 3 }}>{bn ? 'শুকানোর ব্যাচ নেই।' : 'No drying batches recorded.'}</TableCell></TableRow>}
+        </TableBody>
+      </Table>
     </Paper>
   </Stack>;
 }

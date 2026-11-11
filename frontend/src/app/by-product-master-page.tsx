@@ -350,22 +350,36 @@ export function ByProductMasterPage({
     {itemsQuery.error && <Alert severity="error">{messageOf(itemsQuery.error, t.failed)}</Alert>}
     {activityQuery.error && !(activityQuery.error instanceof ApiError && activityQuery.error.status === 403) && <Alert severity="error">{messageOf(activityQuery.error, t.failed)}</Alert>}
     {activityQuery.error instanceof ApiError && activityQuery.error.status === 403 && <Alert severity="info">{t.inventoryPermission}</Alert>}
-    <Paper variant="outlined" sx={{ overflow: 'hidden' }}>
+    <Paper variant="outlined" sx={{ overflowX: 'auto' }}>
       {itemsQuery.isLoading
         ? <Stack direction="row" spacing={1} alignItems="center" p={3}><CircularProgress size={18} /><Typography>{t.loading}</Typography></Stack>
-        : <Table size="small">
-          <TableHead><TableRow>{[t.name, t.code, t.type, t.grade, t.stock, t.production, t.sales, t.prices, t.status, t.actions].map(label => <TableCell key={label}>{label}</TableCell>)}</TableRow></TableHead>
+        : <Table size="small" sx={{ minWidth: 1050 }}>
+          <TableHead><TableRow>{[
+            { label: t.name, align: 'left' },
+            { label: t.code, align: 'left' },
+            { label: t.type, align: 'left' },
+            { label: t.grade, align: 'left' },
+            { label: t.stock, align: 'right' },
+            { label: t.production, align: 'right' },
+            { label: t.sales, align: 'right' },
+            { label: t.prices, align: 'center' },
+            { label: t.status, align: 'center' },
+            { label: t.actions, align: 'right' },
+          ].map(col => <TableCell key={col.label} align={col.align as any} sx={{ whiteSpace: 'nowrap' }}>{col.label}</TableCell>)}</TableRow></TableHead>
           <TableBody>
             {rows.map(item => {
               const activity = activityByItem.get(item.id);
               return <TableRow key={item.id} hover>
-                <TableCell>{item.name}</TableCell><TableCell>{item.code}</TableCell><TableCell>{item.byProductType ?? '—'}</TableCell><TableCell>{item.grade ?? '—'}</TableCell>
-                <TableCell>{activity ? Number(activity.stockKg).toLocaleString() : '—'}</TableCell>
-                <TableCell>{activity ? Number(activity.productionKg).toLocaleString() : '—'}</TableCell>
-                <TableCell>{activity ? Number(activity.salesKg).toLocaleString() : '—'}</TableCell>
-                <TableCell><Chip size="small" color={item.hasReferencePrices ? 'success' : 'warning'} label={item.hasReferencePrices ? t.priceSet : t.priceMissing} /></TableCell>
-                <TableCell><Chip size="small" color={item.active ? 'success' : 'default'} label={item.active ? t.enabled : t.disabled} /></TableCell>
-                <TableCell><Stack direction="row" spacing={0.5}>
+                <TableCell sx={{ maxWidth: 180 }}><Typography variant="body2" fontWeight={600} noWrap title={item.name}>{item.name}</Typography></TableCell>
+                <TableCell sx={{ whiteSpace: 'nowrap', fontFamily: 'monospace' }}>{item.code}</TableCell>
+                <TableCell sx={{ whiteSpace: 'nowrap' }}>{item.byProductType ?? '—'}</TableCell>
+                <TableCell sx={{ whiteSpace: 'nowrap' }}>{item.grade ?? '—'}</TableCell>
+                <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{activity ? `${Number(activity.stockKg).toLocaleString()} KG` : '—'}</TableCell>
+                <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{activity ? `${Number(activity.productionKg).toLocaleString()} KG` : '—'}</TableCell>
+                <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{activity ? `${Number(activity.salesKg).toLocaleString()} KG` : '—'}</TableCell>
+                <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}><Chip size="small" color={item.hasReferencePrices ? 'success' : 'warning'} label={item.hasReferencePrices ? t.priceSet : t.priceMissing} /></TableCell>
+                <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}><Chip size="small" color={item.active ? 'success' : 'default'} label={item.active ? t.enabled : t.disabled} /></TableCell>
+                <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}><Stack direction="row" spacing={0.5} justifyContent="flex-end">
                   <Button size="small" onClick={() => startEdit(item)}>{language === 'bn' ? 'সম্পাদনা' : 'Edit'}</Button>
                   <Button size="small" onClick={() => startPrices(item)}>{item.hasReferencePrices ? t.editPrices : t.priceAction}</Button>
                 </Stack></TableCell>

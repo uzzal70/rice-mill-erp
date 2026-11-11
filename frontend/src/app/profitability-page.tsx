@@ -231,21 +231,21 @@ export function ProfitabilityPage({
 
       {/* Tab 0: Production Batches Table */}
       {activeTab === 0 && (
-        <Paper variant="outlined" sx={{ borderRadius: 2.5, overflow: 'hidden' }}>
-          <Table size="small">
+        <Paper variant="outlined" sx={{ borderRadius: 2.5, overflowX: 'auto' }}>
+          <Table size="small" sx={{ minWidth: 1250 }}>
             <TableHead sx={{ bgcolor: 'grey.100' }}>
               <TableRow>
-                <TableCell sx={{ fontWeight: 700 }}>Batch Number</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>Paddy Cost</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>By-Product Credit</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>Net Rice Cost</TableCell>
-                <TableCell align="right" sx={{ fontWeight: 700 }}>Finished Rice KG</TableCell>
-                <TableCell align="right" sx={{ fontWeight: 700 }}>Cost / KG</TableCell>
-                <TableCell align="right" sx={{ fontWeight: 700 }}>Cost / Mon (40KG)</TableCell>
-                <TableCell align="right" sx={{ fontWeight: 700 }}>Cost / Ton</TableCell>
-                <TableCell align="right" sx={{ fontWeight: 700 }}>Projected Revenue</TableCell>
-                <TableCell align="right" sx={{ fontWeight: 800 }}>Gross Profit</TableCell>
-                <TableCell align="right" sx={{ fontWeight: 800 }}>Margin %</TableCell>
+                <TableCell sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>Batch Number</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>Paddy Cost</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>By-Product Credit</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>Net Rice Cost</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>Finished Rice KG</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>Cost / KG</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>Cost / Mon (40KG)</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>Cost / Ton</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>Projected Revenue</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 800, whiteSpace: 'nowrap' }}>Gross Profit</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 800, whiteSpace: 'nowrap' }}>Margin %</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -258,19 +258,19 @@ export function ProfitabilityPage({
               ) : (
                 records.map((r) => (
                   <TableRow key={r.id} hover>
-                    <TableCell sx={{ fontWeight: 600 }}>{r.batchNumber}</TableCell>
-                    <TableCell>৳ {Number(r.paddyCost).toLocaleString()}</TableCell>
-                    <TableCell sx={{ color: 'success.main' }}>- ৳ {Number(r.byProductRevenue).toLocaleString()}</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }}>৳ {Number(r.netRiceCost).toLocaleString()}</TableCell>
-                    <TableCell align="right">{Number(r.finishedRiceKg).toLocaleString()} KG</TableCell>
-                    <TableCell align="right" sx={{ fontWeight: 600 }}>৳ {Number(r.costPerKg).toFixed(2)}</TableCell>
-                    <TableCell align="right">৳ {Number(r.costPerMon).toFixed(2)}</TableCell>
-                    <TableCell align="right">৳ {Number(r.costPerTon).toFixed(0)}</TableCell>
-                    <TableCell align="right">৳ {Number(r.projectedRevenue).toLocaleString()}</TableCell>
-                    <TableCell align="right" sx={{ fontWeight: 800, color: Number(r.grossProfit) >= 0 ? 'success.dark' : 'error.dark' }}>
+                    <TableCell sx={{ fontWeight: 600, fontFamily: 'monospace', whiteSpace: 'nowrap' }}>{r.batchNumber}</TableCell>
+                    <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>৳ {Number(r.paddyCost).toLocaleString()}</TableCell>
+                    <TableCell align="right" sx={{ color: 'success.main', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>- ৳ {Number(r.byProductRevenue).toLocaleString()}</TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 700, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>৳ {Number(r.netRiceCost).toLocaleString()}</TableCell>
+                    <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{Number(r.finishedRiceKg).toLocaleString()} KG</TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 600, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>৳ {Number(r.costPerKg).toFixed(2)}</TableCell>
+                    <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>৳ {Number(r.costPerMon).toFixed(2)}</TableCell>
+                    <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>৳ {Number(r.costPerTon).toFixed(0)}</TableCell>
+                    <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>৳ {Number(r.projectedRevenue).toLocaleString()}</TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 800, color: Number(r.grossProfit) >= 0 ? 'success.dark' : 'error.dark', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
                       ৳ {Number(r.grossProfit).toLocaleString()}
                     </TableCell>
-                    <TableCell align="right">
+                    <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
                       <Chip
                         size="small"
                         color={Number(r.grossMarginPct) >= 20 ? 'success' : Number(r.grossMarginPct) >= 10 ? 'primary' : 'warning'}
@@ -288,35 +288,35 @@ export function ProfitabilityPage({
 
       {/* Tab 1: Purchase Lots */}
       {activeTab === 1 && (
-        <Paper variant="outlined" sx={{ borderRadius: 2.5, overflow: 'hidden' }}>
-          <Table size="small">
+        <Paper variant="outlined" sx={{ borderRadius: 2.5, overflowX: 'auto' }}>
+          <Table size="small" sx={{ minWidth: 1150 }}>
             <TableHead sx={{ bgcolor: 'grey.100' }}>
               <TableRow>
-                <TableCell sx={{ fontWeight: 700 }}>Invoice #</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>Supplier</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>Paddy Variety</TableCell>
-                <TableCell align="right" sx={{ fontWeight: 700 }}>Net Paddy KG</TableCell>
-                <TableCell align="right" sx={{ fontWeight: 700 }}>Total Purchase Cost</TableCell>
-                <TableCell align="right" sx={{ fontWeight: 700 }}>Cost / KG</TableCell>
-                <TableCell align="right" sx={{ fontWeight: 700 }}>Cost / Mon</TableCell>
-                <TableCell align="right" sx={{ fontWeight: 700 }}>Cost / Ton</TableCell>
-                <TableCell align="right" sx={{ fontWeight: 700 }}>Projected Milled Revenue</TableCell>
-                <TableCell align="right" sx={{ fontWeight: 800 }}>Projected Margin %</TableCell>
+                <TableCell sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>Invoice #</TableCell>
+                <TableCell sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>Supplier</TableCell>
+                <TableCell sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>Paddy Variety</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>Net Paddy KG</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>Total Purchase Cost</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>Cost / KG</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>Cost / Mon</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>Cost / Ton</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>Projected Milled Revenue</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 800, whiteSpace: 'nowrap' }}>Projected Margin %</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {records.map((r) => (
                 <TableRow key={r.id} hover>
-                  <TableCell sx={{ fontWeight: 600 }}>{r.invoiceNumber}</TableCell>
-                  <TableCell>{r.supplier}</TableCell>
-                  <TableCell>{r.paddyItem}</TableCell>
-                  <TableCell align="right">{Number(r.netPaddyKg).toLocaleString()} KG</TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 700 }}>৳ {Number(r.totalPurchaseCost).toLocaleString()}</TableCell>
-                  <TableCell align="right">৳ {Number(r.costPerKg).toFixed(2)}</TableCell>
-                  <TableCell align="right">৳ {Number(r.costPerMon).toFixed(2)}</TableCell>
-                  <TableCell align="right">৳ {Number(r.costPerTon).toFixed(0)}</TableCell>
-                  <TableCell align="right">৳ {Number(r.projectedRevenue).toLocaleString()}</TableCell>
-                  <TableCell align="right">
+                  <TableCell sx={{ fontWeight: 600, fontFamily: 'monospace', whiteSpace: 'nowrap' }}>{r.invoiceNumber}</TableCell>
+                  <TableCell sx={{ maxWidth: 200 }}><Typography variant="body2" fontWeight={600} noWrap title={r.supplier}>{r.supplier}</Typography></TableCell>
+                  <TableCell sx={{ whiteSpace: 'nowrap' }}>{r.paddyItem}</TableCell>
+                  <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{Number(r.netPaddyKg).toLocaleString()} KG</TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 700, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>৳ {Number(r.totalPurchaseCost).toLocaleString()}</TableCell>
+                  <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>৳ {Number(r.costPerKg).toFixed(2)}</TableCell>
+                  <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>৳ {Number(r.costPerMon).toFixed(2)}</TableCell>
+                  <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>৳ {Number(r.costPerTon).toFixed(0)}</TableCell>
+                  <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>৳ {Number(r.projectedRevenue).toLocaleString()}</TableCell>
+                  <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
                     <Chip size="small" color="primary" label={`${Number(r.marginPct).toFixed(1)}%`} sx={{ fontWeight: 700 }} />
                   </TableCell>
                 </TableRow>
@@ -328,33 +328,33 @@ export function ProfitabilityPage({
 
       {/* Tab 2: Products & Brands */}
       {activeTab === 2 && (
-        <Paper variant="outlined" sx={{ borderRadius: 2.5, overflow: 'hidden' }}>
-          <Table size="small">
+        <Paper variant="outlined" sx={{ borderRadius: 2.5, overflowX: 'auto' }}>
+          <Table size="small" sx={{ minWidth: 980 }}>
             <TableHead sx={{ bgcolor: 'grey.100' }}>
               <TableRow>
-                <TableCell sx={{ fontWeight: 700 }}>Product Name</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>Brand</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>Variety</TableCell>
-                <TableCell align="right" sx={{ fontWeight: 700 }}>Unit Cost / KG</TableCell>
-                <TableCell align="right" sx={{ fontWeight: 700 }}>Unit Cost / Mon</TableCell>
-                <TableCell align="right" sx={{ fontWeight: 700 }}>Unit Cost / Ton</TableCell>
-                <TableCell align="right" sx={{ fontWeight: 700 }}>Sales Rate / KG</TableCell>
-                <TableCell align="right" sx={{ fontWeight: 800 }}>Profit / KG</TableCell>
-                <TableCell align="right" sx={{ fontWeight: 800 }}>Gross Margin %</TableCell>
+                <TableCell sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>Product Name</TableCell>
+                <TableCell sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>Brand</TableCell>
+                <TableCell sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>Variety</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>Unit Cost / KG</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>Unit Cost / Mon</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>Unit Cost / Ton</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>Sales Rate / KG</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 800, whiteSpace: 'nowrap' }}>Profit / KG</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 800, whiteSpace: 'nowrap' }}>Gross Margin %</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {records.map((r) => (
                 <TableRow key={r.id} hover>
-                  <TableCell sx={{ fontWeight: 600 }}>{r.name} ({r.code})</TableCell>
-                  <TableCell>{r.brand}</TableCell>
-                  <TableCell>{r.variety}</TableCell>
-                  <TableCell align="right">৳ {Number(r.unitCostKg).toFixed(2)}</TableCell>
-                  <TableCell align="right">৳ {Number(r.unitCostMon).toFixed(2)}</TableCell>
-                  <TableCell align="right">৳ {Number(r.unitCostTon).toFixed(0)}</TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 600 }}>৳ {Number(r.salesRatePerKg).toFixed(2)}</TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 700, color: 'success.main' }}>৳ {Number(r.grossProfitKg).toFixed(2)}</TableCell>
-                  <TableCell align="right">
+                  <TableCell sx={{ fontWeight: 600, maxWidth: 220 }}><Typography variant="body2" fontWeight={600} noWrap title={`${r.name} (${r.code})`}>{r.name} ({r.code})</Typography></TableCell>
+                  <TableCell sx={{ whiteSpace: 'nowrap' }}>{r.brand}</TableCell>
+                  <TableCell sx={{ whiteSpace: 'nowrap' }}>{r.variety}</TableCell>
+                  <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>৳ {Number(r.unitCostKg).toFixed(2)}</TableCell>
+                  <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>৳ {Number(r.unitCostMon).toFixed(2)}</TableCell>
+                  <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>৳ {Number(r.unitCostTon).toFixed(0)}</TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 600, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>৳ {Number(r.salesRatePerKg).toFixed(2)}</TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 700, color: 'success.main', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>৳ {Number(r.grossProfitKg).toFixed(2)}</TableCell>
+                  <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
                     <Chip size="small" color="success" label={`${Number(r.grossMarginPct).toFixed(1)}%`} sx={{ fontWeight: 700 }} />
                   </TableCell>
                 </TableRow>
@@ -366,27 +366,27 @@ export function ProfitabilityPage({
 
       {/* Tab 3: Customers */}
       {activeTab === 3 && (
-        <Paper variant="outlined" sx={{ borderRadius: 2.5, overflow: 'hidden' }}>
-          <Table size="small">
+        <Paper variant="outlined" sx={{ borderRadius: 2.5, overflowX: 'auto' }}>
+          <Table size="small" sx={{ minWidth: 800 }}>
             <TableHead sx={{ bgcolor: 'grey.100' }}>
               <TableRow>
-                <TableCell sx={{ fontWeight: 700 }}>Customer Name</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>Code</TableCell>
-                <TableCell align="right" sx={{ fontWeight: 700 }}>Total Sales Revenue</TableCell>
-                <TableCell align="right" sx={{ fontWeight: 700 }}>Estimated COGS</TableCell>
-                <TableCell align="right" sx={{ fontWeight: 800 }}>Gross Profit</TableCell>
-                <TableCell align="right" sx={{ fontWeight: 800 }}>Margin %</TableCell>
+                <TableCell sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>Customer Name</TableCell>
+                <TableCell sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>Code</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>Total Sales Revenue</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>Estimated COGS</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 800, whiteSpace: 'nowrap' }}>Gross Profit</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 800, whiteSpace: 'nowrap' }}>Margin %</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {records.map((r) => (
                 <TableRow key={r.id} hover>
-                  <TableCell sx={{ fontWeight: 600 }}>{r.name}</TableCell>
-                  <TableCell>{r.code}</TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 600 }}>৳ {Number(r.totalRevenue).toLocaleString()}</TableCell>
-                  <TableCell align="right">৳ {Number(r.estimatedCost).toLocaleString()}</TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 800, color: 'primary.main' }}>৳ {Number(r.grossProfit).toLocaleString()}</TableCell>
-                  <TableCell align="right">
+                  <TableCell sx={{ fontWeight: 600, maxWidth: 220 }}><Typography variant="body2" fontWeight={600} noWrap title={r.name}>{r.name}</Typography></TableCell>
+                  <TableCell sx={{ whiteSpace: 'nowrap', fontFamily: 'monospace' }}>{r.code}</TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 600, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>৳ {Number(r.totalRevenue).toLocaleString()}</TableCell>
+                  <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>৳ {Number(r.estimatedCost).toLocaleString()}</TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 800, color: 'primary.main', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>৳ {Number(r.grossProfit).toLocaleString()}</TableCell>
+                  <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
                     <Chip size="small" color="primary" label={`${Number(r.grossMarginPct).toFixed(1)}%`} sx={{ fontWeight: 700 }} />
                   </TableCell>
                 </TableRow>
@@ -398,29 +398,29 @@ export function ProfitabilityPage({
 
       {/* Tab 4: Factories */}
       {activeTab === 4 && (
-        <Paper variant="outlined" sx={{ borderRadius: 2.5, overflow: 'hidden' }}>
-          <Table size="small">
+        <Paper variant="outlined" sx={{ borderRadius: 2.5, overflowX: 'auto' }}>
+          <Table size="small" sx={{ minWidth: 800 }}>
             <TableHead sx={{ bgcolor: 'grey.100' }}>
               <TableRow>
-                <TableCell sx={{ fontWeight: 700 }}>Factory Name</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>Code</TableCell>
-                <TableCell align="right" sx={{ fontWeight: 700 }}>Batches Count</TableCell>
-                <TableCell align="right" sx={{ fontWeight: 700 }}>Total Revenue</TableCell>
-                <TableCell align="right" sx={{ fontWeight: 700 }}>Total Cost</TableCell>
-                <TableCell align="right" sx={{ fontWeight: 800 }}>Gross Profit</TableCell>
-                <TableCell align="right" sx={{ fontWeight: 800 }}>Margin %</TableCell>
+                <TableCell sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>Factory Name</TableCell>
+                <TableCell sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>Code</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>Batches Count</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>Total Revenue</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>Total Cost</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 800, whiteSpace: 'nowrap' }}>Gross Profit</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 800, whiteSpace: 'nowrap' }}>Margin %</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {records.map((r) => (
                 <TableRow key={r.id} hover>
-                  <TableCell sx={{ fontWeight: 600 }}>{r.name}</TableCell>
-                  <TableCell>{r.code}</TableCell>
-                  <TableCell align="right">{r.batchCount}</TableCell>
-                  <TableCell align="right">৳ {Number(r.totalRevenue).toLocaleString()}</TableCell>
-                  <TableCell align="right">৳ {Number(r.totalCost).toLocaleString()}</TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 800, color: 'success.main' }}>৳ {Number(r.grossProfit).toLocaleString()}</TableCell>
-                  <TableCell align="right">
+                  <TableCell sx={{ fontWeight: 600, maxWidth: 220 }}><Typography variant="body2" fontWeight={600} noWrap title={r.name}>{r.name}</Typography></TableCell>
+                  <TableCell sx={{ whiteSpace: 'nowrap', fontFamily: 'monospace' }}>{r.code}</TableCell>
+                  <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{r.batchCount}</TableCell>
+                  <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>৳ {Number(r.totalRevenue).toLocaleString()}</TableCell>
+                  <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>৳ {Number(r.totalCost).toLocaleString()}</TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 800, color: 'success.main', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>৳ {Number(r.grossProfit).toLocaleString()}</TableCell>
+                  <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
                     <Chip size="small" color="success" label={`${Number(r.grossMarginPct).toFixed(1)}%`} sx={{ fontWeight: 700 }} />
                   </TableCell>
                 </TableRow>

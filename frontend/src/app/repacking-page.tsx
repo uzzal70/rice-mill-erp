@@ -1,7 +1,7 @@
 'use client';
 
 import { FormEvent, useMemo, useState } from 'react';
-import { Alert, Button, Paper, Stack, Table, TableBody, TableCell, TableHead, TableRow, TextField, Typography } from '@mui/material';
+import { Alert, Button, Chip, Paper, Stack, Table, TableBody, TableCell, TableHead, TableRow, TextField, Typography } from '@mui/material';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiRequest, queryString } from '@/lib/api';
 
@@ -62,10 +62,35 @@ export function RepackingPage({ companyId, factoryId, language, onSaved }: { com
       <Typography color="text.secondary" fontSize={12} mt={1}>{text.packed}: {packedKg || '—'} KG · {text.loss}: {lossKg || '—'} KG {selectedPackage?.packagingSpec?.bagType ? `· ${selectedPackage.packagingSpec.bagType}` : ''}</Typography>
     </Paper>
     <Paper className="workspace-card" elevation={0} sx={{ p: 2, overflowX: 'auto' }}>
-      <Table size="small"><TableHead><TableRow>{[text.batch, text.source, text.output, text.package, text.input, text.count, text.packed, text.loss, 'Status', text.actions].map(label => <TableCell key={label}>{label}</TableCell>)}</TableRow></TableHead><TableBody>
-        {rows.map(row => <TableRow key={row.id}><TableCell>{row.batchNumber}</TableCell><TableCell>{row.sourceItem.name} · {row.sourceStack.code}</TableCell><TableCell>{row.outputItem.name} · {row.destinationStack.code}</TableCell><TableCell>{row.packagingItem.name} · {row.packageSizeKg} KG</TableCell><TableCell>{row.inputQuantityKg}</TableCell><TableCell>{row.packageCount}</TableCell><TableCell>{row.packedQuantityKg}</TableCell><TableCell>{row.packingLossKg}</TableCell><TableCell>{row.status}</TableCell><TableCell>{row.status === 'DRAFT' ? <Button size="small" onClick={() => action(row, 'approve')}>{text.approve}</Button> : row.status === 'APPROVED' ? <Button size="small" onClick={() => action(row, 'post')}>{text.post}</Button> : '—'}</TableCell></TableRow>)}
-        {!rows.length && <TableRow><TableCell colSpan={10} align="center">{text.noRows}</TableCell></TableRow>}
-      </TableBody></Table>
+      <Table size="small" sx={{ minWidth: 1150 }}>
+        <TableHead><TableRow>{[
+          { label: text.batch, align: 'left' },
+          { label: text.source, align: 'left' },
+          { label: text.output, align: 'left' },
+          { label: text.package, align: 'left' },
+          { label: text.input, align: 'right' },
+          { label: text.count, align: 'right' },
+          { label: text.packed, align: 'right' },
+          { label: text.loss, align: 'right' },
+          { label: 'Status', align: 'center' },
+          { label: text.actions, align: 'right' },
+        ].map(col => <TableCell key={col.label} align={col.align as any} sx={{ whiteSpace: 'nowrap' }}>{col.label}</TableCell>)}</TableRow></TableHead>
+        <TableBody>
+          {rows.map(row => <TableRow key={row.id} hover>
+            <TableCell sx={{ fontFamily: 'monospace', fontWeight: 600, whiteSpace: 'nowrap' }}>{row.batchNumber}</TableCell>
+            <TableCell sx={{ maxWidth: 180 }}><Typography variant="body2" noWrap title={`${row.sourceItem.name} · ${row.sourceStack.code}`}>{row.sourceItem.name} · {row.sourceStack.code}</Typography></TableCell>
+            <TableCell sx={{ maxWidth: 180 }}><Typography variant="body2" noWrap title={`${row.outputItem.name} · ${row.destinationStack.code}`}>{row.outputItem.name} · {row.destinationStack.code}</Typography></TableCell>
+            <TableCell sx={{ maxWidth: 180 }}><Typography variant="body2" noWrap title={`${row.packagingItem.name} · ${row.packageSizeKg} KG`}>{row.packagingItem.name} · {row.packageSizeKg} KG</Typography></TableCell>
+            <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{row.inputQuantityKg} KG</TableCell>
+            <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{row.packageCount}</TableCell>
+            <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>{row.packedQuantityKg} KG</TableCell>
+            <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums', color: 'error.main' }}>{row.packingLossKg} KG</TableCell>
+            <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}><Chip size="small" label={row.status} color={row.status === 'POSTED' ? 'success' : 'default'} /></TableCell>
+            <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>{row.status === 'DRAFT' ? <Button size="small" variant="outlined" onClick={() => action(row, 'approve')}>{text.approve}</Button> : row.status === 'APPROVED' ? <Button size="small" variant="contained" onClick={() => action(row, 'post')}>{text.post}</Button> : '—'}</TableCell>
+          </TableRow>)}
+          {!rows.length && <TableRow><TableCell colSpan={10} align="center" sx={{ color: 'text.secondary', py: 3 }}>{text.noRows}</TableCell></TableRow>}
+        </TableBody>
+      </Table>
     </Paper>
   </Stack>;
 }

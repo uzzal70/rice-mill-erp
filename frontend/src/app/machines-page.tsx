@@ -298,18 +298,18 @@ export function MachinesPage({
       </Box>
 
       {/* Machines Table */}
-      <Paper variant="outlined" sx={{ borderRadius: 2.5, overflow: 'hidden' }}>
-        <Table size="small">
+      <Paper variant="outlined" sx={{ borderRadius: 2.5, overflowX: 'auto' }}>
+        <Table size="small" sx={{ minWidth: 980 }}>
           <TableHead sx={{ bgcolor: 'grey.100' }}>
             <TableRow>
-              <TableCell sx={{ fontWeight: 700 }}>Machine Code</TableCell>
-              <TableCell sx={{ fontWeight: 700 }}>Machine Name</TableCell>
-              <TableCell sx={{ fontWeight: 700 }}>Type</TableCell>
-              <TableCell sx={{ fontWeight: 700 }}>Brand & Capacity</TableCell>
-              <TableCell align="right" sx={{ fontWeight: 700 }}>Total Run Hours</TableCell>
-              <TableCell sx={{ fontWeight: 700 }}>Last Service</TableCell>
-              <TableCell sx={{ fontWeight: 700 }}>Next Service Due</TableCell>
-              <TableCell sx={{ fontWeight: 700 }}>Status</TableCell>
+              <TableCell sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>Machine Code</TableCell>
+              <TableCell sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>Machine Name</TableCell>
+              <TableCell sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>Type</TableCell>
+              <TableCell sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>Brand & Capacity</TableCell>
+              <TableCell align="right" sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>Total Run Hours</TableCell>
+              <TableCell sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>Last Service</TableCell>
+              <TableCell align="center" sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>Next Service Due</TableCell>
+              <TableCell align="center" sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>Status</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -322,15 +322,15 @@ export function MachinesPage({
             ) : (
               machines.map((m) => (
                 <TableRow key={m.id} hover>
-                  <TableCell sx={{ fontWeight: 700 }}>{m.code}</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>{m.name}</TableCell>
-                  <TableCell><Chip size="small" label={m.machineType} /></TableCell>
-                  <TableCell>{m.brand || '-'} {m.capacity ? `(${m.capacity})` : ''}</TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 700, color: 'primary.main' }}>
+                  <TableCell sx={{ fontWeight: 700, fontFamily: 'monospace', whiteSpace: 'nowrap' }}>{m.code}</TableCell>
+                  <TableCell sx={{ fontWeight: 600, maxWidth: 200 }}><Typography variant="body2" fontWeight={600} noWrap title={m.name}>{m.name}</Typography></TableCell>
+                  <TableCell sx={{ whiteSpace: 'nowrap' }}><Chip size="small" label={m.machineType} /></TableCell>
+                  <TableCell sx={{ whiteSpace: 'nowrap' }}>{m.brand || '-'} {m.capacity ? `(${m.capacity})` : ''}</TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 700, color: 'primary.main', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
                     {Number(m.totalRunHours).toFixed(1)} hrs
                   </TableCell>
-                  <TableCell>{m.lastServiceDate ? new Date(m.lastServiceDate).toLocaleDateString() : 'N/A'}</TableCell>
-                  <TableCell>
+                  <TableCell sx={{ whiteSpace: 'nowrap' }}>{m.lastServiceDate ? new Date(m.lastServiceDate).toLocaleDateString() : 'N/A'}</TableCell>
+                  <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}>
                     {m.nextServiceDate ? (
                       <Chip
                         size="small"
@@ -342,7 +342,7 @@ export function MachinesPage({
                       'N/A'
                     )}
                   </TableCell>
-                  <TableCell>
+                  <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}>
                     <Chip
                       size="small"
                       color={

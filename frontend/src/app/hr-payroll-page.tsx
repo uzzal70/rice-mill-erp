@@ -353,19 +353,19 @@ export function HrPayrollPage({
 
       {/* Tab 0: Employees Master Table */}
       {activeTab === 0 && (
-        <Paper variant="outlined" sx={{ borderRadius: 2.5, overflow: 'hidden' }}>
-          <Table size="small">
+        <Paper variant="outlined" sx={{ borderRadius: 2.5, overflowX: 'auto' }}>
+          <Table size="small" sx={{ minWidth: 1050 }}>
             <TableHead sx={{ bgcolor: 'grey.100' }}>
               <TableRow>
-                <TableCell sx={{ fontWeight: 700 }}>Employee Code</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>Full Name</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>Department</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>Designation</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>Phone / NID</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>Joining Date</TableCell>
-                <TableCell align="right" sx={{ fontWeight: 700 }}>Base Salary</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>Payment Mode</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>Status</TableCell>
+                <TableCell sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>Employee Code</TableCell>
+                <TableCell sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>Full Name</TableCell>
+                <TableCell sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>Department</TableCell>
+                <TableCell sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>Designation</TableCell>
+                <TableCell sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>Phone / NID</TableCell>
+                <TableCell sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>Joining Date</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>Base Salary</TableCell>
+                <TableCell sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>Payment Mode</TableCell>
+                <TableCell align="center" sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>Status</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -378,17 +378,17 @@ export function HrPayrollPage({
               ) : (
                 employees.map((emp) => (
                   <TableRow key={emp.id} hover>
-                    <TableCell sx={{ fontWeight: 700 }}>{emp.employeeCode}</TableCell>
-                    <TableCell sx={{ fontWeight: 600 }}>{emp.fullName}</TableCell>
-                    <TableCell><Chip size="small" label={emp.department} /></TableCell>
-                    <TableCell>{emp.designation}</TableCell>
-                    <TableCell>{emp.phone || emp.nid || '-'}</TableCell>
-                    <TableCell>{new Date(emp.joiningDate).toLocaleDateString()}</TableCell>
-                    <TableCell align="right" sx={{ fontWeight: 700, color: 'primary.main' }}>
+                    <TableCell sx={{ fontWeight: 700, fontFamily: 'monospace', whiteSpace: 'nowrap' }}>{emp.employeeCode}</TableCell>
+                    <TableCell sx={{ fontWeight: 600, maxWidth: 200 }}><Typography variant="body2" fontWeight={600} noWrap title={emp.fullName}>{emp.fullName}</Typography></TableCell>
+                    <TableCell sx={{ whiteSpace: 'nowrap' }}><Chip size="small" label={emp.department} /></TableCell>
+                    <TableCell sx={{ whiteSpace: 'nowrap' }}>{emp.designation}</TableCell>
+                    <TableCell sx={{ whiteSpace: 'nowrap' }}>{emp.phone || emp.nid || '-'}</TableCell>
+                    <TableCell sx={{ whiteSpace: 'nowrap' }}>{new Date(emp.joiningDate).toLocaleDateString()}</TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 700, color: 'primary.main', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
                       ৳ {Number(emp.baseSalary).toLocaleString()}
                     </TableCell>
-                    <TableCell>{emp.paymentMode}</TableCell>
-                    <TableCell>
+                    <TableCell sx={{ whiteSpace: 'nowrap' }}>{emp.paymentMode}</TableCell>
+                    <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}>
                       <Chip
                         size="small"
                         color={emp.active ? 'success' : 'default'}
@@ -405,20 +405,20 @@ export function HrPayrollPage({
 
       {/* Tab 1: Monthly Payrolls */}
       {activeTab === 1 && (
-        <Paper variant="outlined" sx={{ borderRadius: 2.5, overflow: 'hidden' }}>
-          <Table size="small">
+        <Paper variant="outlined" sx={{ borderRadius: 2.5, overflowX: 'auto' }}>
+          <Table size="small" sx={{ minWidth: 1150 }}>
             <TableHead sx={{ bgcolor: 'grey.100' }}>
               <TableRow>
-                <TableCell sx={{ fontWeight: 700 }}>Payroll #</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>Month</TableCell>
-                <TableCell align="center" sx={{ fontWeight: 700 }}>Employees</TableCell>
-                <TableCell align="right" sx={{ fontWeight: 700 }}>Base Salary</TableCell>
-                <TableCell align="right" sx={{ fontWeight: 700 }}>Overtime</TableCell>
-                <TableCell align="right" sx={{ fontWeight: 700 }}>Bonus</TableCell>
-                <TableCell align="right" sx={{ fontWeight: 700 }}>Deductions</TableCell>
-                <TableCell align="right" sx={{ fontWeight: 800 }}>Net Salary</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>Status</TableCell>
-                <TableCell align="center" sx={{ fontWeight: 700 }}>Actions</TableCell>
+                <TableCell sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>Payroll #</TableCell>
+                <TableCell sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>Month</TableCell>
+                <TableCell align="center" sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>Employees</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>Base Salary</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>Overtime</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>Bonus</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>Deductions</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 800, whiteSpace: 'nowrap' }}>Net Salary</TableCell>
+                <TableCell align="center" sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>Status</TableCell>
+                <TableCell align="center" sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>Actions</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -431,17 +431,17 @@ export function HrPayrollPage({
               ) : (
                 payrolls.map((p) => (
                   <TableRow key={p.id} hover>
-                    <TableCell sx={{ fontWeight: 700 }}>{p.payrollNumber}</TableCell>
-                    <TableCell sx={{ fontWeight: 600 }}>{p.monthYear}</TableCell>
-                    <TableCell align="center">{p.totalEmployees}</TableCell>
-                    <TableCell align="right">৳ {Number(p.totalBaseSalary).toLocaleString()}</TableCell>
-                    <TableCell align="right" sx={{ color: 'success.main' }}>+ ৳ {Number(p.totalOvertime).toLocaleString()}</TableCell>
-                    <TableCell align="right" sx={{ color: 'info.main' }}>+ ৳ {Number(p.totalBonus).toLocaleString()}</TableCell>
-                    <TableCell align="right" sx={{ color: 'error.main' }}>- ৳ {Number(p.totalDeductions).toLocaleString()}</TableCell>
-                    <TableCell align="right" sx={{ fontWeight: 800, color: 'primary.main', fontSize: 15 }}>
+                    <TableCell sx={{ fontWeight: 700, fontFamily: 'monospace', whiteSpace: 'nowrap' }}>{p.payrollNumber}</TableCell>
+                    <TableCell sx={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{p.monthYear}</TableCell>
+                    <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}>{p.totalEmployees}</TableCell>
+                    <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>৳ {Number(p.totalBaseSalary).toLocaleString()}</TableCell>
+                    <TableCell align="right" sx={{ color: 'success.main', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>+ ৳ {Number(p.totalOvertime).toLocaleString()}</TableCell>
+                    <TableCell align="right" sx={{ color: 'info.main', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>+ ৳ {Number(p.totalBonus).toLocaleString()}</TableCell>
+                    <TableCell align="right" sx={{ color: 'error.main', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>- ৳ {Number(p.totalDeductions).toLocaleString()}</TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 800, color: 'primary.main', fontSize: 14, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
                       ৳ {Number(p.totalNetSalary).toLocaleString()}
                     </TableCell>
-                    <TableCell>
+                    <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}>
                       <Chip
                         size="small"
                         color={p.status === 'POSTED' ? 'success' : 'warning'}
@@ -449,7 +449,7 @@ export function HrPayrollPage({
                         sx={{ fontWeight: 700 }}
                       />
                     </TableCell>
-                    <TableCell align="center">
+                    <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}>
                       <Stack direction="row" spacing={1} justifyContent="center">
                         <Button
                           size="small"

@@ -326,23 +326,37 @@ export function PackagingMasterPage({
     {stockQuery.error && !(stockQuery.error instanceof ApiError && stockQuery.error.status === 403) && <Alert severity="error">{messageOf(stockQuery.error, t.failed)}</Alert>}
     {stockQuery.error instanceof ApiError && stockQuery.error.status === 403 && <Alert severity="info">{t.inventoryPermission}</Alert>}
     {suppliersQuery.error && !suppliersForbidden && <Alert severity="error">{messageOf(suppliersQuery.error, t.failed)}</Alert>}
-    <Paper variant="outlined" sx={{ overflow: 'hidden' }}>
+    <Paper variant="outlined" sx={{ overflowX: 'auto' }}>
       {itemsQuery.isLoading
         ? <Stack direction="row" spacing={1} alignItems="center" p={3}><CircularProgress size={18} /><Typography>{t.loading}</Typography></Stack>
-        : <Table size="small">
-          <TableHead><TableRow>{[t.name, t.code, t.bagType, t.size, t.material, t.supplier, t.stock, t.cost, t.status, t.actions].map(label => <TableCell key={label}>{label}</TableCell>)}</TableRow></TableHead>
+        : <Table size="small" sx={{ minWidth: 1050 }}>
+          <TableHead><TableRow>{[
+            { label: t.name, align: 'left' },
+            { label: t.code, align: 'left' },
+            { label: t.bagType, align: 'left' },
+            { label: t.size, align: 'right' },
+            { label: t.material, align: 'left' },
+            { label: t.supplier, align: 'left' },
+            { label: t.stock, align: 'right' },
+            { label: t.cost, align: 'center' },
+            { label: t.status, align: 'center' },
+            { label: t.actions, align: 'right' },
+          ].map(col => <TableCell key={col.label} align={col.align as any} sx={{ whiteSpace: 'nowrap' }}>{col.label}</TableCell>)}</TableRow></TableHead>
           <TableBody>
             {items.map(item => {
               const stock = stockById.get(item.id);
               const supplier = item.packagingSpec.supplierPartnerId ? supplierById.get(item.packagingSpec.supplierPartnerId) : null;
               return <TableRow key={item.id} hover>
-                <TableCell>{item.name}</TableCell><TableCell>{item.code}</TableCell><TableCell>{item.packagingSpec.bagType ?? '—'}</TableCell>
-                <TableCell>{Number(item.packagingSpec.sizeKg).toLocaleString()} KG</TableCell><TableCell>{item.packagingSpec.material}</TableCell>
-                <TableCell>{supplier?.name ?? item.packagingSpec.supplierPartnerId ?? t.noSupplier}</TableCell>
-                <TableCell>{stock ? `${Number(stock.stock).toLocaleString()} ${stock.baseUnit}` : '—'}</TableCell>
-                <TableCell><Button size="small" onClick={() => startCostEdit(item)}>{t.cost}</Button></TableCell>
-                <TableCell><Chip size="small" color={item.active ? 'success' : 'default'} label={item.active ? t.enabled : t.disabled} /></TableCell>
-                <TableCell><Button size="small" onClick={() => startEdit(item)}>{language === 'bn' ? 'সম্পাদনা' : 'Edit'}</Button></TableCell>
+                <TableCell sx={{ maxWidth: 180 }}><Typography variant="body2" fontWeight={600} noWrap title={item.name}>{item.name}</Typography></TableCell>
+                <TableCell sx={{ whiteSpace: 'nowrap', fontFamily: 'monospace' }}>{item.code}</TableCell>
+                <TableCell sx={{ whiteSpace: 'nowrap' }}>{item.packagingSpec.bagType ?? '—'}</TableCell>
+                <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{Number(item.packagingSpec.sizeKg).toLocaleString()} KG</TableCell>
+                <TableCell sx={{ whiteSpace: 'nowrap' }}>{item.packagingSpec.material}</TableCell>
+                <TableCell sx={{ maxWidth: 180 }}><Typography variant="body2" noWrap title={supplier?.name ?? item.packagingSpec.supplierPartnerId ?? t.noSupplier}>{supplier?.name ?? item.packagingSpec.supplierPartnerId ?? t.noSupplier}</Typography></TableCell>
+                <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>{stock ? `${Number(stock.stock).toLocaleString()} ${stock.baseUnit}` : '—'}</TableCell>
+                <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}><Button size="small" variant="outlined" onClick={() => startCostEdit(item)}>{t.cost}</Button></TableCell>
+                <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}><Chip size="small" color={item.active ? 'success' : 'default'} label={item.active ? t.enabled : t.disabled} /></TableCell>
+                <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}><Button size="small" onClick={() => startEdit(item)}>{language === 'bn' ? 'সম্পাদনা' : 'Edit'}</Button></TableCell>
               </TableRow>;
             })}
             {!items.length && <TableRow><TableCell colSpan={10} align="center" sx={{ py: 4, color: 'text.secondary' }}>{t.noRows}</TableCell></TableRow>}

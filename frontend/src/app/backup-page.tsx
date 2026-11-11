@@ -249,39 +249,43 @@ export function BackupPage({
           <Chip label={`${archives.length} Archives`} size="small" variant="outlined" />
         </Box>
         <Divider />
-        <TableContainer>
-          <Table size="small">
+        <TableContainer sx={{ overflowX: 'auto' }}>
+          <Table size="small" sx={{ minWidth: 980 }}>
             <TableHead>
               <TableRow sx={{ backgroundColor: '#f8fafc' }}>
-                <TableCell><strong>{isBn ? 'আর্কাইভ ফাইল' : 'Filename'}</strong></TableCell>
-                <TableCell><strong>{isBn ? 'ধরন' : 'Type'}</strong></TableCell>
-                <TableCell><strong>{isBn ? 'সাইজ' : 'Size'}</strong></TableCell>
-                <TableCell><strong>{isBn ? 'স্ট্যাটাস' : 'Status'}</strong></TableCell>
-                <TableCell><strong>{isBn ? 'তারিখ ও সময়' : 'Completed At'}</strong></TableCell>
-                <TableCell><strong>{isBn ? 'চেকসাম (SHA-256)' : 'Checksum'}</strong></TableCell>
-                <TableCell align="right"><strong>{isBn ? 'অ্যাকশন' : 'Actions'}</strong></TableCell>
+                <TableCell sx={{ whiteSpace: 'nowrap' }}><strong>{isBn ? 'আর্কাইভ ফাইল' : 'Filename'}</strong></TableCell>
+                <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}><strong>{isBn ? 'ধরন' : 'Type'}</strong></TableCell>
+                <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}><strong>{isBn ? 'সাইজ' : 'Size'}</strong></TableCell>
+                <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}><strong>{isBn ? 'স্ট্যাটাস' : 'Status'}</strong></TableCell>
+                <TableCell sx={{ whiteSpace: 'nowrap' }}><strong>{isBn ? 'তারিখ ও সময়' : 'Completed At'}</strong></TableCell>
+                <TableCell sx={{ whiteSpace: 'nowrap' }}><strong>{isBn ? 'চেকসাম (SHA-256)' : 'Checksum'}</strong></TableCell>
+                <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}><strong>{isBn ? 'অ্যাকশন' : 'Actions'}</strong></TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {archives.map(row => (
                 <TableRow key={row.id} hover>
-                  <TableCell sx={{ fontFamily: 'monospace', fontWeight: 600 }}>{row.filename}</TableCell>
-                  <TableCell>
+                  <TableCell sx={{ fontFamily: 'monospace', fontWeight: 600, maxWidth: 220 }}>
+                    <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 600 }} noWrap title={row.filename}>
+                      {row.filename}
+                    </Typography>
+                  </TableCell>
+                  <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}>
                     <Chip
                       label={row.type}
                       size="small"
                       color={row.type === 'DATABASE' ? 'primary' : row.type === 'FILES' ? 'secondary' : 'default'}
                     />
                   </TableCell>
-                  <TableCell>{row.size}</TableCell>
-                  <TableCell>
+                  <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{row.size}</TableCell>
+                  <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}>
                     <Chip label={row.status} size="small" color="success" />
                   </TableCell>
-                  <TableCell>{row.completedAt}</TableCell>
-                  <TableCell sx={{ fontFamily: 'monospace', fontSize: 11, color: '#718096' }}>
+                  <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.completedAt}</TableCell>
+                  <TableCell sx={{ fontFamily: 'monospace', fontSize: 11, color: '#718096', whiteSpace: 'nowrap' }}>
                     {row.checksum.slice(0, 16)}...
                   </TableCell>
-                  <TableCell align="right">
+                  <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
                     <Stack direction="row" spacing={1} justifyContent="flex-end">
                       <Button size="small" variant="outlined" startIcon={<DownloadIcon />} onClick={() => setToastMsg(`Downloading ${row.filename}...`)}>
                         {isBn ? 'ডাউনলোড' : 'Download'}

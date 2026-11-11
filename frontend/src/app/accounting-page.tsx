@@ -750,16 +750,16 @@ export function AccountingPage({
             </Stack>
           </Paper>
 
-          <Paper variant="outlined" sx={{ borderRadius: 2.5, overflow: 'hidden' }}>
-            <Table size="small">
+          <Paper variant="outlined" sx={{ borderRadius: 2.5, overflowX: 'auto' }}>
+            <Table size="small" sx={{ minWidth: 800 }}>
               <TableHead sx={{ bgcolor: 'action.hover' }}>
                 <TableRow>
-                  <TableCell sx={{ fontWeight: 600 }}>{isBn ? 'কোড' : 'Code'}</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>{isBn ? 'হিসাবের নাম' : 'Account Name'}</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>{isBn ? 'ধরন (Type)' : 'Type'}</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>{isBn ? 'উপ-ধরন (Subtype)' : 'Subtype'}</TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 600 }}>{isBn ? 'বর্তমান ব্যালেন্স' : 'Current Balance'}</TableCell>
-                  <TableCell align="center" sx={{ fontWeight: 600 }}>{isBn ? 'স্ট্যাটাস' : 'Status'}</TableCell>
+                  <TableCell sx={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{isBn ? 'কোড' : 'Code'}</TableCell>
+                  <TableCell sx={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{isBn ? 'হিসাবের নাম' : 'Account Name'}</TableCell>
+                  <TableCell sx={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{isBn ? 'ধরন (Type)' : 'Type'}</TableCell>
+                  <TableCell sx={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{isBn ? 'উপ-ধরন (Subtype)' : 'Subtype'}</TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{isBn ? 'বর্তমান ব্যালেন্স' : 'Current Balance'}</TableCell>
+                  <TableCell align="center" sx={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{isBn ? 'স্ট্যাটাস' : 'Status'}</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -772,25 +772,27 @@ export function AccountingPage({
                 ) : (
                   accounts.map((acc) => (
                     <TableRow key={acc.id} hover>
-                      <TableCell sx={{ fontWeight: 700, fontFamily: 'monospace' }}>{acc.code}</TableCell>
-                      <TableCell sx={{ fontWeight: 600 }}>
-                        {acc.name}
+                      <TableCell sx={{ fontWeight: 700, fontFamily: 'monospace', whiteSpace: 'nowrap' }}>{acc.code}</TableCell>
+                      <TableCell sx={{ fontWeight: 600, maxWidth: 260 }}>
+                        <Typography variant="body2" fontWeight={600} noWrap title={acc.name}>
+                          {acc.name}
+                        </Typography>
                         {acc.isSystem && (
                           <Chip size="small" label="SYSTEM" sx={{ ml: 1, fontSize: 10, height: 18 }} />
                         )}
                       </TableCell>
-                      <TableCell>
+                      <TableCell sx={{ whiteSpace: 'nowrap' }}>
                         <Chip size="small" label={acc.type} color={TYPE_COLORS[acc.type]} sx={{ fontSize: 11 }} />
                       </TableCell>
-                      <TableCell>
+                      <TableCell sx={{ whiteSpace: 'nowrap' }}>
                         <Typography variant="caption" color="text.secondary">
                           {acc.subtype || '—'}
                         </Typography>
                       </TableCell>
-                      <TableCell align="right" sx={{ fontWeight: 700 }}>
+                      <TableCell align="right" sx={{ fontWeight: 700, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
                         ৳ {Number(acc.currentBalance).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                       </TableCell>
-                      <TableCell align="center">
+                      <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}>
                         <Chip
                           size="small"
                           label={acc.active ? 'ACTIVE' : 'INACTIVE'}
@@ -845,18 +847,18 @@ export function AccountingPage({
             </Stack>
           </Paper>
 
-          <Paper variant="outlined" sx={{ borderRadius: 2.5, overflow: 'hidden' }}>
-            <Table size="small">
+          <Paper variant="outlined" sx={{ borderRadius: 2.5, overflowX: 'auto' }}>
+            <Table size="small" sx={{ minWidth: 1050 }}>
               <TableHead sx={{ bgcolor: 'action.hover' }}>
                 <TableRow>
-                  <TableCell sx={{ fontWeight: 600 }}>{isBn ? 'ভাউচার নং' : 'Voucher #'}</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>{isBn ? 'তারিখ' : 'Date'}</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>{isBn ? 'ধরন' : 'Type'}</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>{isBn ? 'বিবরণ / Narration' : 'Narration'}</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>{isBn ? 'রেফারেন্স / পার্টনার' : 'Ref / Partner'}</TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 600 }}>{isBn ? 'মোট টাকা' : 'Amount (BDT)'}</TableCell>
-                  <TableCell align="center" sx={{ fontWeight: 600 }}>{isBn ? 'স্ট্যাটাস' : 'Status'}</TableCell>
-                  <TableCell align="center" sx={{ fontWeight: 600 }}>{isBn ? 'পদক্ষেপ' : 'Actions'}</TableCell>
+                  <TableCell sx={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{isBn ? 'ভাউচার নং' : 'Voucher #'}</TableCell>
+                  <TableCell sx={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{isBn ? 'তারিখ' : 'Date'}</TableCell>
+                  <TableCell sx={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{isBn ? 'ধরন' : 'Type'}</TableCell>
+                  <TableCell sx={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{isBn ? 'বিবরণ / Narration' : 'Narration'}</TableCell>
+                  <TableCell sx={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{isBn ? 'রেফারেন্স / পার্টনার' : 'Ref / Partner'}</TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{isBn ? 'মোট টাকা' : 'Amount (BDT)'}</TableCell>
+                  <TableCell align="center" sx={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{isBn ? 'স্ট্যাটাস' : 'Status'}</TableCell>
+                  <TableCell align="center" sx={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{isBn ? 'পদক্ষেপ' : 'Actions'}</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -869,19 +871,25 @@ export function AccountingPage({
                 ) : (
                   journals.map((j) => (
                     <TableRow key={j.id} hover>
-                      <TableCell sx={{ fontWeight: 700, fontFamily: 'monospace' }}>{j.number}</TableCell>
-                      <TableCell>{new Date(j.voucherDate).toLocaleDateString()}</TableCell>
-                      <TableCell>
+                      <TableCell sx={{ fontWeight: 700, fontFamily: 'monospace', whiteSpace: 'nowrap' }}>{j.number}</TableCell>
+                      <TableCell sx={{ whiteSpace: 'nowrap' }}>{new Date(j.voucherDate).toLocaleDateString()}</TableCell>
+                      <TableCell sx={{ whiteSpace: 'nowrap' }}>
                         <Chip size="small" label={j.voucherType} variant="outlined" sx={{ fontSize: 11 }} />
                       </TableCell>
-                      <TableCell>{j.narration || '—'}</TableCell>
-                      <TableCell>
-                        {j.partner ? `${j.partner.name} (${j.partner.code})` : j.chequeOrRefNo || '—'}
+                      <TableCell sx={{ maxWidth: 220 }}>
+                        <Typography variant="body2" noWrap title={j.narration || '—'}>
+                          {j.narration || '—'}
+                        </Typography>
                       </TableCell>
-                      <TableCell align="right" sx={{ fontWeight: 700 }}>
+                      <TableCell sx={{ maxWidth: 180 }}>
+                        <Typography variant="body2" noWrap title={j.partner ? `${j.partner.name} (${j.partner.code})` : j.chequeOrRefNo || '—'}>
+                          {j.partner ? `${j.partner.name} (${j.partner.code})` : j.chequeOrRefNo || '—'}
+                        </Typography>
+                      </TableCell>
+                      <TableCell align="right" sx={{ fontWeight: 700, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
                         ৳ {Number(j.totalAmount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                       </TableCell>
-                      <TableCell align="center">
+                      <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}>
                         <Chip
                           size="small"
                           label={j.status}
@@ -986,17 +994,17 @@ export function AccountingPage({
                   </Stack>
                 </Paper>
 
-                <Paper variant="outlined" sx={{ borderRadius: 2.5, overflow: 'hidden' }}>
-                  <Table size="small">
+                <Paper variant="outlined" sx={{ borderRadius: 2.5, overflowX: 'auto' }}>
+                  <Table size="small" sx={{ minWidth: 950 }}>
                     <TableHead sx={{ bgcolor: 'action.hover' }}>
                       <TableRow>
-                        <TableCell sx={{ fontWeight: 600 }}>{isBn ? 'তারিখ' : 'Date'}</TableCell>
-                        <TableCell sx={{ fontWeight: 600 }}>{isBn ? 'ভাউচার নং' : 'Voucher #'}</TableCell>
-                        <TableCell sx={{ fontWeight: 600 }}>{isBn ? 'ধরন' : 'Type'}</TableCell>
-                        <TableCell sx={{ fontWeight: 600 }}>{isBn ? 'বিবরণ' : 'Narration'}</TableCell>
-                        <TableCell align="right" sx={{ fontWeight: 600 }}>{isBn ? 'ডেবিট (Dr)' : 'Debit (Dr)'}</TableCell>
-                        <TableCell align="right" sx={{ fontWeight: 600 }}>{isBn ? 'ক্রেডিট (Cr)' : 'Credit (Cr)'}</TableCell>
-                        <TableCell align="right" sx={{ fontWeight: 600 }}>{isBn ? 'ব্যালেন্স' : 'Running Balance'}</TableCell>
+                        <TableCell sx={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{isBn ? 'তারিখ' : 'Date'}</TableCell>
+                        <TableCell sx={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{isBn ? 'ভাউচার নং' : 'Voucher #'}</TableCell>
+                        <TableCell sx={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{isBn ? 'ধরন' : 'Type'}</TableCell>
+                        <TableCell sx={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{isBn ? 'বিবরণ' : 'Narration'}</TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{isBn ? 'ডেবিট (Dr)' : 'Debit (Dr)'}</TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{isBn ? 'ক্রেডিট (Cr)' : 'Credit (Cr)'}</TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{isBn ? 'ব্যালেন্স' : 'Running Balance'}</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
@@ -1009,13 +1017,17 @@ export function AccountingPage({
                       ) : (
                         gl.entries.map((entry) => (
                           <TableRow key={entry.id} hover>
-                            <TableCell>{new Date(entry.date).toLocaleDateString()}</TableCell>
-                            <TableCell sx={{ fontWeight: 600, fontFamily: 'monospace' }}>{entry.voucherNumber}</TableCell>
-                            <TableCell>
+                            <TableCell sx={{ whiteSpace: 'nowrap' }}>{new Date(entry.date).toLocaleDateString()}</TableCell>
+                            <TableCell sx={{ fontWeight: 600, fontFamily: 'monospace', whiteSpace: 'nowrap' }}>{entry.voucherNumber}</TableCell>
+                            <TableCell sx={{ whiteSpace: 'nowrap' }}>
                               <Chip size="small" label={entry.voucherType} sx={{ fontSize: 10 }} />
                             </TableCell>
-                            <TableCell>{entry.narration || '—'}</TableCell>
-                            <TableCell align="right" sx={{ fontWeight: entry.debit > 0 ? 700 : 400 }}>
+                            <TableCell sx={{ maxWidth: 240 }}>
+                              <Typography variant="body2" noWrap title={entry.narration || '—'}>
+                                {entry.narration || '—'}
+                              </Typography>
+                            </TableCell>
+                            <TableCell align="right" sx={{ fontWeight: entry.debit > 0 ? 700 : 400, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
                               {entry.debit > 0 ? `৳ ${entry.debit.toLocaleString(undefined, { minimumFractionDigits: 2 })}` : '—'}
                             </TableCell>
                             <TableCell align="right" sx={{ fontWeight: entry.credit > 0 ? 700 : 400 }}>
@@ -1141,29 +1153,33 @@ export function AccountingPage({
                   : `Trial Balance difference detected: ৳ ${tbQuery.data.difference.toLocaleString()}`}
               </Alert>
 
-              <Paper variant="outlined" sx={{ borderRadius: 2.5, overflow: 'hidden' }}>
-                <Table size="small">
+              <Paper variant="outlined" sx={{ borderRadius: 2.5, overflowX: 'auto' }}>
+                <Table size="small" sx={{ minWidth: 800 }}>
                   <TableHead sx={{ bgcolor: 'action.hover' }}>
                     <TableRow>
-                      <TableCell sx={{ fontWeight: 700 }}>{isBn ? 'কোড' : 'Code'}</TableCell>
-                      <TableCell sx={{ fontWeight: 700 }}>{isBn ? 'হিসাবের বিবরণ' : 'Account Title'}</TableCell>
-                      <TableCell sx={{ fontWeight: 700 }}>{isBn ? 'শ্রেণী (Type)' : 'Classification'}</TableCell>
-                      <TableCell align="right" sx={{ fontWeight: 700 }}>{isBn ? 'ডেবিট (Dr BDT)' : 'Debit (Dr BDT)'}</TableCell>
-                      <TableCell align="right" sx={{ fontWeight: 700 }}>{isBn ? 'ক্রেডিট (Cr BDT)' : 'Credit (Cr BDT)'}</TableCell>
+                      <TableCell sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>{isBn ? 'কোড' : 'Code'}</TableCell>
+                      <TableCell sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>{isBn ? 'হিসাবের বিবরণ' : 'Account Title'}</TableCell>
+                      <TableCell sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>{isBn ? 'শ্রেণী (Type)' : 'Classification'}</TableCell>
+                      <TableCell align="right" sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>{isBn ? 'ডেবিট (Dr BDT)' : 'Debit (Dr BDT)'}</TableCell>
+                      <TableCell align="right" sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>{isBn ? 'ক্রেডিট (Cr BDT)' : 'Credit (Cr BDT)'}</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
                     {tbQuery.data.accounts.map((row) => (
                       <TableRow key={row.id} hover>
-                        <TableCell sx={{ fontFamily: 'monospace', fontWeight: 600 }}>{row.code}</TableCell>
-                        <TableCell sx={{ fontWeight: 600 }}>{row.name}</TableCell>
-                        <TableCell>
+                        <TableCell sx={{ fontFamily: 'monospace', fontWeight: 600, whiteSpace: 'nowrap' }}>{row.code}</TableCell>
+                        <TableCell sx={{ fontWeight: 600, maxWidth: 260 }}>
+                          <Typography variant="body2" fontWeight={600} noWrap title={row.name}>
+                            {row.name}
+                          </Typography>
+                        </TableCell>
+                        <TableCell sx={{ whiteSpace: 'nowrap' }}>
                           <Chip size="small" label={row.type} color={TYPE_COLORS[row.type]} sx={{ fontSize: 10, height: 20 }} />
                         </TableCell>
-                        <TableCell align="right" sx={{ fontWeight: row.debit > 0 ? 700 : 400 }}>
+                        <TableCell align="right" sx={{ fontWeight: row.debit > 0 ? 700 : 400, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
                           {row.debit > 0 ? `৳ ${row.debit.toLocaleString(undefined, { minimumFractionDigits: 2 })}` : '—'}
                         </TableCell>
-                        <TableCell align="right" sx={{ fontWeight: row.credit > 0 ? 700 : 400 }}>
+                        <TableCell align="right" sx={{ fontWeight: row.credit > 0 ? 700 : 400, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
                           {row.credit > 0 ? `৳ ${row.credit.toLocaleString(undefined, { minimumFractionDigits: 2 })}` : '—'}
                         </TableCell>
                       </TableRow>

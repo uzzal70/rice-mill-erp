@@ -227,18 +227,34 @@ export function PaddyMasterPage({
       </Select></FormControl>
     </Stack>
     {itemsQuery.error && <Alert severity="error">{messageOf(itemsQuery.error, t.failed)}</Alert>}
-    <Paper variant="outlined" sx={{ overflow: 'hidden' }}>
+    <Paper variant="outlined" sx={{ overflowX: 'auto' }}>
       {itemsQuery.isLoading
         ? <Stack direction="row" spacing={1} alignItems="center" p={3}><CircularProgress size={18} /><Typography>{t.loading}</Typography></Stack>
-        : <Table size="small">
-          <TableHead><TableRow>{[t.name, t.code, t.variety, t.localName, t.cropYear, t.grade, t.moisture, t.recovery, t.status, t.actions].map(label => <TableCell key={label}>{label}</TableCell>)}</TableRow></TableHead>
+        : <Table size="small" sx={{ minWidth: 950 }}>
+          <TableHead><TableRow>{[
+            { label: t.name, align: 'left' },
+            { label: t.code, align: 'left' },
+            { label: t.variety, align: 'left' },
+            { label: t.localName, align: 'left' },
+            { label: t.cropYear, align: 'left' },
+            { label: t.grade, align: 'left' },
+            { label: t.moisture, align: 'right' },
+            { label: t.recovery, align: 'right' },
+            { label: t.status, align: 'center' },
+            { label: t.actions, align: 'right' },
+          ].map(col => <TableCell key={col.label} align={col.align as any} sx={{ whiteSpace: 'nowrap' }}>{col.label}</TableCell>)}</TableRow></TableHead>
           <TableBody>
             {rows.map(item => <TableRow key={item.id} hover>
-              <TableCell>{item.name}</TableCell><TableCell>{item.code}</TableCell><TableCell>{item.variety}</TableCell>
-              <TableCell>{item.localName ?? '—'}</TableCell><TableCell>{item.cropYear ?? '—'}</TableCell><TableCell>{item.grade ?? '—'}</TableCell>
-              <TableCell>{Number(item.standardMoisture).toFixed(2)}%</TableCell><TableCell>{Number(item.standardRecovery).toFixed(2)}%</TableCell>
-              <TableCell><Chip size="small" color={item.active ? 'success' : 'default'} label={item.active ? t.enabled : t.disabled} /></TableCell>
-              <TableCell><Button size="small" onClick={() => startEdit(item)}>{language === 'bn' ? 'সম্পাদনা' : 'Edit'}</Button></TableCell>
+              <TableCell sx={{ maxWidth: 200 }}><Typography variant="body2" fontWeight={600} noWrap title={item.name}>{item.name}</Typography></TableCell>
+              <TableCell sx={{ whiteSpace: 'nowrap', fontFamily: 'monospace' }}>{item.code}</TableCell>
+              <TableCell sx={{ whiteSpace: 'nowrap' }}>{item.variety}</TableCell>
+              <TableCell sx={{ whiteSpace: 'nowrap' }}>{item.localName ?? '—'}</TableCell>
+              <TableCell sx={{ whiteSpace: 'nowrap' }}>{item.cropYear ?? '—'}</TableCell>
+              <TableCell sx={{ whiteSpace: 'nowrap' }}>{item.grade ?? '—'}</TableCell>
+              <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{Number(item.standardMoisture).toFixed(2)}%</TableCell>
+              <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>{Number(item.standardRecovery).toFixed(2)}%</TableCell>
+              <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}><Chip size="small" color={item.active ? 'success' : 'default'} label={item.active ? t.enabled : t.disabled} /></TableCell>
+              <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}><Button size="small" onClick={() => startEdit(item)}>{language === 'bn' ? 'সম্পাদনা' : 'Edit'}</Button></TableCell>
             </TableRow>)}
             {!rows.length && <TableRow><TableCell colSpan={10} align="center" sx={{ py: 4, color: 'text.secondary' }}>{t.noRows}</TableCell></TableRow>}
           </TableBody>

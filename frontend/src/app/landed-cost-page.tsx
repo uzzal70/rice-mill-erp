@@ -1,7 +1,7 @@
 'use client';
 
 import { FormEvent, useState } from 'react';
-import { Alert, Button, Paper, Stack, Table, TableBody, TableCell, TableHead, TableRow, TextField, Typography } from '@mui/material';
+import { Alert, Button, Chip, Paper, Stack, Table, TableBody, TableCell, TableHead, TableRow, TextField, Typography } from '@mui/material';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiRequest, queryString } from '@/lib/api';
 
@@ -71,9 +71,35 @@ export function LandedCostPage({ companyId, factoryId, language, onSaved }: { co
       {!eligible.length && <Typography color="text.secondary">{bn ? 'খরচ হিসাবের জন্য কোনো পোস্টকৃত GRN অপেক্ষমাণ নেই।' : 'No posted GRNs are waiting for a landed-cost calculation.'}</Typography>}
     </Paper>
     <Paper className="workspace-card" elevation={0} sx={{ p: 2, overflowX: 'auto' }}>
-      <Table size="small"><TableHead><TableRow>{[bn ? 'GRN' : 'GRN', bn ? 'সরবরাহকারী' : 'Supplier', bn ? 'ধান' : 'Paddy', 'Purchase', 'Additional', 'Total', '/ KG', '/ Mon', '/ Ton', bn ? 'অবস্থা' : 'Status', bn ? 'কার্যক্রম' : 'Actions'].map(h => <TableCell key={h}>{h}</TableCell>)}</TableRow></TableHead>
-        <TableBody>{rows.map(row => <TableRow key={row.id}><TableCell>{row.goodsReceipt.receiptNumber}</TableCell><TableCell>{row.purchaseOrder.supplier.name}</TableCell><TableCell>{row.purchaseOrder.item.name}</TableCell><TableCell>৳{row.purchaseCost}</TableCell><TableCell>৳{row.totalAdditionalCost}</TableCell><TableCell>৳{row.landedCostTotal}</TableCell><TableCell>৳{row.landedCostPerKg}</TableCell><TableCell>৳{row.landedCostPerMon}</TableCell><TableCell>৳{row.landedCostPerTon}</TableCell><TableCell>{row.status}</TableCell><TableCell>{row.status === 'DRAFT' ? <Button size="small" onClick={() => transition(row, 'approve')}>{text.approve}</Button> : row.status === 'APPROVED' ? <Button size="small" onClick={() => transition(row, 'post')}>{text.post}</Button> : '—'}</TableCell></TableRow>)}
-          {!rows.length && <TableRow><TableCell colSpan={11} align="center">{text.noRows}</TableCell></TableRow>}</TableBody>
+      <Table size="small" sx={{ minWidth: 1150 }}>
+        <TableHead><TableRow>{[
+          { label: bn ? 'GRN' : 'GRN', align: 'left' },
+          { label: bn ? 'সরবরাহকারী' : 'Supplier', align: 'left' },
+          { label: bn ? 'ধান' : 'Paddy', align: 'left' },
+          { label: 'Purchase', align: 'right' },
+          { label: 'Additional', align: 'right' },
+          { label: 'Total', align: 'right' },
+          { label: '/ KG', align: 'right' },
+          { label: '/ Mon', align: 'right' },
+          { label: '/ Ton', align: 'right' },
+          { label: bn ? 'অবস্থা' : 'Status', align: 'center' },
+          { label: bn ? 'কার্যক্রম' : 'Actions', align: 'right' },
+        ].map(col => <TableCell key={col.label} align={col.align as any} sx={{ whiteSpace: 'nowrap' }}>{col.label}</TableCell>)}</TableRow></TableHead>
+        <TableBody>{rows.map(row => <TableRow key={row.id} hover>
+          <TableCell sx={{ fontFamily: 'monospace', fontWeight: 600, whiteSpace: 'nowrap' }}>{row.goodsReceipt.receiptNumber}</TableCell>
+          <TableCell sx={{ maxWidth: 180 }}><Typography variant="body2" fontWeight={600} noWrap title={row.purchaseOrder.supplier.name}>{row.purchaseOrder.supplier.name}</Typography></TableCell>
+          <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.purchaseOrder.item.name}</TableCell>
+          <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>৳ {Number(row.purchaseCost).toLocaleString()}</TableCell>
+          <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>৳ {Number(row.totalAdditionalCost).toLocaleString()}</TableCell>
+          <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>৳ {Number(row.landedCostTotal).toLocaleString()}</TableCell>
+          <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>৳ {Number(row.landedCostPerKg).toFixed(2)}</TableCell>
+          <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>৳ {Number(row.landedCostPerMon).toFixed(2)}</TableCell>
+          <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>৳ {Number(row.landedCostPerTon).toFixed(0)}</TableCell>
+          <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}><Chip size="small" label={row.status} color={row.status === 'POSTED' ? 'success' : 'default'} /></TableCell>
+          <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>{row.status === 'DRAFT' ? <Button size="small" variant="outlined" onClick={() => transition(row, 'approve')}>{text.approve}</Button> : row.status === 'APPROVED' ? <Button size="small" variant="contained" onClick={() => transition(row, 'post')}>{text.post}</Button> : '—'}</TableCell>
+        </TableRow>)}
+          {!rows.length && <TableRow><TableCell colSpan={11} align="center" sx={{ color: 'text.secondary', py: 3 }}>{text.noRows}</TableCell></TableRow>}
+        </TableBody>
       </Table>
     </Paper>
   </Stack>;

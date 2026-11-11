@@ -252,17 +252,17 @@ export function AuditPage({ companyId, language, onSaved }: AuditPageProps) {
       </Paper>
 
       {/* Audit Log Table */}
-      <Paper sx={{ p: 2 }}>
-        <Table size="small">
+      <Paper sx={{ p: 2, overflowX: 'auto' }}>
+        <Table size="small" sx={{ minWidth: 980 }}>
           <TableHead sx={{ backgroundColor: 'action.hover' }}>
             <TableRow>
-              <TableCell><strong>{isBn ? 'তারিখ ও সময়' : 'Date & Time'}</strong></TableCell>
-              <TableCell><strong>{isBn ? 'ব্যবহারকারী' : 'User'}</strong></TableCell>
-              <TableCell><strong>{isBn ? 'অ্যাকশন' : 'Action'}</strong></TableCell>
-              <TableCell><strong>{isBn ? 'মডিউল' : 'Module'}</strong></TableCell>
-              <TableCell><strong>{isBn ? 'রেকর্ড আইডি' : 'Record ID'}</strong></TableCell>
-              <TableCell><strong>{isBn ? 'আইপি ও ডিভাইস' : 'IP & Device'}</strong></TableCell>
-              <TableCell align="center"><strong>{isBn ? 'মান তুলনা' : 'Diff Inspector'}</strong></TableCell>
+              <TableCell sx={{ whiteSpace: 'nowrap' }}><strong>{isBn ? 'তারিখ ও সময়' : 'Date & Time'}</strong></TableCell>
+              <TableCell sx={{ whiteSpace: 'nowrap' }}><strong>{isBn ? 'ব্যবহারকারী' : 'User'}</strong></TableCell>
+              <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}><strong>{isBn ? 'অ্যাকশন' : 'Action'}</strong></TableCell>
+              <TableCell sx={{ whiteSpace: 'nowrap' }}><strong>{isBn ? 'মডিউল' : 'Module'}</strong></TableCell>
+              <TableCell sx={{ whiteSpace: 'nowrap' }}><strong>{isBn ? 'রেকর্ড আইডি' : 'Record ID'}</strong></TableCell>
+              <TableCell sx={{ whiteSpace: 'nowrap' }}><strong>{isBn ? 'আইপি ও ডিভাইস' : 'IP & Device'}</strong></TableCell>
+              <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}><strong>{isBn ? 'মান তুলনা' : 'Diff Inspector'}</strong></TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -285,34 +285,34 @@ export function AuditPage({ companyId, language, onSaved }: AuditPageProps) {
                         {new Date(ev.occurredAt).toLocaleTimeString()}
                       </Typography>
                     </TableCell>
-                    <TableCell>
-                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                    <TableCell sx={{ maxWidth: 190 }}>
+                      <Typography variant="body2" sx={{ fontWeight: 600 }} noWrap title={ev.user?.fullName || ev.userName || (isBn ? 'সিস্টেম' : 'System')}>
                         {ev.user?.fullName || ev.userName || (isBn ? 'সিস্টেম' : 'System')}
                       </Typography>
                       {ev.user?.email && (
-                        <Typography variant="caption" color="text.secondary">
+                        <Typography variant="caption" color="text.secondary" noWrap title={ev.user.email}>
                           {ev.user.email}
                         </Typography>
                       )}
                     </TableCell>
-                    <TableCell>
+                    <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}>
                       <Chip size="small" color={color} label={ev.action} sx={{ fontWeight: 700, fontSize: 11 }} />
                     </TableCell>
-                    <TableCell>
+                    <TableCell sx={{ whiteSpace: 'nowrap' }}>
                       <Chip size="small" variant="outlined" label={ev.resource} sx={{ fontSize: 11 }} />
                     </TableCell>
-                    <TableCell sx={{ fontFamily: 'monospace', fontSize: 12 }}>
+                    <TableCell sx={{ fontFamily: 'monospace', fontSize: 12, whiteSpace: 'nowrap' }}>
                       {ev.resourceId || '—'}
                     </TableCell>
-                    <TableCell>
-                      <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: 12 }}>
+                    <TableCell sx={{ maxWidth: 180 }}>
+                      <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: 12 }} noWrap>
                         {ev.ipAddress || '127.0.0.1'}
                       </Typography>
-                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={ev.device || 'Desktop Browser'}>
                         {ev.device || 'Desktop Browser'}
                       </Typography>
                     </TableCell>
-                    <TableCell align="center">
+                    <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}>
                       <Button
                         size="small"
                         variant="outlined"

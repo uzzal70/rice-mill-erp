@@ -350,18 +350,18 @@ export function DocumentsPage({
       </Paper>
 
       {/* Documents Table */}
-      <Paper sx={{ p: 2 }}>
-        <Table size="small">
+      <Paper sx={{ p: 2, overflowX: 'auto' }}>
+        <Table size="small" sx={{ minWidth: 980 }}>
           <TableHead sx={{ backgroundColor: 'action.hover' }}>
             <TableRow>
-              <TableCell><strong>{isBn ? 'ক্যাটাগরি' : 'Category'}</strong></TableCell>
-              <TableCell><strong>{isBn ? 'নথির নাম ও নম্বর' : 'Document Title & #'}</strong></TableCell>
-              <TableCell><strong>{isBn ? 'ইস্যুকারী কর্তৃপক্ষ' : 'Issuing Authority'}</strong></TableCell>
-              <TableCell><strong>{isBn ? 'ইস্যু তারিখ' : 'Issue Date'}</strong></TableCell>
-              <TableCell><strong>{isBn ? 'মেয়াদ উত্তীর্ণের তারিখ' : 'Expiry Date'}</strong></TableCell>
-              <TableCell><strong>{isBn ? 'অবশিষ্ট দিন' : 'Validity Status'}</strong></TableCell>
-              <TableCell><strong>{isBn ? 'ফাইল / লিংক' : 'Attachment'}</strong></TableCell>
-              <TableCell align="center"><strong>{isBn ? 'অ্যাকশন' : 'Actions'}</strong></TableCell>
+              <TableCell sx={{ whiteSpace: 'nowrap' }}><strong>{isBn ? 'ক্যাটাগরি' : 'Category'}</strong></TableCell>
+              <TableCell sx={{ whiteSpace: 'nowrap' }}><strong>{isBn ? 'নথির নাম ও নম্বর' : 'Document Title & #'}</strong></TableCell>
+              <TableCell sx={{ whiteSpace: 'nowrap' }}><strong>{isBn ? 'ইস্যুকারী কর্তৃপক্ষ' : 'Issuing Authority'}</strong></TableCell>
+              <TableCell sx={{ whiteSpace: 'nowrap' }}><strong>{isBn ? 'ইস্যু তারিখ' : 'Issue Date'}</strong></TableCell>
+              <TableCell sx={{ whiteSpace: 'nowrap' }}><strong>{isBn ? 'মেয়াদ উত্তীর্ণের তারিখ' : 'Expiry Date'}</strong></TableCell>
+              <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}><strong>{isBn ? 'অবশিষ্ট দিন' : 'Validity Status'}</strong></TableCell>
+              <TableCell sx={{ whiteSpace: 'nowrap' }}><strong>{isBn ? 'ফাইল / লিংক' : 'Attachment'}</strong></TableCell>
+              <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}><strong>{isBn ? 'অ্যাকশন' : 'Actions'}</strong></TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -376,7 +376,7 @@ export function DocumentsPage({
                 const daysLeft = getDaysLeft(d.expiryDate);
                 return (
                   <TableRow key={d.id} hover>
-                    <TableCell>
+                    <TableCell sx={{ whiteSpace: 'nowrap' }}>
                       <Chip
                         size="small"
                         label={d.category.replaceAll('_', ' ')}
@@ -384,18 +384,18 @@ export function DocumentsPage({
                         sx={{ fontSize: 11, fontWeight: 600 }}
                       />
                     </TableCell>
-                    <TableCell>
-                      <Typography variant="body2" sx={{ fontWeight: 600 }}>{d.title}</Typography>
+                    <TableCell sx={{ maxWidth: 220 }}>
+                      <Typography variant="body2" sx={{ fontWeight: 600 }} noWrap title={d.title}>{d.title}</Typography>
                       {d.documentNumber && (
-                        <Typography variant="caption" color="text.secondary">
+                        <Typography variant="caption" color="text.secondary" noWrap title={d.documentNumber}>
                           #{d.documentNumber}
                         </Typography>
                       )}
                     </TableCell>
-                    <TableCell>{d.issuingAuthority || '—'}</TableCell>
-                    <TableCell>{d.issueDate ? new Date(d.issueDate).toLocaleDateString() : '—'}</TableCell>
-                    <TableCell>{d.expiryDate ? new Date(d.expiryDate).toLocaleDateString() : '—'}</TableCell>
-                    <TableCell>
+                    <TableCell sx={{ maxWidth: 180 }}><Typography variant="body2" noWrap title={d.issuingAuthority || '—'}>{d.issuingAuthority || '—'}</Typography></TableCell>
+                    <TableCell sx={{ whiteSpace: 'nowrap' }}>{d.issueDate ? new Date(d.issueDate).toLocaleDateString() : '—'}</TableCell>
+                    <TableCell sx={{ whiteSpace: 'nowrap' }}>{d.expiryDate ? new Date(d.expiryDate).toLocaleDateString() : '—'}</TableCell>
+                    <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}>
                       {daysLeft === null ? (
                         <Chip size="small" label={isBn ? 'মেয়াদহীন / স্থায়ী' : 'No Expiry'} color="default" />
                       ) : daysLeft < 0 ? (

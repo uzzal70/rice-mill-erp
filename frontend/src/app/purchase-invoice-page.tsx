@@ -2,7 +2,7 @@
 
 import { FormEvent, useState } from 'react';
 import {
-  Alert, Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, Paper, Stack, Table, TableBody,
+  Alert, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle, Paper, Stack, Table, TableBody,
   TableCell, TableHead, TableRow, TextField, Typography,
 } from '@mui/material';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -171,41 +171,68 @@ export function PurchaseInvoicePage({
   return <Stack spacing={2}>
     {(invoicesQuery.isError || receiptsQuery.isError) && <Alert severity="error">{messageOf(invoicesQuery.error ?? receiptsQuery.error, t.forbidden)}</Alert>}
     {error && <Alert severity="error" onClose={() => setError('')}>{error}</Alert>}
-    <Paper className="workspace-card" elevation={0} sx={{ p: 2 }}>
+    <Paper className="workspace-card" elevation={0} sx={{ p: 2, overflowX: 'auto' }}>
       <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ xs: 'stretch', sm: 'center' }} gap={2} mb={2}>
         <Box><Typography fontWeight={800}>{t.title}</Typography><Typography color="text.secondary" fontSize={12}>{t.subtitle}</Typography></Box>
       </Stack>
       <Typography fontWeight={700} fontSize={13} mb={1}>{t.receipt}</Typography>
-      <Table size="small">
-        <TableHead><TableRow>{[t.receipt, t.supplier, t.paddy, t.physical, t.actions].map(label => <TableCell key={label}>{label}</TableCell>)}</TableRow></TableHead>
+      <Table size="small" sx={{ minWidth: 750 }}>
+        <TableHead><TableRow>
+          <TableCell sx={{ whiteSpace: 'nowrap' }}>{t.receipt}</TableCell>
+          <TableCell sx={{ whiteSpace: 'nowrap' }}>{t.supplier}</TableCell>
+          <TableCell sx={{ whiteSpace: 'nowrap' }}>{t.paddy}</TableCell>
+          <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>{t.physical}</TableCell>
+          <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>{t.actions}</TableCell>
+        </TableRow></TableHead>
         <TableBody>
           {eligibleReceipts.map(row => <TableRow key={row.id}>
-            <TableCell>{row.receiptNumber}</TableCell><TableCell>{row.purchaseOrder.supplier.name}</TableCell>
-            <TableCell>{row.purchaseOrder.item.name}</TableCell><TableCell>{row.quantity} KG</TableCell>
-            <TableCell><Button size="small" variant="outlined" onClick={() => startInvoice(row)}>{t.create}</Button></TableCell>
+            <TableCell sx={{ fontFamily: 'monospace', fontWeight: 600, whiteSpace: 'nowrap' }}>{row.receiptNumber}</TableCell>
+            <TableCell sx={{ maxWidth: 200 }}><Typography variant="body2" noWrap title={row.purchaseOrder.supplier.name}>{row.purchaseOrder.supplier.name}</Typography></TableCell>
+            <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.purchaseOrder.item.name}</TableCell>
+            <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{row.quantity} KG</TableCell>
+            <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}><Button size="small" variant="outlined" onClick={() => startInvoice(row)}>{t.create}</Button></TableCell>
           </TableRow>)}
-          {!eligibleReceipts.length && <TableRow><TableCell colSpan={5} align="center">{t.noEligible}</TableCell></TableRow>}
+          {!eligibleReceipts.length && <TableRow><TableCell colSpan={5} align="center" sx={{ color: 'text.secondary', py: 2 }}>{t.noEligible}</TableCell></TableRow>}
         </TableBody>
       </Table>
     </Paper>
     <Paper className="workspace-card" elevation={0} sx={{ p: 2, overflowX: 'auto' }}>
       <Typography fontWeight={700} fontSize={13} mb={1}>{invoices.length} invoices</Typography>
-      <Table size="small">
-        <TableHead><TableRow>{[t.invoice, t.date, t.receipt, t.supplier, t.paddy, t.physical, t.payable, t.rate, t.gross, t.qualityDeduction, t.netPayable, t.separateCosts, t.status, t.actions].map(label => <TableCell key={label}>{label}</TableCell>)}</TableRow></TableHead>
+      <Table size="small" sx={{ minWidth: 1450 }}>
+        <TableHead><TableRow>
+          <TableCell sx={{ whiteSpace: 'nowrap' }}>{t.invoice}</TableCell>
+          <TableCell sx={{ whiteSpace: 'nowrap' }}>{t.date}</TableCell>
+          <TableCell sx={{ whiteSpace: 'nowrap' }}>{t.receipt}</TableCell>
+          <TableCell sx={{ whiteSpace: 'nowrap' }}>{t.supplier}</TableCell>
+          <TableCell sx={{ whiteSpace: 'nowrap' }}>{t.paddy}</TableCell>
+          <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>{t.physical}</TableCell>
+          <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>{t.payable}</TableCell>
+          <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>{t.rate}</TableCell>
+          <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>{t.gross}</TableCell>
+          <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>{t.qualityDeduction}</TableCell>
+          <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>{t.netPayable}</TableCell>
+          <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>{t.separateCosts}</TableCell>
+          <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}>{t.status}</TableCell>
+          <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>{t.actions}</TableCell>
+        </TableRow></TableHead>
         <TableBody>
-          {invoices.map(invoice => <TableRow key={invoice.id}>
-            <TableCell>{invoice.invoiceNumber}</TableCell><TableCell>{new Date(invoice.invoiceDate).toLocaleDateString()}</TableCell>
-            <TableCell>{invoice.goodsReceipt.receiptNumber}</TableCell><TableCell>{invoice.supplier.name}</TableCell>
-            <TableCell>{invoice.goodsReceipt.purchaseOrder.item.name}</TableCell>
-            <TableCell>{Number(invoice.physicalQuantityKg).toLocaleString()} KG</TableCell>
-            <TableCell>{Number(invoice.payableQuantityKg).toLocaleString()} KG</TableCell>
-            <TableCell>{money(invoice.adjustedUnitRate)}</TableCell><TableCell>{money(invoice.grossAmount)}</TableCell>
-            <TableCell>{money(invoice.qualityDeductionAmount)}</TableCell><TableCell>{money(invoice.netSupplierPayable)}</TableCell>
-            <TableCell>{money(String(Number(invoice.transportCost) + Number(invoice.loadingCost) + Number(invoice.unloadingCost) + Number(invoice.otherCost)))}</TableCell>
-            <TableCell>{invoice.status}</TableCell>
-            <TableCell>{invoice.status === 'DRAFT' ? <Button size="small" onClick={() => action(invoice, 'approve')}>{t.approve}</Button> : invoice.status === 'APPROVED' ? <Button size="small" onClick={() => action(invoice, 'post')}>{t.post}</Button> : '—'}</TableCell>
+          {invoices.map(invoice => <TableRow key={invoice.id} hover>
+            <TableCell sx={{ fontFamily: 'monospace', fontWeight: 700, whiteSpace: 'nowrap' }}>{invoice.invoiceNumber}</TableCell>
+            <TableCell sx={{ whiteSpace: 'nowrap' }}>{new Date(invoice.invoiceDate).toLocaleDateString()}</TableCell>
+            <TableCell sx={{ fontFamily: 'monospace', whiteSpace: 'nowrap' }}>{invoice.goodsReceipt.receiptNumber}</TableCell>
+            <TableCell sx={{ maxWidth: 190 }}><Typography variant="body2" fontWeight={600} noWrap title={invoice.supplier.name}>{invoice.supplier.name}</Typography></TableCell>
+            <TableCell sx={{ whiteSpace: 'nowrap' }}>{invoice.goodsReceipt.purchaseOrder.item.name}</TableCell>
+            <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{Number(invoice.physicalQuantityKg).toLocaleString()} KG</TableCell>
+            <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>{Number(invoice.payableQuantityKg).toLocaleString()} KG</TableCell>
+            <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{money(invoice.adjustedUnitRate)}</TableCell>
+            <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{money(invoice.grossAmount)}</TableCell>
+            <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums', color: 'error.main' }}>{money(invoice.qualityDeductionAmount)}</TableCell>
+            <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums', fontWeight: 700, color: 'primary.dark' }}>{money(invoice.netSupplierPayable)}</TableCell>
+            <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{money(String(Number(invoice.transportCost) + Number(invoice.loadingCost) + Number(invoice.unloadingCost) + Number(invoice.otherCost)))}</TableCell>
+            <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}><Chip size="small" label={invoice.status} color={invoice.status === 'POSTED' ? 'success' : invoice.status === 'APPROVED' ? 'info' : 'default'} /></TableCell>
+            <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>{invoice.status === 'DRAFT' ? <Button size="small" variant="outlined" onClick={() => action(invoice, 'approve')}>{t.approve}</Button> : invoice.status === 'APPROVED' ? <Button size="small" variant="contained" onClick={() => action(invoice, 'post')}>{t.post}</Button> : '—'}</TableCell>
           </TableRow>)}
-          {!invoices.length && <TableRow><TableCell colSpan={14} align="center">{t.noInvoices}</TableCell></TableRow>}
+          {!invoices.length && <TableRow><TableCell colSpan={14} align="center" sx={{ color: 'text.secondary', py: 3 }}>{t.noInvoices}</TableCell></TableRow>}
         </TableBody>
       </Table>
     </Paper>

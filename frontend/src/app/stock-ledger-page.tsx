@@ -1,7 +1,7 @@
 'use client';
 
 import { FormEvent, useState } from 'react';
-import { Alert, Button, Paper, Stack, Table, TableBody, TableCell, TableHead, TableRow, TextField, Typography } from '@mui/material';
+import { Alert, Button, Chip, Paper, Stack, Table, TableBody, TableCell, TableHead, TableRow, TextField, Typography } from '@mui/material';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiRequest, queryString } from '@/lib/api';
 
@@ -52,8 +52,25 @@ export function StockLedgerPage({ companyId, factoryId, language, onSaved }: { c
     {error && <Alert severity="error" onClose={() => setError('')}>{error}</Alert>}
     <Paper className="workspace-card" elevation={0} sx={{ p: 2, overflowX: 'auto' }}>
       <Typography fontWeight={800} mb={1}>{labels.title}</Typography>
-      <Table size="small"><TableHead><TableRow>{[labels.item, labels.location, 'Variety / batch / lot', labels.opening, labels.in, labels.out, labels.balance].map(label => <TableCell key={label}>{label}</TableCell>)}</TableRow></TableHead>
-        <TableBody>{rows.map((row, i) => <TableRow key={`${row.item.id}-${row.stack?.id ?? i}`}><TableCell>{row.item.name} <Typography component="span" variant="caption">({row.item.code})</Typography></TableCell><TableCell>{row.stack ? `${row.stack.godown.name} / ${row.stack.code}` : '—'}</TableCell><TableCell>{[row.stack?.varietyName, row.stack?.cropYear, row.stack?.batchNumber, row.stack?.lotNumber].filter(Boolean).join(' · ') || '—'}</TableCell><TableCell>{row.opening} {row.item.baseUnit}</TableCell><TableCell>{row.in} {row.item.baseUnit}</TableCell><TableCell>{row.out} {row.item.baseUnit}</TableCell><TableCell>{row.onHand} {row.item.baseUnit}</TableCell></TableRow>)}{!rows.length && <TableRow><TableCell colSpan={7} align="center">{bn ? 'কোনো মজুদ লেজার নেই।' : 'No stock movements recorded.'}</TableCell></TableRow>}</TableBody>
+      <Table size="small" sx={{ minWidth: 950 }}>
+        <TableHead><TableRow>
+          <TableCell sx={{ whiteSpace: 'nowrap' }}>{labels.item}</TableCell>
+          <TableCell sx={{ whiteSpace: 'nowrap' }}>{labels.location}</TableCell>
+          <TableCell sx={{ whiteSpace: 'nowrap' }}>Variety / batch / lot</TableCell>
+          <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>{labels.opening}</TableCell>
+          <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>{labels.in}</TableCell>
+          <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>{labels.out}</TableCell>
+          <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>{labels.balance}</TableCell>
+        </TableRow></TableHead>
+        <TableBody>{rows.map((row, i) => <TableRow key={`${row.item.id}-${row.stack?.id ?? i}`} hover>
+          <TableCell sx={{ maxWidth: 220 }}><Typography variant="body2" fontWeight={600} noWrap title={row.item.name}>{row.item.name}</Typography> <Typography component="span" variant="caption" sx={{ fontFamily: 'monospace' }}>({row.item.code})</Typography></TableCell>
+          <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.stack ? `${row.stack.godown.name} / ${row.stack.code}` : '—'}</TableCell>
+          <TableCell sx={{ maxWidth: 200 }}><Typography variant="body2" noWrap title={[row.stack?.varietyName, row.stack?.cropYear, row.stack?.batchNumber, row.stack?.lotNumber].filter(Boolean).join(' · ') || '—'}>{[row.stack?.varietyName, row.stack?.cropYear, row.stack?.batchNumber, row.stack?.lotNumber].filter(Boolean).join(' · ') || '—'}</Typography></TableCell>
+          <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{row.opening} {row.item.baseUnit}</TableCell>
+          <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums', color: 'success.main', fontWeight: 600 }}>+{row.in} {row.item.baseUnit}</TableCell>
+          <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums', color: 'error.main' }}>-{row.out} {row.item.baseUnit}</TableCell>
+          <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums', fontWeight: 800 }}>{row.onHand} {row.item.baseUnit}</TableCell>
+        </TableRow>)}{!rows.length && <TableRow><TableCell colSpan={7} align="center" sx={{ color: 'text.secondary', py: 3 }}>{bn ? 'কোনো মজুদ লেজার নেই।' : 'No stock movements recorded.'}</TableCell></TableRow>}</TableBody>
       </Table>
     </Paper>
     <Paper className="workspace-card" elevation={0} sx={{ p: 2 }}>
@@ -69,9 +86,31 @@ export function StockLedgerPage({ companyId, factoryId, language, onSaved }: { c
     </Paper>
     <Paper className="workspace-card" elevation={0} sx={{ p: 2, overflowX: 'auto' }}>
       <Typography fontWeight={800} mb={1}>{labels.pending}</Typography>
-      <Table size="small"><TableHead><TableRow>{[labels.number, labels.item, labels.location, 'Book', labels.physical, 'Difference', 'Status', ''].map(label => <TableCell key={label}>{label}</TableCell>)}</TableRow></TableHead><TableBody>
-        {countRows.map(row => <TableRow key={row.id}><TableCell>{row.countNumber}</TableCell><TableCell>{row.item.name}</TableCell><TableCell>{row.stack.godown.name} / {row.stack.code}</TableCell><TableCell>{row.bookQuantity} {row.unit}</TableCell><TableCell>{row.countedQuantity} {row.unit}</TableCell><TableCell>{row.adjustmentQuantity} {row.unit}</TableCell><TableCell>{row.status}</TableCell><TableCell>{row.status === 'DRAFT' && <Button size="small" onClick={() => postCount(row)}>{labels.reconcile}</Button>}</TableCell></TableRow>)}
-        {!countRows.length && <TableRow><TableCell colSpan={8} align="center">{bn ? 'স্টক গণনার রেকর্ড নেই।' : 'No stock counts recorded.'}</TableCell></TableRow>}
-      </TableBody></Table></Paper>
+      <Table size="small" sx={{ minWidth: 900 }}>
+        <TableHead><TableRow>
+          <TableCell sx={{ whiteSpace: 'nowrap' }}>{labels.number}</TableCell>
+          <TableCell sx={{ whiteSpace: 'nowrap' }}>{labels.item}</TableCell>
+          <TableCell sx={{ whiteSpace: 'nowrap' }}>{labels.location}</TableCell>
+          <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>Book</TableCell>
+          <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>{labels.physical}</TableCell>
+          <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>Difference</TableCell>
+          <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}>Status</TableCell>
+          <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}></TableCell>
+        </TableRow></TableHead>
+        <TableBody>
+          {countRows.map(row => <TableRow key={row.id} hover>
+            <TableCell sx={{ fontFamily: 'monospace', fontWeight: 600, whiteSpace: 'nowrap' }}>{row.countNumber}</TableCell>
+            <TableCell sx={{ maxWidth: 180 }}><Typography variant="body2" noWrap title={row.item.name}>{row.item.name}</Typography></TableCell>
+            <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.stack.godown.name} / {row.stack.code}</TableCell>
+            <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{row.bookQuantity} {row.unit}</TableCell>
+            <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{row.countedQuantity} {row.unit}</TableCell>
+            <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>{row.adjustmentQuantity} {row.unit}</TableCell>
+            <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}><Chip size="small" label={row.status} /></TableCell>
+            <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>{row.status === 'DRAFT' && <Button size="small" variant="contained" onClick={() => postCount(row)}>{labels.reconcile}</Button>}</TableCell>
+          </TableRow>)}
+          {!countRows.length && <TableRow><TableCell colSpan={8} align="center" sx={{ color: 'text.secondary', py: 3 }}>{bn ? 'স্টক গণনার রেকর্ড নেই।' : 'No stock counts recorded.'}</TableCell></TableRow>}
+        </TableBody>
+      </Table>
+    </Paper>
   </Stack>;
 }

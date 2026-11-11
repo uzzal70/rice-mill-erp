@@ -235,19 +235,19 @@ export function ApprovalsPage({
 
       {/* Tab 0: Approval Inbox */}
       {activeTab === 0 && (
-        <Paper sx={{ p: 2 }}>
+        <Paper sx={{ p: 2, overflowX: 'auto' }}>
           <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2 }}>
             {isBn ? 'অনুমোদন ও পর্যালোচনার জন্য অপেক্ষমাণ লেনদেন' : 'Active Items Requiring Officer Review & Authorization'}
           </Typography>
-          <Table size="small">
+          <Table size="small" sx={{ minWidth: 920 }}>
             <TableHead sx={{ backgroundColor: 'action.hover' }}>
               <TableRow>
-                <TableCell><strong>{isBn ? 'লেনদেন নং ও ধরন' : 'Document # & Type'}</strong></TableCell>
-                <TableCell><strong>{isBn ? 'বিবরণ' : 'Title'}</strong></TableCell>
-                <TableCell align="right"><strong>{isBn ? 'পরিমাণ (৳)' : 'Amount (BDT)'}</strong></TableCell>
-                <TableCell><strong>{isBn ? 'বর্তমান স্ট্যাটাস' : 'Status'}</strong></TableCell>
-                <TableCell><strong>{isBn ? 'দাখিলের সময়' : 'Submitted At'}</strong></TableCell>
-                <TableCell align="center"><strong>{isBn ? 'পদক্ষেপ / অ্যাকশন' : 'Approval Actions'}</strong></TableCell>
+                <TableCell sx={{ whiteSpace: 'nowrap' }}><strong>{isBn ? 'লেনদেন নং ও ধরন' : 'Document # & Type'}</strong></TableCell>
+                <TableCell sx={{ whiteSpace: 'nowrap' }}><strong>{isBn ? 'বিবরণ' : 'Title'}</strong></TableCell>
+                <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}><strong>{isBn ? 'পরিমাণ (৳)' : 'Amount (BDT)'}</strong></TableCell>
+                <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}><strong>{isBn ? 'বর্তমান স্ট্যাটাস' : 'Status'}</strong></TableCell>
+                <TableCell sx={{ whiteSpace: 'nowrap' }}><strong>{isBn ? 'দাখিলের সময়' : 'Submitted At'}</strong></TableCell>
+                <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}><strong>{isBn ? 'পদক্ষেপ / অ্যাকশন' : 'Approval Actions'}</strong></TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -262,21 +262,21 @@ export function ApprovalsPage({
                   const cfg = STATUS_CONFIG[req.status] || { color: 'default', labelEn: req.status, labelBn: req.status };
                   return (
                     <TableRow key={req.id} hover>
-                      <TableCell>
-                        <Typography variant="body2" sx={{ fontWeight: 600 }}>{req.entityNumber}</Typography>
+                      <TableCell sx={{ whiteSpace: 'nowrap' }}>
+                        <Typography variant="body2" sx={{ fontWeight: 600, fontFamily: 'monospace' }}>{req.entityNumber}</Typography>
                         <Chip size="small" label={req.entityType} sx={{ fontSize: 10, height: 20 }} />
                       </TableCell>
-                      <TableCell>{req.title}</TableCell>
-                      <TableCell align="right" sx={{ fontWeight: 600 }}>
-                        {req.amount ? `৳${Number(req.amount).toLocaleString()}` : '—'}
+                      <TableCell sx={{ maxWidth: 220 }}><Typography variant="body2" noWrap title={req.title}>{req.title}</Typography></TableCell>
+                      <TableCell align="right" sx={{ fontWeight: 700, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
+                        {req.amount ? `৳ ${Number(req.amount).toLocaleString()}` : '—'}
                       </TableCell>
-                      <TableCell>
+                      <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}>
                         <Chip size="small" color={cfg.color} label={isBn ? cfg.labelBn : cfg.labelEn} />
                       </TableCell>
-                      <TableCell>
+                      <TableCell sx={{ whiteSpace: 'nowrap' }}>
                         {req.submittedAt ? new Date(req.submittedAt).toLocaleString() : '—'}
                       </TableCell>
-                      <TableCell align="center">
+                      <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}>
                         <Stack direction="row" spacing={1} justifyContent="center">
                           {req.status === 'SUBMITTED' && (
                             <Button
@@ -381,15 +381,15 @@ export function ApprovalsPage({
             />
           </Stack>
 
-          <Table size="small">
+          <Table size="small" sx={{ minWidth: 920 }}>
             <TableHead sx={{ backgroundColor: 'action.hover' }}>
               <TableRow>
-                <TableCell><strong>{isBn ? 'নথি নং ও ধরন' : 'Doc # & Type'}</strong></TableCell>
-                <TableCell><strong>{isBn ? 'শিরোনাম' : 'Title'}</strong></TableCell>
-                <TableCell align="right"><strong>{isBn ? 'মূল্য (৳)' : 'Amount'}</strong></TableCell>
-                <TableCell><strong>{isBn ? 'স্ট্যাটাস' : 'Status'}</strong></TableCell>
-                <TableCell><strong>{isBn ? 'সর্বশেষ আপডেট' : 'Updated'}</strong></TableCell>
-                <TableCell align="center"><strong>{isBn ? 'কার্যক্রম' : 'Action'}</strong></TableCell>
+                <TableCell sx={{ whiteSpace: 'nowrap' }}><strong>{isBn ? 'নথি নং ও ধরন' : 'Doc # & Type'}</strong></TableCell>
+                <TableCell sx={{ whiteSpace: 'nowrap' }}><strong>{isBn ? 'শিরোনাম' : 'Title'}</strong></TableCell>
+                <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}><strong>{isBn ? 'মূল্য (৳)' : 'Amount'}</strong></TableCell>
+                <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}><strong>{isBn ? 'স্ট্যাটাস' : 'Status'}</strong></TableCell>
+                <TableCell sx={{ whiteSpace: 'nowrap' }}><strong>{isBn ? 'সর্বশেষ আপডেট' : 'Updated'}</strong></TableCell>
+                <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}><strong>{isBn ? 'কার্যক্রম' : 'Action'}</strong></TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -404,19 +404,19 @@ export function ApprovalsPage({
                   const cfg = STATUS_CONFIG[req.status] || { color: 'default', labelEn: req.status, labelBn: req.status };
                   return (
                     <TableRow key={req.id} hover>
-                      <TableCell sx={{ fontWeight: 600 }}>
-                        {req.entityNumber}
+                      <TableCell sx={{ whiteSpace: 'nowrap' }}>
+                        <Typography variant="body2" sx={{ fontWeight: 600, fontFamily: 'monospace' }}>{req.entityNumber}</Typography>
                         <Typography variant="caption" color="text.secondary" display="block">{req.entityType}</Typography>
                       </TableCell>
-                      <TableCell>{req.title}</TableCell>
-                      <TableCell align="right" sx={{ fontWeight: 600 }}>
-                        {req.amount ? `৳${Number(req.amount).toLocaleString()}` : '—'}
+                      <TableCell sx={{ maxWidth: 220 }}><Typography variant="body2" noWrap title={req.title}>{req.title}</Typography></TableCell>
+                      <TableCell align="right" sx={{ fontWeight: 700, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
+                        {req.amount ? `৳ ${Number(req.amount).toLocaleString()}` : '—'}
                       </TableCell>
-                      <TableCell>
+                      <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}>
                         <Chip size="small" color={cfg.color} label={isBn ? cfg.labelBn : cfg.labelEn} />
                       </TableCell>
-                      <TableCell>{new Date(req.updatedAt).toLocaleDateString()}</TableCell>
-                      <TableCell align="center">
+                      <TableCell sx={{ whiteSpace: 'nowrap' }}>{new Date(req.updatedAt).toLocaleDateString()}</TableCell>
+                      <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}>
                         <Stack direction="row" spacing={1} justifyContent="center">
                           {req.status === 'APPROVED' && (
                             <Button

@@ -178,22 +178,32 @@ export function QualityControlPage({ companyId, factoryId, language, onSaved, on
     <Paper className="workspace-card" elevation={0} sx={{ p: 1.5 }}>
       {busy ? <Stack alignItems="center" py={5}><CircularProgress size={24} /><Typography mt={1} color="text.secondary">{t.loading}</Typography></Stack>
         : samples.length === 0 ? <Typography textAlign="center" color="text.secondary" py={5}>{t.noRows}</Typography>
-          : <Box sx={{ overflowX: 'auto' }}><Table size="small" sx={{ minWidth: 1050 }}>
-            <TableHead><TableRow>{[t.sample, t.gate, t.vehicle, t.counterparty, t.material, t.stage, t.status, t.result, t.actions].map(label => <TableCell key={label}>{label}</TableCell>)}</TableRow></TableHead>
+          : <Box sx={{ overflowX: 'auto', width: '100%' }}><Table size="small" sx={{ minWidth: 1150 }}>
+            <TableHead><TableRow>
+              <TableCell sx={{ whiteSpace: 'nowrap' }}>{t.sample}</TableCell>
+              <TableCell sx={{ whiteSpace: 'nowrap' }}>{t.gate}</TableCell>
+              <TableCell sx={{ whiteSpace: 'nowrap' }}>{t.vehicle}</TableCell>
+              <TableCell sx={{ whiteSpace: 'nowrap' }}>{t.counterparty}</TableCell>
+              <TableCell sx={{ whiteSpace: 'nowrap' }}>{t.material}</TableCell>
+              <TableCell sx={{ whiteSpace: 'nowrap' }}>{t.stage}</TableCell>
+              <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}>{t.status}</TableCell>
+              <TableCell sx={{ whiteSpace: 'nowrap' }}>{t.result}</TableCell>
+              <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>{t.actions}</TableCell>
+            </TableRow></TableHead>
             <TableBody>{samples.map(sample => <TableRow key={sample.id} hover>
-              <TableCell><Typography fontWeight={800}>{sample.sampleNumber}</Typography></TableCell>
-              <TableCell>{sample.gateEntry.gateNumber}</TableCell>
-              <TableCell>{sample.gateEntry.vehicleNumber}</TableCell>
-              <TableCell>{sample.gateEntry.partner?.name ?? '—'}</TableCell>
-              <TableCell>{sample.gateEntry.item?.name ?? '—'}</TableCell>
-              <TableCell>{sample.sampleType}</TableCell>
-              <TableCell><Chip size="small" color={sample.status === 'APPROVED' ? 'success' : sample.status === 'REJECTED' ? 'error' : sample.status === 'TESTED' ? 'warning' : 'default'} label={sample.status} /></TableCell>
-              <TableCell><Stack spacing={.3}>{parameters.filter(([key]) => sample.measurements[key] !== undefined).map(([key, en, bn]) => <Typography key={key} fontSize={10}>{language === 'bn' ? bn : en}: {sample.measurements[key]}%</Typography>)}</Stack></TableCell>
-              <TableCell><Stack direction="row" spacing={.5} flexWrap="wrap">
-                {sample.status === 'SAMPLE' && <Button size="small" onClick={() => openResults(sample)}>{t.enterResults}</Button>}
+              <TableCell sx={{ whiteSpace: 'nowrap' }}><Typography fontWeight={800} sx={{ fontFamily: 'monospace' }}>{sample.sampleNumber}</Typography></TableCell>
+              <TableCell sx={{ whiteSpace: 'nowrap', fontFamily: 'monospace' }}>{sample.gateEntry.gateNumber}</TableCell>
+              <TableCell sx={{ whiteSpace: 'nowrap', fontWeight: 600 }}>{sample.gateEntry.vehicleNumber}</TableCell>
+              <TableCell sx={{ maxWidth: 200 }}><Typography variant="body2" fontWeight={600} noWrap title={sample.gateEntry.partner?.name ?? '—'}>{sample.gateEntry.partner?.name ?? '—'}</Typography></TableCell>
+              <TableCell sx={{ maxWidth: 160 }}><Typography variant="body2" noWrap title={sample.gateEntry.item?.name ?? '—'}>{sample.gateEntry.item?.name ?? '—'}</Typography></TableCell>
+              <TableCell sx={{ whiteSpace: 'nowrap' }}>{sample.sampleType}</TableCell>
+              <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}><Chip size="small" color={sample.status === 'APPROVED' ? 'success' : sample.status === 'REJECTED' ? 'error' : sample.status === 'TESTED' ? 'warning' : 'default'} label={sample.status} /></TableCell>
+              <TableCell sx={{ minWidth: 180 }}><Stack spacing={.3}>{parameters.filter(([key]) => sample.measurements[key] !== undefined).map(([key, en, bn]) => <Typography key={key} fontSize={10} noWrap>{language === 'bn' ? bn : en}: <strong>{sample.measurements[key]}%</strong></Typography>)}</Stack></TableCell>
+              <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}><Stack direction="row" spacing={.5} justifyContent="flex-end">
+                {sample.status === 'SAMPLE' && <Button size="small" variant="contained" onClick={() => openResults(sample)}>{t.enterResults}</Button>}
                 {sample.status === 'TESTED' && <>
-                  <Button size="small" color="success" onClick={() => decide(sample, 'ACCEPT')}>{t.accept}</Button>
-                  <Button size="small" color="error" onClick={() => decide(sample, 'REJECT')}>{t.reject}</Button>
+                  <Button size="small" color="success" variant="contained" onClick={() => decide(sample, 'ACCEPT')}>{t.accept}</Button>
+                  <Button size="small" color="error" variant="outlined" onClick={() => decide(sample, 'REJECT')}>{t.reject}</Button>
                 </>}
               </Stack></TableCell>
             </TableRow>)}</TableBody>

@@ -300,14 +300,14 @@ export function CalculationEnginePage() {
                   </Grid>
                 </Grid>
 
-                <TableContainer component={Paper} variant="outlined">
-                  <Table size="small">
+                <TableContainer component={Paper} variant="outlined" sx={{ overflowX: 'auto' }}>
+                  <Table size="small" sx={{ minWidth: 650 }}>
                     <TableHead>
                       <TableRow sx={{ backgroundColor: '#edf2f7' }}>
-                        <TableCell><strong>Component</strong></TableCell>
-                        <TableCell align="right"><strong>Weight (KG)</strong></TableCell>
-                        <TableCell align="right"><strong>Recovery %</strong></TableCell>
-                        <TableCell><strong>Standard Reference</strong></TableCell>
+                        <TableCell sx={{ whiteSpace: 'nowrap' }}><strong>Component</strong></TableCell>
+                        <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}><strong>Weight (KG)</strong></TableCell>
+                        <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}><strong>Recovery %</strong></TableCell>
+                        <TableCell sx={{ whiteSpace: 'nowrap' }}><strong>Standard Reference</strong></TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
@@ -484,15 +484,15 @@ export function CalculationEnginePage() {
           <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: '#1a365d' }}>
             Complete 14 Industrial Calculation Engines Catalog
           </Typography>
-          <TableContainer>
-            <Table size="small">
+          <TableContainer sx={{ overflowX: 'auto' }}>
+            <Table size="small" sx={{ minWidth: 850 }}>
               <TableHead>
                 <TableRow sx={{ backgroundColor: '#edf2f7' }}>
-                  <TableCell>#</TableCell>
-                  <TableCell>Function Name</TableCell>
-                  <TableCell>Module Domain</TableCell>
-                  <TableCell>Formula Specification</TableCell>
-                  <TableCell>Verification Status</TableCell>
+                  <TableCell sx={{ whiteSpace: 'nowrap' }}>#</TableCell>
+                  <TableCell sx={{ whiteSpace: 'nowrap' }}>Function Name</TableCell>
+                  <TableCell sx={{ whiteSpace: 'nowrap' }}>Module Domain</TableCell>
+                  <TableCell sx={{ whiteSpace: 'nowrap' }}>Formula Specification</TableCell>
+                  <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}>Verification Status</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -512,12 +512,12 @@ export function CalculationEnginePage() {
                   { id: 13, name: 'calculateTollCharge()', domain: 'Toll Milling', formula: 'Milled KG × Toll Rate + Handling - Retained By-products', status: 'VERIFIED' },
                   { id: 14, name: 'calculatePackagingCost()', domain: 'Repacking', formula: 'Bags × (Bag Price + Twine + Printing + Liner)', status: 'VERIFIED' },
                 ].map(r => (
-                  <TableRow key={r.id}>
-                    <TableCell>{r.id}</TableCell>
-                    <TableCell sx={{ fontFamily: 'monospace', fontWeight: 600 }}>{r.name}</TableCell>
-                    <TableCell><Chip label={r.domain} size="small" variant="outlined" /></TableCell>
-                    <TableCell>{r.formula}</TableCell>
-                    <TableCell><Chip label={r.status} size="small" color="success" /></TableCell>
+                  <TableRow key={r.id} hover>
+                    <TableCell sx={{ whiteSpace: 'nowrap' }}>{r.id}</TableCell>
+                    <TableCell sx={{ fontFamily: 'monospace', fontWeight: 600, whiteSpace: 'nowrap' }}>{r.name}</TableCell>
+                    <TableCell sx={{ whiteSpace: 'nowrap' }}><Chip label={r.domain} size="small" variant="outlined" /></TableCell>
+                    <TableCell sx={{ fontFamily: 'monospace', fontSize: 11, whiteSpace: 'nowrap' }}>{r.formula}</TableCell>
+                    <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}><Chip label={r.status} size="small" color="success" /></TableCell>
                   </TableRow>
                 ))}
               </TableBody>

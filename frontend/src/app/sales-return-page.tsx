@@ -566,21 +566,21 @@ export function SalesReturnPage({ companyId, factoryId, language, onSaved }: Sal
       </Paper>
 
       {/* Main Register Table */}
-      <Paper sx={{ borderRadius: 2, overflow: 'hidden' }}>
-        <Table size="small">
+      <Paper sx={{ borderRadius: 2, overflowX: 'auto' }}>
+        <Table size="small" sx={{ minWidth: 1150 }}>
           <TableHead sx={{ bgcolor: 'action.hover' }}>
             <TableRow>
-              <TableCell><strong>{isBn ? 'ফেরত নং' : 'Return No'}</strong></TableCell>
-              <TableCell><strong>{isBn ? 'ক্রেডিট নোট' : 'Credit Note'}</strong></TableCell>
-              <TableCell><strong>{isBn ? 'তারিখ' : 'Date'}</strong></TableCell>
-              <TableCell><strong>{isBn ? 'ক্রেতা' : 'Customer'}</strong></TableCell>
-              <TableCell><strong>{isBn ? 'বিক্রয় আদেশ / চালান' : 'Order / Challan'}</strong></TableCell>
-              <TableCell><strong>{isBn ? 'ধরন ও নিষ্পত্তি' : 'Type & Settlement'}</strong></TableCell>
-              <TableCell align="right"><strong>{isBn ? 'বস্তা' : 'Bags'}</strong></TableCell>
-              <TableCell align="right"><strong>{isBn ? 'ফেরত ওজন (কেজি)' : 'Return KG'}</strong></TableCell>
-              <TableCell align="right"><strong>{isBn ? 'মোট মূল্য' : 'Amount'}</strong></TableCell>
-              <TableCell align="center"><strong>{isBn ? 'অবস্থা' : 'Status'}</strong></TableCell>
-              <TableCell align="right"><strong>{isBn ? 'কার্যক্রম' : 'Actions'}</strong></TableCell>
+              <TableCell sx={{ whiteSpace: 'nowrap' }}><strong>{isBn ? 'ফেরত নং' : 'Return No'}</strong></TableCell>
+              <TableCell sx={{ whiteSpace: 'nowrap' }}><strong>{isBn ? 'ক্রেডিট নোট' : 'Credit Note'}</strong></TableCell>
+              <TableCell sx={{ whiteSpace: 'nowrap' }}><strong>{isBn ? 'তারিখ' : 'Date'}</strong></TableCell>
+              <TableCell sx={{ whiteSpace: 'nowrap' }}><strong>{isBn ? 'ক্রেতা' : 'Customer'}</strong></TableCell>
+              <TableCell sx={{ whiteSpace: 'nowrap' }}><strong>{isBn ? 'বিক্রয় আদেশ / চালান' : 'Order / Challan'}</strong></TableCell>
+              <TableCell sx={{ whiteSpace: 'nowrap' }}><strong>{isBn ? 'ধরন ও নিষ্পত্তি' : 'Type & Settlement'}</strong></TableCell>
+              <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}><strong>{isBn ? 'বস্তা' : 'Bags'}</strong></TableCell>
+              <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}><strong>{isBn ? 'ফেরত ওজন (কেজি)' : 'Return KG'}</strong></TableCell>
+              <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}><strong>{isBn ? 'মোট মূল্য' : 'Amount'}</strong></TableCell>
+              <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}><strong>{isBn ? 'অবস্থা' : 'Status'}</strong></TableCell>
+              <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}><strong>{isBn ? 'কার্যক্রম' : 'Actions'}</strong></TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -599,21 +599,21 @@ export function SalesReturnPage({ companyId, factoryId, language, onSaved }: Sal
             ) : (
               returns.map((ret) => (
                 <TableRow key={ret.id} hover>
-                  <TableCell sx={{ fontWeight: 600 }}>{ret.returnNumber}</TableCell>
-                  <TableCell>
+                  <TableCell sx={{ fontWeight: 600, fontFamily: 'monospace', whiteSpace: 'nowrap' }}>{ret.returnNumber}</TableCell>
+                  <TableCell sx={{ whiteSpace: 'nowrap' }}>
                     {ret.creditNoteNumber ? (
                       <Chip label={ret.creditNoteNumber} size="small" variant="outlined" color="primary" />
                     ) : (
                       '—'
                     )}
                   </TableCell>
-                  <TableCell>{ret.returnDate ? new Date(ret.returnDate).toLocaleDateString() : '—'}</TableCell>
-                  <TableCell>
-                    <Typography variant="body2" fontWeight={600}>
+                  <TableCell sx={{ whiteSpace: 'nowrap' }}>{ret.returnDate ? new Date(ret.returnDate).toLocaleDateString() : '—'}</TableCell>
+                  <TableCell sx={{ maxWidth: 200 }}>
+                    <Typography variant="body2" fontWeight={600} noWrap title={ret.customer?.name}>
                       {ret.customer?.name}
                     </Typography>
                     {ret.customer?.businessName && (
-                      <Typography variant="caption" color="text.secondary">
+                      <Typography variant="caption" color="text.secondary" noWrap title={ret.customer.businessName}>
                         {ret.customer.businessName}
                       </Typography>
                     )}
