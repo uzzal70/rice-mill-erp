@@ -722,53 +722,59 @@ export function SalesPage({
 
           {/* ORDERS TABLE */}
           <Paper sx={{ p: 2, overflowX: 'auto', borderRadius: 2 }}>
-            <Table size="small">
+            <Table size="small" sx={{ minWidth: 1100 }}>
               <TableHead>
                 <TableRow>
-                  <TableCell><strong>{text.orderNo}</strong></TableCell>
-                  <TableCell><strong>{text.customer}</strong></TableCell>
-                  <TableCell><strong>{text.channel}</strong></TableCell>
-                  <TableCell><strong>{text.item}</strong></TableCell>
-                  <TableCell><strong>{text.qty}</strong></TableCell>
-                  <TableCell><strong>{text.rate}</strong></TableCell>
-                  <TableCell><strong>{text.lineTotal}</strong></TableCell>
-                  <TableCell><strong>{text.status}</strong></TableCell>
-                  <TableCell align="right"><strong>{text.actions}</strong></TableCell>
+                  <TableCell sx={{ whiteSpace: 'nowrap' }}><strong>{text.orderNo}</strong></TableCell>
+                  <TableCell sx={{ whiteSpace: 'nowrap' }}><strong>{text.customer}</strong></TableCell>
+                  <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}><strong>{text.channel}</strong></TableCell>
+                  <TableCell sx={{ whiteSpace: 'nowrap' }}><strong>{text.item}</strong></TableCell>
+                  <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}><strong>{text.qty}</strong></TableCell>
+                  <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}><strong>{text.rate}</strong></TableCell>
+                  <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}><strong>{text.lineTotal}</strong></TableCell>
+                  <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}><strong>{text.status}</strong></TableCell>
+                  <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}><strong>{text.actions}</strong></TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {(orders.data?.data ?? []).map((o) => (
                   <TableRow key={o.id} hover>
-                    <TableCell>
-                      <strong>{o.orderNumber}</strong>
+                    <TableCell sx={{ whiteSpace: 'nowrap' }}>
+                      <strong style={{ fontFamily: 'monospace' }}>{o.orderNumber}</strong>
                       {o.quotation && (
                         <Typography variant="caption" display="block" color="text.secondary">
                           Quote: {o.quotation.quotationNumber}
                         </Typography>
                       )}
                     </TableCell>
-                    <TableCell>
-                      {o.customer.name}
+                    <TableCell sx={{ maxWidth: 200 }}>
+                      <Typography variant="body2" fontWeight={600} noWrap title={o.customer.name}>
+                        {o.customer.name}
+                      </Typography>
                       {o.customer.businessName && (
-                        <Typography variant="caption" display="block" color="text.secondary">
+                        <Typography variant="caption" display="block" color="text.secondary" noWrap title={o.customer.businessName}>
                           {o.customer.businessName}
                         </Typography>
                       )}
                     </TableCell>
-                    <TableCell>
+                    <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}>
                       <Chip label={o.channel} size="small" variant="outlined" />
                     </TableCell>
-                    <TableCell>
-                      {o.lines.map((l) => `${l.item.name} (${l.stack.code})`).join(', ')}
+                    <TableCell sx={{ maxWidth: 220 }}>
+                      <Typography variant="body2" noWrap title={o.lines.map((l) => `${l.item.name} (${l.stack.code})`).join(', ')}>
+                        {o.lines.map((l) => `${l.item.name} (${l.stack.code})`).join(', ')}
+                      </Typography>
                     </TableCell>
-                    <TableCell>{o.lines.map((l) => `${Number(l.quantityKg).toLocaleString()} KG`).join(', ')}</TableCell>
-                    <TableCell>{o.lines.map((l) => `${Number(l.unitRate).toFixed(2)}`).join(', ')}</TableCell>
-                    <TableCell>
-                      <strong>
-                        {Number(o.totalAmount).toLocaleString()} {o.currency}
-                      </strong>
+                    <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
+                      {o.lines.map((l) => `${Number(l.quantityKg).toLocaleString()} KG`).join(', ')}
                     </TableCell>
-                    <TableCell>
+                    <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
+                      {o.lines.map((l) => `৳ ${Number(l.unitRate).toFixed(2)}`).join(', ')}
+                    </TableCell>
+                    <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>
+                      {Number(o.totalAmount).toLocaleString()} {o.currency}
+                    </TableCell>
+                    <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}>
                       <Chip
                         label={o.status}
                         size="small"
@@ -781,7 +787,7 @@ export function SalesPage({
                         }
                       />
                     </TableCell>
-                    <TableCell align="right">
+                    <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
                       {o.status === 'DRAFT' && (
                         <Button
                           size="small"
@@ -808,7 +814,7 @@ export function SalesPage({
                 ))}
                 {!(orders.data?.data ?? []).length && (
                   <TableRow>
-                    <TableCell colSpan={9} align="center" sx={{ py: 3 }}>
+                    <TableCell colSpan={9} align="center" sx={{ py: 3, color: 'text.secondary' }}>
                       {text.noOrders}
                     </TableCell>
                   </TableRow>
@@ -1033,37 +1039,47 @@ export function SalesPage({
 
           {/* QUOTATION TABLE */}
           <Paper sx={{ p: 2, overflowX: 'auto', borderRadius: 2 }}>
-            <Table size="small">
+            <Table size="small" sx={{ minWidth: 1100 }}>
               <TableHead>
                 <TableRow>
-                  <TableCell><strong>{text.quoteNo}</strong></TableCell>
-                  <TableCell><strong>{text.customer}</strong></TableCell>
-                  <TableCell><strong>{text.channel}</strong></TableCell>
-                  <TableCell><strong>{text.validUntil}</strong></TableCell>
-                  <TableCell><strong>{text.item}</strong></TableCell>
-                  <TableCell><strong>{text.qty}</strong></TableCell>
-                  <TableCell><strong>{text.rate}</strong></TableCell>
-                  <TableCell><strong>{text.lineTotal}</strong></TableCell>
-                  <TableCell><strong>{text.status}</strong></TableCell>
-                  <TableCell align="right"><strong>{text.actions}</strong></TableCell>
+                  <TableCell sx={{ whiteSpace: 'nowrap' }}><strong>{text.quoteNo}</strong></TableCell>
+                  <TableCell sx={{ whiteSpace: 'nowrap' }}><strong>{text.customer}</strong></TableCell>
+                  <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}><strong>{text.channel}</strong></TableCell>
+                  <TableCell sx={{ whiteSpace: 'nowrap' }}><strong>{text.validUntil}</strong></TableCell>
+                  <TableCell sx={{ whiteSpace: 'nowrap' }}><strong>{text.item}</strong></TableCell>
+                  <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}><strong>{text.qty}</strong></TableCell>
+                  <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}><strong>{text.rate}</strong></TableCell>
+                  <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}><strong>{text.lineTotal}</strong></TableCell>
+                  <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}><strong>{text.status}</strong></TableCell>
+                  <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}><strong>{text.actions}</strong></TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {(quotations.data?.data ?? []).map((q) => (
                   <TableRow key={q.id} hover>
-                    <TableCell><strong>{q.quotationNumber}</strong></TableCell>
-                    <TableCell>{q.customer.name}</TableCell>
-                    <TableCell><Chip label={q.channel} size="small" variant="outlined" /></TableCell>
-                    <TableCell>{new Date(q.validUntil).toLocaleDateString()}</TableCell>
-                    <TableCell>{q.lines.map((l) => l.item.name).join(', ')}</TableCell>
-                    <TableCell>{q.lines.map((l) => `${Number(l.quantityKg).toLocaleString()} KG`).join(', ')}</TableCell>
-                    <TableCell>{q.lines.map((l) => Number(l.unitRate).toFixed(2)).join(', ')}</TableCell>
-                    <TableCell>
-                      <strong>
-                        {Number(q.totalAmount).toLocaleString()} {q.currency}
-                      </strong>
+                    <TableCell sx={{ whiteSpace: 'nowrap' }}><strong style={{ fontFamily: 'monospace' }}>{q.quotationNumber}</strong></TableCell>
+                    <TableCell sx={{ maxWidth: 200 }}>
+                      <Typography variant="body2" fontWeight={600} noWrap title={q.customer.name}>
+                        {q.customer.name}
+                      </Typography>
                     </TableCell>
-                    <TableCell>
+                    <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}><Chip label={q.channel} size="small" variant="outlined" /></TableCell>
+                    <TableCell sx={{ whiteSpace: 'nowrap' }}>{new Date(q.validUntil).toLocaleDateString()}</TableCell>
+                    <TableCell sx={{ maxWidth: 220 }}>
+                      <Typography variant="body2" noWrap title={q.lines.map((l) => l.item.name).join(', ')}>
+                        {q.lines.map((l) => l.item.name).join(', ')}
+                      </Typography>
+                    </TableCell>
+                    <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
+                      {q.lines.map((l) => `${Number(l.quantityKg).toLocaleString()} KG`).join(', ')}
+                    </TableCell>
+                    <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
+                      {q.lines.map((l) => `৳ ${Number(l.unitRate).toFixed(2)}`).join(', ')}
+                    </TableCell>
+                    <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>
+                      {Number(q.totalAmount).toLocaleString()} {q.currency}
+                    </TableCell>
+                    <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}>
                       <Chip
                         label={q.status}
                         size="small"
@@ -1076,7 +1092,7 @@ export function SalesPage({
                         }
                       />
                     </TableCell>
-                    <TableCell align="right">
+                    <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
                       <Stack direction="row" spacing={1} justifyContent="flex-end">
                         {q.status === 'DRAFT' && (
                           <>
@@ -1099,7 +1115,7 @@ export function SalesPage({
                 ))}
                 {!(quotations.data?.data ?? []).length && (
                   <TableRow>
-                    <TableCell colSpan={10} align="center" sx={{ py: 3 }}>
+                    <TableCell colSpan={10} align="center" sx={{ py: 3, color: 'text.secondary' }}>
                       {text.noQuotes}
                     </TableCell>
                   </TableRow>

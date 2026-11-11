@@ -244,6 +244,74 @@ const theme = createTheme({
   palette: { primary: { main: '#1b6a4a', dark: '#104c36' }, background: { default: '#f5f8f5', paper: '#fff' }, success: { main: '#378867' }, warning: { main: '#c88a32' } },
   typography: { fontFamily: '"DM Sans", sans-serif', button: { textTransform: 'none', fontWeight: 700 } },
   shape: { borderRadius: 12 },
+  components: {
+    MuiTableContainer: {
+      styleOverrides: {
+        root: {
+          overflowX: 'auto',
+          maxWidth: '100%',
+          scrollbarWidth: 'thin',
+        },
+      },
+    },
+    MuiTable: {
+      defaultProps: {
+        size: 'small',
+      },
+      styleOverrides: {
+        root: {
+          borderCollapse: 'separate',
+          borderSpacing: 0,
+        },
+      },
+    },
+    MuiTableHead: {
+      styleOverrides: {
+        root: {
+          backgroundColor: '#f8fafc',
+        },
+      },
+    },
+    MuiTableCell: {
+      styleOverrides: {
+        root: {
+          borderColor: '#e8eee9',
+          padding: '9px 12px',
+          fontSize: '12px',
+          lineHeight: 1.45,
+        },
+        head: {
+          fontWeight: 700,
+          fontSize: '11px',
+          textTransform: 'uppercase',
+          letterSpacing: '0.04em',
+          color: '#475569',
+          backgroundColor: '#f8fafc',
+          whiteSpace: 'nowrap',
+          borderBottom: '2px solid #e2e8f0',
+        },
+        alignRight: {
+          fontVariantNumeric: 'tabular-nums',
+          whiteSpace: 'nowrap',
+        },
+        alignCenter: {
+          whiteSpace: 'nowrap',
+        },
+      },
+    },
+    MuiTableRow: {
+      styleOverrides: {
+        root: {
+          '&:hover': {
+            backgroundColor: 'rgba(27, 106, 74, 0.035) !important',
+          },
+          '&:last-child td': {
+            borderBottom: 0,
+          },
+        },
+      },
+    },
+  },
 });
 
 function messageOf(error: unknown) {
@@ -558,7 +626,15 @@ export default function HomePage() {
   const [factoryComparisonRestricted, setFactoryComparisonRestricted] = useState(false);
   const [companyId, setCompanyId] = useState('');
   const [factoryId, setFactoryId] = useState('');
-  const [page, setPage] = useState<PageKey>('dashboard');
+  const [page, setPageState] = useState<PageKey>('dashboard');
+
+  const setPage = useCallback((newPage: PageKey) => {
+    setPageState(newPage);
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('rice-mill-active-page', newPage);
+      window.history.replaceState(null, '', '#' + newPage);
+    }
+  }, []);
   const [design, setDesign] = useState<DesignMode>('advanced');
   const [language, setLanguage] = useState<'en' | 'bn'>('en');
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -597,20 +673,50 @@ export default function HomePage() {
     setSession(readSession());
     setDesign(window.localStorage.getItem('rice-mill-design') === 'classic' ? 'classic' : 'advanced');
     setLanguage(window.localStorage.getItem('rice-mill-language') === 'bn' ? 'bn' : 'en');
+    
+    // Restore active page from hash or localStorage on reload
+    const hash = window.location.hash.replace('#', '') as PageKey;
+    const savedPage = window.localStorage.getItem('rice-mill-active-page') as PageKey;
+    const initialPage = hash || savedPage;
+    if (initialPage && navigation.some(item => item.key === initialPage)) {
+      setPageState(initialPage);
+    }
+
     setReady(true);
+  }, []);
+
+  useEffect(() => {
+    const handleHashChange = () => {
+      const hash = window.location.hash.replace('#', '') as PageKey;
+      if (hash && navigation.some(item => item.key === hash)) {
+        setPageState(hash);
+      }
+    };
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
 
   const loadCompanies = useCallback(async () => {
     const rows = await apiRequest<Company[]>('/companies');
     setCompanies(rows);
-    setCompanyId(current => current && rows.some(row => row.id === current) ? current : rows[0]?.id ?? '');
+    const savedComp = typeof window !== 'undefined' ? window.localStorage.getItem('rice-mill-company-id') : null;
+    const initialComp = (savedComp && rows.some(r => r.id === savedComp)) ? savedComp : (rows[0]?.id ?? '');
+    setCompanyId(initialComp);
+    if (typeof window !== 'undefined' && initialComp) {
+      window.localStorage.setItem('rice-mill-company-id', initialComp);
+    }
   }, []);
 
   const loadFactories = useCallback(async (selectedCompany: string) => {
     if (!selectedCompany) { setFactories([]); setFactoryId(''); return; }
     const rows = await apiRequest<Factory[]>(`/factories?${queryString({ companyId: selectedCompany })}`);
     setFactories(rows);
-    setFactoryId(current => current && rows.some(row => row.id === current) ? current : rows[0]?.id ?? '');
+    const savedFact = typeof window !== 'undefined' ? window.localStorage.getItem('rice-mill-factory-id') : null;
+    const initialFact = (savedFact && rows.some(r => r.id === savedFact)) ? savedFact : (rows[0]?.id ?? '');
+    setFactoryId(initialFact);
+    if (typeof window !== 'undefined' && initialFact) {
+      window.localStorage.setItem('rice-mill-factory-id', initialFact);
+    }
   }, []);
 
   const loadData = useCallback(async () => {
@@ -879,11 +985,27 @@ export default function HomePage() {
             </Box>
             <FormControl size="small" sx={{ minWidth: { xs: 110, sm: 165 } }}>
               <InputLabel>{t.company}</InputLabel>
-              <Select label={t.company} value={companyId} onChange={event => { setFactories([]); setFactoryId(''); setFactorySummaries([]); setCompanyId(event.target.value); }}>{companies.map(row => <MenuItem key={row.id} value={row.id}>{row.name}</MenuItem>)}</Select>
+              <Select label={t.company} value={companyId} onChange={event => {
+                const newComp = event.target.value;
+                setFactories([]);
+                setFactoryId('');
+                setFactorySummaries([]);
+                setCompanyId(newComp);
+                if (typeof window !== 'undefined') {
+                  window.localStorage.setItem('rice-mill-company-id', newComp);
+                  window.localStorage.removeItem('rice-mill-factory-id');
+                }
+              }}>{companies.map(row => <MenuItem key={row.id} value={row.id}>{row.name}</MenuItem>)}</Select>
             </FormControl>
             <FormControl size="small" sx={{ minWidth: { xs: 105, sm: 155 } }}>
               <InputLabel>{t.factory}</InputLabel>
-              <Select label={t.factory} value={factoryId} onChange={event => setFactoryId(event.target.value)}>{factories.map(row => <MenuItem key={row.id} value={row.id}>{row.name}</MenuItem>)}</Select>
+              <Select label={t.factory} value={factoryId} onChange={event => {
+                const newFact = event.target.value;
+                setFactoryId(newFact);
+                if (typeof window !== 'undefined') {
+                  window.localStorage.setItem('rice-mill-factory-id', newFact);
+                }
+              }}>{factories.map(row => <MenuItem key={row.id} value={row.id}>{row.name}</MenuItem>)}</Select>
             </FormControl>
             <Button
               size="small"
@@ -963,7 +1085,7 @@ export default function HomePage() {
           {page === 'documentPrinting' && <DocumentPrintingPage />}
           {page === 'bangladeshConfig' && <BangladeshConfigPage companyId={companyId} language={language} onSaved={setToast} />}
           {page === 'excelImport' && <ExcelImportPage companyId={companyId} language={language} onSaved={setToast} />}
-          {page === 'notifications' && <NotificationsPage companyId={companyId} language={language} onSaved={setToast} />}
+          {page === 'notifications' && <NotificationsPage companyId={companyId} language={language} onSaved={setToast} onNavigate={(targetPage) => setPage(targetPage as PageKey)} />}
           {page === 'dataIntegrity' && <DataIntegrityPage />}
           {page === 'calculations' && <CalculationEnginePage />}
           {page === 'mobileOwner' && <MobileOwnerPage companyId={companyId} language={language} />}
@@ -1145,25 +1267,52 @@ function GateTable({ t, entries, onAction, compact = false, onUploadAttachment, 
   onDownloadAttachment?: (entry: GateEntry, attachment: GateAttachment) => void;
 }) {
   if (!entries.length) return <EmptyState text={t.noRows} />;
-  return <Box sx={{ overflowX: 'auto' }}><Box component="table" sx={{ width: '100%', borderCollapse: 'collapse', minWidth: compact ? 700 : 1050 }}>
-    <thead><tr>{[t.tableGate, t.vehicle, 'Direction', t.purpose, 'Supplier/customer · material', t.net, t.status, ...(compact ? [] : ['Quality', 'Actions'])].map(label => <Box component="th" key={label} className="table-head" sx={{ textAlign: 'left', py: 1.2, px: 1.25, borderBottom: '1px solid var(--line)' }}>{label}</Box>)}</tr></thead>
+  return <Box sx={{ overflowX: 'auto', width: '100%' }}><Box component="table" sx={{ width: '100%', borderCollapse: 'collapse', minWidth: compact ? 700 : 1100 }}>
+    <thead><tr>{[
+      { label: t.tableGate, align: 'left' },
+      { label: t.vehicle, align: 'left' },
+      { label: 'Direction', align: 'center' },
+      { label: t.purpose, align: 'left' },
+      { label: 'Supplier/customer · material', align: 'left' },
+      { label: t.net, align: 'right' },
+      { label: t.status, align: 'center' },
+      ...(compact ? [] : [
+        { label: 'Quality', align: 'left' },
+        { label: 'Actions', align: 'right' }
+      ])
+    ].map(col => <Box component="th" key={col.label} className="table-head" sx={{ textAlign: col.align as any, py: 1.2, px: 1.25, borderBottom: '1px solid var(--line)', whiteSpace: 'nowrap' }}>{col.label}</Box>)}</tr></thead>
     <tbody>{entries.map(entry => <tr key={entry.id}>
-      <Box component="td" sx={{ py: 1.5, px: 1.25, borderBottom: '1px solid var(--line)' }}><Typography fontWeight={800} fontSize={12}>{entry.gateNumber}</Typography><Typography color="text.secondary" fontSize={10}>{new Date(entry.enteredAt).toLocaleString()}</Typography></Box>
-      <Box component="td" sx={{ py: 1.5, px: 1.25, borderBottom: '1px solid var(--line)' }}><Typography fontSize={12}>{entry.vehicleNumber}</Typography>{entry.driverName && <Typography color="text.secondary" fontSize={10}>{entry.driverName}</Typography>}</Box>
-      <Box component="td" sx={{ py: 1.5, px: 1.25, borderBottom: '1px solid var(--line)', fontSize: 11 }}>{entry.direction}</Box>
-      <Box component="td" sx={{ py: 1.5, px: 1.25, borderBottom: '1px solid var(--line)', fontSize: 11 }}>{entry.purpose.replaceAll('_', ' ')}</Box>
-      <Box component="td" sx={{ py: 1.5, px: 1.25, borderBottom: '1px solid var(--line)' }}><Typography fontSize={11}>{entry.partner?.name ?? '—'}</Typography><Typography color="text.secondary" fontSize={10}>{entry.item?.name ?? '—'}</Typography></Box>
-      <Box component="td" sx={{ py: 1.5, px: 1.25, borderBottom: '1px solid var(--line)', fontWeight: 700, fontSize: 11 }}>{entry.weighbridgeTicket ? formatKg(entry.weighbridgeTicket.netWeight) : '—'}</Box>
-      <Box component="td" sx={{ py: 1.5, px: 1.25, borderBottom: '1px solid var(--line)' }}><StatusTag value={entry.status} /></Box>
+      <Box component="td" sx={{ py: 1.5, px: 1.25, borderBottom: '1px solid var(--line)', whiteSpace: 'nowrap' }}>
+        <Typography fontWeight={800} fontSize={12} fontFamily="monospace">{entry.gateNumber}</Typography>
+        <Typography color="text.secondary" fontSize={10}>{new Date(entry.enteredAt).toLocaleString()}</Typography>
+      </Box>
+      <Box component="td" sx={{ py: 1.5, px: 1.25, borderBottom: '1px solid var(--line)', whiteSpace: 'nowrap' }}>
+        <Typography fontSize={12} fontWeight={600}>{entry.vehicleNumber}</Typography>
+        {entry.driverName && <Typography color="text.secondary" fontSize={10}>{entry.driverName}</Typography>}
+      </Box>
+      <Box component="td" sx={{ py: 1.5, px: 1.25, borderBottom: '1px solid var(--line)', fontSize: 11, textAlign: 'center', whiteSpace: 'nowrap' }}>
+        <Chip size="small" variant="outlined" label={entry.direction} sx={{ fontSize: 10, height: 20 }} />
+      </Box>
+      <Box component="td" sx={{ py: 1.5, px: 1.25, borderBottom: '1px solid var(--line)', fontSize: 11, whiteSpace: 'nowrap' }}>{entry.purpose.replaceAll('_', ' ')}</Box>
+      <Box component="td" sx={{ py: 1.5, px: 1.25, borderBottom: '1px solid var(--line)', maxWidth: 220 }}>
+        <Typography fontSize={11} fontWeight={600} noWrap title={entry.partner?.name ?? '—'}>{entry.partner?.name ?? '—'}</Typography>
+        <Typography color="text.secondary" fontSize={10} noWrap title={entry.item?.name ?? '—'}>{entry.item?.name ?? '—'}</Typography>
+      </Box>
+      <Box component="td" sx={{ py: 1.5, px: 1.25, borderBottom: '1px solid var(--line)', fontWeight: 700, fontSize: 12, textAlign: 'right', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums', fontFamily: 'monospace' }}>
+        {entry.weighbridgeTicket ? formatKg(entry.weighbridgeTicket.netWeight) : '—'}
+      </Box>
+      <Box component="td" sx={{ py: 1.5, px: 1.25, borderBottom: '1px solid var(--line)', textAlign: 'center', whiteSpace: 'nowrap' }}><StatusTag value={entry.status} /></Box>
       {!compact && <>
-        <Box component="td" sx={{ py: 1.5, px: 1.25, borderBottom: '1px solid var(--line)' }}><Stack spacing={.5}>{entry.qualitySamples?.map(sample => <Typography key={sample.id} fontSize={10}>{sample.sampleNumber} · {sample.status}</Typography>) ?? '—'}</Stack></Box>
-        <Box component="td" sx={{ py: 1, px: 1, borderBottom: '1px solid var(--line)' }}>
-          <Stack spacing={.75}>
+        <Box component="td" sx={{ py: 1.5, px: 1.25, borderBottom: '1px solid var(--line)', minWidth: 140 }}>
+          <Stack spacing={.5}>{entry.qualitySamples?.map(sample => <Typography key={sample.id} fontSize={10} noWrap>{sample.sampleNumber} · {sample.status}</Typography>) ?? '—'}</Stack>
+        </Box>
+        <Box component="td" sx={{ py: 1, px: 1, borderBottom: '1px solid var(--line)', textAlign: 'right' }}>
+          <Stack spacing={.75} alignItems="flex-end">
             {onAction(entry)}
-            <Stack direction="row" gap={.5} flexWrap="wrap">
-              {entry.attachments?.map(attachment => <Button key={attachment.id} size="small" startIcon={<DownloadRoundedIcon />} onClick={() => onDownloadAttachment?.(entry, attachment)} sx={{ textTransform: 'none', justifyContent: 'flex-start' }}>{attachment.fileName}</Button>)}
-              {onUploadAttachment && <Button component="label" size="small" startIcon={<AttachFileRoundedIcon />} sx={{ textTransform: 'none' }}>
-                Attach file
+            <Stack direction="row" gap={.5} flexWrap="wrap" justifyContent="flex-end">
+              {entry.attachments?.map(attachment => <Button key={attachment.id} size="small" startIcon={<DownloadRoundedIcon />} onClick={() => onDownloadAttachment?.(entry, attachment)} sx={{ textTransform: 'none', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={attachment.fileName}>{attachment.fileName}</Button>)}
+              {onUploadAttachment && <Button component="label" size="small" startIcon={<AttachFileRoundedIcon />} sx={{ textTransform: 'none', whiteSpace: 'nowrap' }}>
+                Attach
                 <input hidden type="file" accept=".pdf,image/jpeg,image/png,image/webp" onChange={event => {
                   const file = event.currentTarget.files?.[0];
                   if (file) onUploadAttachment(entry, file);
@@ -1181,20 +1330,45 @@ function GateTable({ t, entries, onAction, compact = false, onUploadAttachment, 
 function ProcurementPage({ t, purchases, receipts, onNewReceipt, onApprove }: { t: Translation; purchases: Purchase[]; receipts: GoodsReceipt[]; onNewReceipt: (purchase: Purchase) => void; onApprove: (purchase: Purchase) => void }) {
   return <Paper className="workspace-card" elevation={0} sx={{ p: 2 }}>
     <Stack direction="row" justifyContent="space-between" alignItems="center" px={1} py={1.5}><Box><Typography className="brand-font" fontWeight={800}>Gate-linked paddy purchases</Typography><Typography color="text.secondary" fontSize={11}>Orders use accepted quality and weighbridge net weight.</Typography></Box><Chip size="small" label={`${purchases.length} orders`} /></Stack>
-    {!purchases.length ? <EmptyState text={t.noRows} /> : <Box sx={{ overflowX: 'auto' }}><Box component="table" sx={{ width: '100%', borderCollapse: 'collapse', minWidth: 850 }}>
-      <thead><tr>{[t.purchaseNo, t.supplier, t.item, t.qty, t.payableQty, t.rate, t.adjustedRate, t.moisturePolicy, t.brokerCommission, t.status, 'Actions'].map(label => <Box component="th" key={label} className="table-head" sx={{ textAlign: 'left', py: 1.2, px: 1.25, borderBottom: '1px solid var(--line)' }}>{label}</Box>)}</tr></thead>
+    {!purchases.length ? <EmptyState text={t.noRows} /> : <Box sx={{ overflowX: 'auto', width: '100%' }}><Box component="table" sx={{ width: '100%', borderCollapse: 'collapse', minWidth: 1200 }}>
+      <thead><tr>{[
+        { label: t.purchaseNo, align: 'left' },
+        { label: t.supplier, align: 'left' },
+        { label: t.item, align: 'left' },
+        { label: t.qty, align: 'right' },
+        { label: t.payableQty, align: 'right' },
+        { label: t.rate, align: 'right' },
+        { label: t.adjustedRate, align: 'right' },
+        { label: t.moisturePolicy, align: 'left' },
+        { label: t.brokerCommission, align: 'right' },
+        { label: t.status, align: 'center' },
+        { label: 'Actions', align: 'center' }
+      ].map(col => <Box component="th" key={col.label} className="table-head" sx={{ textAlign: col.align as any, py: 1.2, px: 1.25, borderBottom: '1px solid var(--line)', whiteSpace: 'nowrap' }}>{col.label}</Box>)}</tr></thead>
       <tbody>{purchases.map(row => <tr key={row.id}>
-        <Box component="td" sx={{ py: 1.5, px: 1.25, borderBottom: '1px solid var(--line)', fontWeight: 800, fontSize: 12 }}>{row.orderNumber}</Box>
-        <Box component="td" sx={{ py: 1.5, px: 1.25, borderBottom: '1px solid var(--line)', fontSize: 12 }}>{row.supplier.name}</Box>
-        <Box component="td" sx={{ py: 1.5, px: 1.25, borderBottom: '1px solid var(--line)', fontSize: 12 }}>{row.item.name}</Box>
-        <Box component="td" sx={{ py: 1.5, px: 1.25, borderBottom: '1px solid var(--line)', fontSize: 12 }}>{formatKg(row.orderedQuantity)}</Box>
-        <Box component="td" sx={{ py: 1.5, px: 1.25, borderBottom: '1px solid var(--line)', fontSize: 12 }}>{formatKg(row.payableQuantityKg)}</Box>
-        <Box component="td" sx={{ py: 1.5, px: 1.25, borderBottom: '1px solid var(--line)', fontSize: 12 }}>৳ {row.unitRate}</Box>
-        <Box component="td" sx={{ py: 1.5, px: 1.25, borderBottom: '1px solid var(--line)', fontSize: 12 }}>৳ {row.adjustedUnitRate}</Box>
-        <Box component="td" sx={{ py: 1.5, px: 1.25, borderBottom: '1px solid var(--line)', fontSize: 12 }}>{row.moisturePolicyName ? `${row.moisturePolicyName} · ${row.moistureReceivedPct}% · −${formatKg(row.moistureDeductionQuantityKg ?? undefined)}` : '—'}</Box>
-        <Box component="td" sx={{ py: 1.5, px: 1.25, borderBottom: '1px solid var(--line)', fontSize: 12 }}>{row.brokerCommissionAmount == null ? '—' : `৳ ${Number(row.brokerCommissionAmount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}</Box>
-        <Box component="td" sx={{ py: 1.5, px: 1.25, borderBottom: '1px solid var(--line)' }}><StatusTag value={row.status} /></Box>
-        <Box component="td" sx={{ py: 1, px: 1, borderBottom: '1px solid var(--line)' }}><Stack direction="row" spacing={.5}>{row.status === 'DRAFT' && <Button size="small" onClick={() => onApprove(row)}>{t.approve}</Button>}{row.status === 'APPROVED' && <Button size="small" variant="contained" onClick={() => onNewReceipt(row)}>{t.newReceipt}</Button>}</Stack></Box>
+        <Box component="td" sx={{ py: 1.5, px: 1.25, borderBottom: '1px solid var(--line)', fontWeight: 800, fontSize: 12, whiteSpace: 'nowrap', fontFamily: 'monospace' }}>{row.orderNumber}</Box>
+        <Box component="td" sx={{ py: 1.5, px: 1.25, borderBottom: '1px solid var(--line)', fontSize: 12, maxWidth: 200 }}>
+          <Typography fontSize={12} fontWeight={600} noWrap title={row.supplier.name}>{row.supplier.name}</Typography>
+        </Box>
+        <Box component="td" sx={{ py: 1.5, px: 1.25, borderBottom: '1px solid var(--line)', fontSize: 12, whiteSpace: 'nowrap' }}>{row.item.name}</Box>
+        <Box component="td" sx={{ py: 1.5, px: 1.25, borderBottom: '1px solid var(--line)', fontSize: 12, textAlign: 'right', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{formatKg(row.orderedQuantity)}</Box>
+        <Box component="td" sx={{ py: 1.5, px: 1.25, borderBottom: '1px solid var(--line)', fontSize: 12, textAlign: 'right', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>{formatKg(row.payableQuantityKg)}</Box>
+        <Box component="td" sx={{ py: 1.5, px: 1.25, borderBottom: '1px solid var(--line)', fontSize: 12, textAlign: 'right', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>৳ {row.unitRate}</Box>
+        <Box component="td" sx={{ py: 1.5, px: 1.25, borderBottom: '1px solid var(--line)', fontSize: 12, textAlign: 'right', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>৳ {row.adjustedUnitRate}</Box>
+        <Box component="td" sx={{ py: 1.5, px: 1.25, borderBottom: '1px solid var(--line)', fontSize: 11, maxWidth: 220 }}>
+          <Typography fontSize={11} noWrap title={row.moisturePolicyName ? `${row.moisturePolicyName} · ${row.moistureReceivedPct}% · −${formatKg(row.moistureDeductionQuantityKg ?? undefined)}` : '—'}>
+            {row.moisturePolicyName ? `${row.moisturePolicyName} · ${row.moistureReceivedPct}% · −${formatKg(row.moistureDeductionQuantityKg ?? undefined)}` : '—'}
+          </Typography>
+        </Box>
+        <Box component="td" sx={{ py: 1.5, px: 1.25, borderBottom: '1px solid var(--line)', fontSize: 12, textAlign: 'right', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
+          {row.brokerCommissionAmount == null ? '—' : `৳ ${Number(row.brokerCommissionAmount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+        </Box>
+        <Box component="td" sx={{ py: 1.5, px: 1.25, borderBottom: '1px solid var(--line)', textAlign: 'center', whiteSpace: 'nowrap' }}><StatusTag value={row.status} /></Box>
+        <Box component="td" sx={{ py: 1, px: 1, borderBottom: '1px solid var(--line)', textAlign: 'center', whiteSpace: 'nowrap' }}>
+          <Stack direction="row" spacing={.5} justifyContent="center">
+            {row.status === 'DRAFT' && <Button size="small" onClick={() => onApprove(row)}>{t.approve}</Button>}
+            {row.status === 'APPROVED' && <Button size="small" variant="contained" onClick={() => onNewReceipt(row)}>{t.newReceipt}</Button>}
+          </Stack>
+        </Box>
       </tr>)}</tbody>
     </Box></Box>}
     <Divider sx={{ my: 2 }} /><Typography fontWeight={800} fontSize={12} px={1}>GRN activity · {receipts.length}</Typography>
@@ -1204,16 +1378,31 @@ function ProcurementPage({ t, purchases, receipts, onNewReceipt, onApprove }: { 
 function ReceiptsPage({ t, receipts, onApprove, onPost }: { t: Translation; receipts: GoodsReceipt[]; onApprove: (receipt: GoodsReceipt) => void; onPost: (receipt: GoodsReceipt) => void }) {
   return <Paper className="workspace-card" elevation={0} sx={{ p: 2 }}>
     <Stack direction="row" justifyContent="space-between" alignItems="center" px={1} py={1.5}><Box><Typography className="brand-font" fontWeight={800}>Goods receipt notes</Typography><Typography color="text.secondary" fontSize={11}>Posting a GRN creates the stock-ledger movement.</Typography></Box><Chip size="small" label={`${receipts.length} receipts`} /></Stack>
-    {!receipts.length ? <EmptyState text={t.noRows} /> : <Box sx={{ overflowX: 'auto' }}><Box component="table" sx={{ width: '100%', borderCollapse: 'collapse', minWidth: 800 }}>
-      <thead><tr>{[t.receiptNo, t.purchaseNo, t.supplier, t.item, t.qty, t.status, 'Actions'].map(label => <Box component="th" key={label} className="table-head" sx={{ textAlign: 'left', py: 1.2, px: 1.25, borderBottom: '1px solid var(--line)' }}>{label}</Box>)}</tr></thead>
+    {!receipts.length ? <EmptyState text={t.noRows} /> : <Box sx={{ overflowX: 'auto', width: '100%' }}><Box component="table" sx={{ width: '100%', borderCollapse: 'collapse', minWidth: 950 }}>
+      <thead><tr>{[
+        { label: t.receiptNo, align: 'left' },
+        { label: t.purchaseNo, align: 'left' },
+        { label: t.supplier, align: 'left' },
+        { label: t.item, align: 'left' },
+        { label: t.qty, align: 'right' },
+        { label: t.status, align: 'center' },
+        { label: 'Actions', align: 'center' }
+      ].map(col => <Box component="th" key={col.label} className="table-head" sx={{ textAlign: col.align as any, py: 1.2, px: 1.25, borderBottom: '1px solid var(--line)', whiteSpace: 'nowrap' }}>{col.label}</Box>)}</tr></thead>
       <tbody>{receipts.map(row => <tr key={row.id}>
-        <Box component="td" sx={{ py: 1.5, px: 1.25, borderBottom: '1px solid var(--line)', fontWeight: 800, fontSize: 12 }}>{row.receiptNumber}</Box>
-        <Box component="td" sx={{ py: 1.5, px: 1.25, borderBottom: '1px solid var(--line)', fontSize: 11 }}>{row.purchaseOrder.orderNumber}</Box>
-        <Box component="td" sx={{ py: 1.5, px: 1.25, borderBottom: '1px solid var(--line)', fontSize: 12 }}>{row.purchaseOrder.supplier.name}</Box>
-        <Box component="td" sx={{ py: 1.5, px: 1.25, borderBottom: '1px solid var(--line)', fontSize: 12 }}>{row.purchaseOrder.item.name}</Box>
-        <Box component="td" sx={{ py: 1.5, px: 1.25, borderBottom: '1px solid var(--line)', fontSize: 12 }}>{formatKg(row.quantity)}</Box>
-        <Box component="td" sx={{ py: 1.5, px: 1.25, borderBottom: '1px solid var(--line)' }}><StatusTag value={row.status} /></Box>
-        <Box component="td" sx={{ py: 1, px: 1, borderBottom: '1px solid var(--line)' }}><Stack direction="row" spacing={.5}>{row.status === 'DRAFT' && <Button size="small" onClick={() => onApprove(row)}>{t.approve}</Button>}{row.status === 'APPROVED' && <Button size="small" variant="contained" onClick={() => onPost(row)}>{t.post}</Button>}</Stack></Box>
+        <Box component="td" sx={{ py: 1.5, px: 1.25, borderBottom: '1px solid var(--line)', fontWeight: 800, fontSize: 12, whiteSpace: 'nowrap', fontFamily: 'monospace' }}>{row.receiptNumber}</Box>
+        <Box component="td" sx={{ py: 1.5, px: 1.25, borderBottom: '1px solid var(--line)', fontSize: 11, whiteSpace: 'nowrap', fontFamily: 'monospace' }}>{row.purchaseOrder.orderNumber}</Box>
+        <Box component="td" sx={{ py: 1.5, px: 1.25, borderBottom: '1px solid var(--line)', fontSize: 12, maxWidth: 220 }}>
+          <Typography fontSize={12} fontWeight={600} noWrap title={row.purchaseOrder.supplier.name}>{row.purchaseOrder.supplier.name}</Typography>
+        </Box>
+        <Box component="td" sx={{ py: 1.5, px: 1.25, borderBottom: '1px solid var(--line)', fontSize: 12, whiteSpace: 'nowrap' }}>{row.purchaseOrder.item.name}</Box>
+        <Box component="td" sx={{ py: 1.5, px: 1.25, borderBottom: '1px solid var(--line)', fontSize: 12, textAlign: 'right', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>{formatKg(row.quantity)}</Box>
+        <Box component="td" sx={{ py: 1.5, px: 1.25, borderBottom: '1px solid var(--line)', textAlign: 'center', whiteSpace: 'nowrap' }}><StatusTag value={row.status} /></Box>
+        <Box component="td" sx={{ py: 1, px: 1, borderBottom: '1px solid var(--line)', textAlign: 'center', whiteSpace: 'nowrap' }}>
+          <Stack direction="row" spacing={.5} justifyContent="center">
+            {row.status === 'DRAFT' && <Button size="small" onClick={() => onApprove(row)}>{t.approve}</Button>}
+            {row.status === 'APPROVED' && <Button size="small" variant="contained" onClick={() => onPost(row)}>{t.post}</Button>}
+          </Stack>
+        </Box>
       </tr>)}</tbody>
     </Box></Box>}
   </Paper>;
@@ -1223,14 +1412,20 @@ function InventoryPage({ t, rows }: { t: Translation; rows: InventoryRow[] }) {
   return <Stack spacing={2}>
     <Paper className="workspace-card" elevation={0} sx={{ p: 2.5 }}>
       <Stack direction="row" spacing={1.5} alignItems="center" mb={2}><WarehouseOutlinedIcon color="primary" /><Box><Typography className="brand-font" fontWeight={800}>Movement ledger balances</Typography><Typography color="text.secondary" fontSize={11}>Derived from receipts, transfers and adjustments; no mutable stock counter.</Typography></Box></Stack>
-      {!rows.length ? <EmptyState text={t.noRows} /> : <Box sx={{ overflowX: 'auto' }}><Box component="table" sx={{ width: '100%', borderCollapse: 'collapse', minWidth: 700 }}>
-        <thead><tr>{['Item code', t.item, 'Godown', t.stack, t.onHand].map(label => <Box component="th" key={label} className="table-head" sx={{ textAlign: 'left', py: 1.2, px: 1.25, borderBottom: '1px solid var(--line)' }}>{label}</Box>)}</tr></thead>
+      {!rows.length ? <EmptyState text={t.noRows} /> : <Box sx={{ overflowX: 'auto', width: '100%' }}><Box component="table" sx={{ width: '100%', borderCollapse: 'collapse', minWidth: 800 }}>
+        <thead><tr>{[
+          { label: 'Item code', align: 'left' },
+          { label: t.item, align: 'left' },
+          { label: 'Godown', align: 'left' },
+          { label: t.stack, align: 'left' },
+          { label: t.onHand, align: 'right' }
+        ].map(col => <Box component="th" key={col.label} className="table-head" sx={{ textAlign: col.align as any, py: 1.2, px: 1.25, borderBottom: '1px solid var(--line)', whiteSpace: 'nowrap' }}>{col.label}</Box>)}</tr></thead>
         <tbody>{rows.map((row, index) => <tr key={`${row.item.id}-${row.stack?.id ?? index}`}>
-          <Box component="td" sx={{ py: 1.5, px: 1.25, borderBottom: '1px solid var(--line)', fontSize: 11, color: 'text.secondary' }}>{row.item.code}</Box>
+          <Box component="td" sx={{ py: 1.5, px: 1.25, borderBottom: '1px solid var(--line)', fontSize: 11, color: 'text.secondary', fontFamily: 'monospace', whiteSpace: 'nowrap' }}>{row.item.code}</Box>
           <Box component="td" sx={{ py: 1.5, px: 1.25, borderBottom: '1px solid var(--line)', fontWeight: 700, fontSize: 12 }}>{row.item.name}</Box>
-          <Box component="td" sx={{ py: 1.5, px: 1.25, borderBottom: '1px solid var(--line)', fontSize: 12 }}>{row.stack?.godown.name ?? '—'}</Box>
-          <Box component="td" sx={{ py: 1.5, px: 1.25, borderBottom: '1px solid var(--line)', fontSize: 12 }}>{row.stack?.code ?? '—'}</Box>
-          <Box component="td" sx={{ py: 1.5, px: 1.25, borderBottom: '1px solid var(--line)', fontWeight: 800, fontSize: 12 }}>{formatKg(row.onHand)}</Box>
+          <Box component="td" sx={{ py: 1.5, px: 1.25, borderBottom: '1px solid var(--line)', fontSize: 12, whiteSpace: 'nowrap' }}>{row.stack?.godown.name ?? '—'}</Box>
+          <Box component="td" sx={{ py: 1.5, px: 1.25, borderBottom: '1px solid var(--line)', fontSize: 12, whiteSpace: 'nowrap' }}>{row.stack?.code ?? '—'}</Box>
+          <Box component="td" sx={{ py: 1.5, px: 1.25, borderBottom: '1px solid var(--line)', fontWeight: 800, fontSize: 12, textAlign: 'right', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{formatKg(row.onHand)}</Box>
         </tr>)}</tbody>
       </Box></Box>}
     </Paper>

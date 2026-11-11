@@ -42,6 +42,172 @@ button, input, select { font: inherit; }
 .status-pill { border-radius: 999px; padding: 5px 10px; font-size: 11px; font-weight: 700; }
 .classic .status-pill { border-radius: 3px; }
 
+/* ==========================================================================
+   Table Responsiveness, Custom Scrollbars & Alignment System
+   ========================================================================== */
+
+/* Modern slim scrollbar for all scrollable containers and tables */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Global table responsive wrappers - prevents any table from clipping or breaking */
+.table-responsive,
+.MuiTableContainer-root,
+.MuiPaper-root:has(table),
+.workspace-card:has(table),
+.MuiPaper-root:has(.MuiTable-root),
+.workspace-card:has(.MuiTable-root),
+div[style*="overflow-x: auto"],
+div[style*="overflowX: auto"] {
+  overflow-x: auto !important;
+  max-width: 100%;
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 #f8fafc;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Table element foundation */
+.MuiTable-root,
+table {
+  width: 100%;
+  min-width: 720px;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+/* Compact tables inside dialogs or narrow cards can have smaller min-width */
+.table-compact,
+.MuiDialogContent-root .MuiTable-root {
+  min-width: 480px;
+}
+
+/* Table Head Styling */
+.MuiTableHead-root,
+thead {
+  background-color: #f8fafc;
+}
+
+.MuiTableHead-root .MuiTableCell-root,
+thead th,
+.table-head {
+  color: #475569 !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.05em !important;
+  text-transform: uppercase !important;
+  background-color: #f8fafc !important;
+  border-bottom: 2px solid #e2e8f0 !important;
+  padding: 10px 12px !important;
+  white-space: nowrap !important;
+  vertical-align: middle;
+}
+
+/* Table Body Styling */
+.MuiTableBody-root .MuiTableCell-root,
+tbody td {
+  padding: 10px 12px;
+  font-size: 12px;
+  border-bottom: 1px solid var(--line, #e8eee9);
+  color: #1e293b;
+  vertical-align: middle;
+}
+
+.MuiTableBody-root .MuiTableRow-root:hover,
+tbody tr:hover {
+  background-color: rgba(27, 106, 74, 0.035) !important;
+  transition: background-color 0.15s ease-in-out;
+}
+
+/* Column Alignment: Numeric & Currency (Right Aligned + Tabular Numbers) */
+.col-num,
+.col-numeric,
+th.col-num,
+td.col-num,
+.MuiTableCell-alignRight {
+  text-align: right !important;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+  white-space: nowrap !important;
+}
+
+/* Column Alignment: Center (Status Badges, Chips, Icons, Direction) */
+.col-center,
+th.col-center,
+td.col-center,
+.MuiTableCell-alignCenter {
+  text-align: center !important;
+  white-space: nowrap !important;
+}
+
+/* Column Alignment: Left */
+.col-left,
+th.col-left,
+td.col-left,
+.MuiTableCell-alignLeft {
+  text-align: left !important;
+}
+
+/* Prevent unwanted multi-line wraps for codes, dates, phones, status */
+.col-nowrap,
+.nowrap,
+th.nowrap,
+td.nowrap {
+  white-space: nowrap !important;
+}
+
+/* Monospace font for document numbers, batches, weights, amounts */
+.font-mono,
+.code-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace !important;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Truncation utilities for long customer names, supplier names, policy notes, descriptions */
+.col-truncate {
+  max-width: 220px;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  display: block;
+}
+
+.col-truncate-sm {
+  max-width: 140px;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  display: block;
+}
+
+.col-truncate-md {
+  max-width: 180px;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  display: block;
+}
+
+.col-truncate-lg {
+  max-width: 320px;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  display: block;
+}
+
 @media (max-width: 720px) {
   .sidebar { display: none; }
 }
