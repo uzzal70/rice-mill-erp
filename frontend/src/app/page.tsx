@@ -2,11 +2,15 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  Alert, AppBar, Avatar, Badge, Box, Button, Chip, CircularProgress, CssBaseline, Dialog, DialogActions,
-  DialogContent, DialogTitle, Divider, Drawer, FormControl, IconButton, InputLabel, MenuItem,
-  Paper, Select, Snackbar, Stack, Tab, Tabs, TextField, Toolbar, Tooltip, Typography,
+  Alert, AppBar, Avatar, Badge, Box, Button, Chip, CircularProgress, CssBaseline,
+  Divider, Drawer, IconButton, Paper, Stack, Tab, Tabs, TextField,
+  Toolbar, Tooltip, Typography,
 } from '@mui/material';
-import { createTheme, ThemeProvider } from '@mui/material/styles';
+import { ThemeProvider } from '@mui/material/styles';
+import { createAppTheme } from '@/lib/theme';
+import { extractApiError, useToast } from '@/components/ui/toast-provider';
+import { FieldRule, focusFieldByName, validateFormFields } from '@/lib/form-validation';
+import { AppAutocomplete, AppSelect, AppTextField, FormDialog, FormGrid } from '@/components/form';
 import AgricultureRoundedIcon from '@mui/icons-material/AgricultureRounded';
 import AdminPanelSettingsRoundedIcon from '@mui/icons-material/AdminPanelSettingsRounded';
 import AttachFileRoundedIcon from '@mui/icons-material/AttachFileRounded';
@@ -240,83 +244,7 @@ const navigation: Array<{ key: PageKey; icon: typeof DashboardRoundedIcon; secti
   { key: 'factoryMaster', icon: PrecisionManufacturingRoundedIcon, section: 'management' },
 ];
 
-const theme = createTheme({
-  palette: { primary: { main: '#1b6a4a', dark: '#104c36' }, background: { default: '#f5f8f5', paper: '#fff' }, success: { main: '#378867' }, warning: { main: '#c88a32' } },
-  typography: { fontFamily: '"DM Sans", sans-serif', button: { textTransform: 'none', fontWeight: 700 } },
-  shape: { borderRadius: 12 },
-  components: {
-    MuiTableContainer: {
-      styleOverrides: {
-        root: {
-          overflowX: 'auto',
-          maxWidth: '100%',
-          scrollbarWidth: 'thin',
-        },
-      },
-    },
-    MuiTable: {
-      defaultProps: {
-        size: 'small',
-      },
-      styleOverrides: {
-        root: {
-          borderCollapse: 'separate',
-          borderSpacing: 0,
-        },
-      },
-    },
-    MuiTableHead: {
-      styleOverrides: {
-        root: {
-          backgroundColor: '#f8fafc',
-        },
-      },
-    },
-    MuiTableCell: {
-      styleOverrides: {
-        root: {
-          borderColor: '#e8eee9',
-          padding: '9px 12px',
-          fontSize: '12px',
-          lineHeight: 1.45,
-        },
-        head: {
-          fontWeight: 700,
-          fontSize: '11px',
-          textTransform: 'uppercase',
-          letterSpacing: '0.04em',
-          color: '#475569',
-          backgroundColor: '#f8fafc',
-          whiteSpace: 'nowrap',
-          borderBottom: '2px solid #e2e8f0',
-        },
-        alignRight: {
-          fontVariantNumeric: 'tabular-nums',
-          whiteSpace: 'nowrap',
-        },
-        alignCenter: {
-          whiteSpace: 'nowrap',
-        },
-      },
-    },
-    MuiTableRow: {
-      styleOverrides: {
-        root: {
-          '&:hover': {
-            backgroundColor: 'rgba(27, 106, 74, 0.035) !important',
-          },
-          '&:last-child td': {
-            borderBottom: 0,
-          },
-        },
-      },
-    },
-  },
-});
-
-function messageOf(error: unknown) {
-  return error instanceof Error ? error.message : 'Something went wrong.';
-};
+const messageOf = extractApiError;
 type Translation = { [Key in keyof typeof translations.en]: string };
 
 function formatKg(value: string | number | undefined) {
@@ -340,29 +268,49 @@ function LoginView({ onLogin, design, onDesign, language, onLanguage }: {
   onLogin: (session: Session) => void; design: DesignMode; onDesign: () => void; language: 'en' | 'bn'; onLanguage: () => void;
 }) {
   const t = translations[language];
+  const toast = useToast();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [feedback, setFeedback] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [mode, setMode] = useState<'password' | 'otp' | 'forgot'>('password');
   const [otpCode, setOtpCode] = useState('');
   const [otpRequested, setOtpRequested] = useState(false);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
+    const validation = validateFormFields(
+      [
+        { name: 'email', label: t.email, value: email, required: true, type: 'email' },
+        { name: 'password', label: t.password, value: password, required: true },
+      ],
+      language,
+    );
+    if (!validation.valid) {
+      setFieldErrors(validation.errors);
+      setError(validation.summary);
+      toast.warning(validation.summary);
+      focusFieldByName(validation.firstField);
+      return;
+    }
     setBusy(true);
     setError('');
+    setFieldErrors({});
     setFeedback('');
     try {
       const session = await apiRequest<Session>('/auth/login', {
         method: 'POST',
-        body: JSON.stringify({ email, password, deviceName: 'Rice Mill ERP Web' }),
+        body: JSON.stringify({ email: email.trim(), password, deviceName: 'Rice Mill ERP Web' }),
       }, false);
       writeSession(session);
+      toast.success(language === 'bn' ? 'সফলভাবে প্রবেশ করেছেন।' : 'Signed in successfully.');
       onLogin(session);
     } catch (reason) {
-      setError(messageOf(reason));
+      const msg = messageOf(reason);
+      setError(msg);
+      toast.error(msg);
     } finally {
       setBusy(false);
     }
@@ -370,35 +318,65 @@ function LoginView({ onLogin, design, onDesign, language, onLanguage }: {
 
   async function sendPasswordReset(event: FormEvent) {
     event.preventDefault();
+    const validation = validateFormFields(
+      [{ name: 'email', label: t.email, value: email, required: true, type: 'email' }],
+      language,
+    );
+    if (!validation.valid) {
+      setFieldErrors(validation.errors);
+      setError(validation.summary);
+      toast.warning(validation.summary);
+      focusFieldByName(validation.firstField);
+      return;
+    }
     setBusy(true);
     setError('');
+    setFieldErrors({});
     setFeedback('');
     try {
       await apiRequest<{ message: string }>('/auth/password-reset/request', {
         method: 'POST',
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ email: email.trim() }),
       }, false);
       setFeedback(t.resetRequested);
+      toast.success(t.resetRequested);
     } catch (reason) {
-      setError(messageOf(reason));
+      const msg = messageOf(reason);
+      setError(msg);
+      toast.error(msg);
     } finally {
       setBusy(false);
     }
   }
 
   async function requestOtp() {
+    const validation = validateFormFields(
+      [{ name: 'email', label: t.email, value: email, required: true, type: 'email' }],
+      language,
+    );
+    if (!validation.valid) {
+      setFieldErrors(validation.errors);
+      setError(validation.summary);
+      toast.warning(validation.summary);
+      focusFieldByName(validation.firstField);
+      return;
+    }
     setBusy(true);
     setError('');
+    setFieldErrors({});
     setFeedback('');
     try {
       await apiRequest<{ message: string }>('/auth/otp/request', {
         method: 'POST',
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ email: email.trim() }),
       }, false);
       setOtpRequested(true);
       setFeedback(t.otpRequested);
+      toast.info(t.otpRequested);
     } catch (reason) {
-      setError(messageOf(reason));
+      const msg = messageOf(reason);
+      setError(msg);
+      toast.error(msg);
     } finally {
       setBusy(false);
     }
@@ -406,17 +384,35 @@ function LoginView({ onLogin, design, onDesign, language, onLanguage }: {
 
   async function verifyOtp(event: FormEvent) {
     event.preventDefault();
+    const validation = validateFormFields(
+      [
+        { name: 'email', label: t.email, value: email, required: true, type: 'email' },
+        { name: 'otpCode', label: t.oneTimeCode, value: otpCode, required: true, minLength: 6 },
+      ],
+      language,
+    );
+    if (!validation.valid) {
+      setFieldErrors(validation.errors);
+      setError(validation.summary);
+      toast.warning(validation.summary);
+      focusFieldByName(validation.firstField);
+      return;
+    }
     setBusy(true);
     setError('');
+    setFieldErrors({});
     try {
       const session = await apiRequest<Session>('/auth/otp/verify', {
         method: 'POST',
-        body: JSON.stringify({ email, code: otpCode, deviceName: 'Rice Mill ERP Web' }),
+        body: JSON.stringify({ email: email.trim(), code: otpCode, deviceName: 'Rice Mill ERP Web' }),
       }, false);
       writeSession(session);
+      toast.success(language === 'bn' ? 'সফলভাবে প্রবেশ করেছেন।' : 'Signed in successfully.');
       onLogin(session);
     } catch (reason) {
-      setError(messageOf(reason));
+      const msg = messageOf(reason);
+      setError(msg);
+      toast.error(msg);
     } finally {
       setBusy(false);
     }
@@ -426,6 +422,7 @@ function LoginView({ onLogin, design, onDesign, language, onLanguage }: {
     setMode(next);
     setError('');
     setFeedback('');
+    setFieldErrors({});
     setOtpCode('');
     setOtpRequested(false);
   }
@@ -459,24 +456,54 @@ function LoginView({ onLogin, design, onDesign, language, onLanguage }: {
           <Typography color="text.secondary" fontSize={14} mb={3}>{t.subtitle}</Typography>
           {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
           {feedback && <Alert severity="success" sx={{ mb: 2 }}>{feedback}</Alert>}
-          <Box component="form" onSubmit={mode === 'forgot' ? sendPasswordReset : mode === 'otp' ? event => { event.preventDefault(); if (otpRequested) void verifyOtp(event); } : submit}>
+          <Box component="form" noValidate onSubmit={mode === 'forgot' ? sendPasswordReset : mode === 'otp' ? event => { event.preventDefault(); if (otpRequested) void verifyOtp(event); else void requestOtp(); } : submit}>
             <Stack spacing={2}>
-              <TextField autoComplete="username" label={t.email} type="email" value={email} onChange={event => setEmail(event.target.value)} required fullWidth />
+              <AppTextField
+                fieldName="email"
+                name="email"
+                autoComplete="username"
+                label={t.email}
+                type="email"
+                value={email}
+                onValueChange={val => { setEmail(val); setFieldErrors(p => ({ ...p, email: '' })); }}
+                errorText={fieldErrors.email}
+                required
+              />
               {mode === 'password' && <>
-                <TextField autoComplete="current-password" label={t.password} type="password" value={password} onChange={event => setPassword(event.target.value)} required fullWidth />
-                <Button type="submit" variant="contained" size="large" disabled={busy} sx={{ minHeight: 48, borderRadius: design === 'classic' ? 1 : 2 }}>
+                <AppTextField
+                  fieldName="password"
+                  name="password"
+                  autoComplete="current-password"
+                  label={t.password}
+                  type="password"
+                  value={password}
+                  onValueChange={val => { setPassword(val); setFieldErrors(p => ({ ...p, password: '' })); }}
+                  errorText={fieldErrors.password}
+                  required
+                />
+                <Button type="submit" variant="contained" size="large" disabled={busy} sx={{ minHeight: 46, borderRadius: design === 'classic' ? 1 : 2 }}>
                   {busy ? <CircularProgress color="inherit" size={20} /> : t.signIn}
                 </Button>
               </>}
-              {mode === 'forgot' && <Button type="submit" variant="contained" size="large" disabled={busy} sx={{ minHeight: 48, borderRadius: design === 'classic' ? 1 : 2 }}>
+              {mode === 'forgot' && <Button type="submit" variant="contained" size="large" disabled={busy} sx={{ minHeight: 46, borderRadius: design === 'classic' ? 1 : 2 }}>
                 {busy ? <CircularProgress color="inherit" size={20} /> : t.sendReset}
               </Button>}
-              {mode === 'otp' && !otpRequested && <Button type="button" variant="contained" size="large" disabled={busy} onClick={() => void requestOtp()} sx={{ minHeight: 48, borderRadius: design === 'classic' ? 1 : 2 }}>
+              {mode === 'otp' && !otpRequested && <Button type="button" variant="contained" size="large" disabled={busy} onClick={() => void requestOtp()} sx={{ minHeight: 46, borderRadius: design === 'classic' ? 1 : 2 }}>
                 {busy ? <CircularProgress color="inherit" size={20} /> : t.requestOtp}
               </Button>}
               {mode === 'otp' && otpRequested && <>
-                <TextField autoComplete="one-time-code" label={t.oneTimeCode} value={otpCode} onChange={event => setOtpCode(event.target.value.replace(/\D/g, '').slice(0, 6))} inputProps={{ inputMode: 'numeric', maxLength: 6, pattern: '\\d{6}' }} required fullWidth />
-                <Button type="submit" variant="contained" size="large" disabled={busy || otpCode.length !== 6} sx={{ minHeight: 48, borderRadius: design === 'classic' ? 1 : 2 }}>
+                <AppTextField
+                  fieldName="otpCode"
+                  name="otpCode"
+                  autoComplete="one-time-code"
+                  label={t.oneTimeCode}
+                  value={otpCode}
+                  onValueChange={val => { setOtpCode(val.replace(/\D/g, '').slice(0, 6)); setFieldErrors(p => ({ ...p, otpCode: '' })); }}
+                  errorText={fieldErrors.otpCode}
+                  inputProps={{ inputMode: 'numeric', maxLength: 6 }}
+                  required
+                />
+                <Button type="submit" variant="contained" size="large" disabled={busy} sx={{ minHeight: 46, borderRadius: design === 'classic' ? 1 : 2 }}>
                   {busy ? <CircularProgress color="inherit" size={20} /> : t.verifyOtp}
                 </Button>
               </>}
@@ -497,12 +524,15 @@ function LoginView({ onLogin, design, onDesign, language, onLanguage }: {
   );
 }
 
-function EntryDialog({ open, onClose, companyId, factoryId, onSaved, t }: {
-  open: boolean; onClose: () => void; companyId: string; factoryId: string; onSaved: () => void; t: Translation;
+function EntryDialog({ open, onClose, companyId, factoryId, onSaved, t, language }: {
+  open: boolean; onClose: () => void; companyId: string; factoryId: string; onSaved: () => void; t: Translation; language: 'en' | 'bn';
 }) {
+  const bn = language === 'bn';
+  const toast = useToast();
   const [vehicles, setVehicles] = useState<Array<{ id: string; vehicleNumber: string }>>([]);
   const [partners, setPartners] = useState<Array<{ id: string; name: string; type: string }>>([]);
   const [items, setItems] = useState<Array<{ id: string; name: string; kind: string }>>([]);
+  const [loadingOptions, setLoadingOptions] = useState(false);
   const [vehicleId, setVehicleId] = useState('');
   const [vehicleNumber, setVehicleNumber] = useState('');
   const [driverName, setDriverName] = useState('');
@@ -518,9 +548,14 @@ function EntryDialog({ open, onClose, companyId, factoryId, onSaved, t }: {
   const [enteredAt, setEnteredAt] = useState(() => new Date().toISOString().slice(0, 16));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (!open) return;
+    setError('');
+    setFieldErrors({});
+    setEnteredAt(new Date(Date.now() - new Date().getTimezoneOffset() * 60_000).toISOString().slice(0, 16));
+    setLoadingOptions(true);
     Promise.all([
       apiRequest<Array<{ id: string; vehicleNumber: string }>>(`/vehicles?${queryString({ companyId, factoryId, page: 1, pageSize: 100, active: true })}`),
       apiRequest<Array<{ id: string; name: string; type: string }>>(`/partners?${queryString({ companyId, page: 1, pageSize: 100 })}`),
@@ -529,92 +564,325 @@ function EntryDialog({ open, onClose, companyId, factoryId, onSaved, t }: {
       setVehicles(vehicleRows);
       setPartners(partnerRows.filter(row => ['SUPPLIER', 'FARMER', 'CUSTOMER'].includes(row.type)));
       setItems(itemRows);
-    }).catch(reason => setError(messageOf(reason)));
-  }, [open, companyId, factoryId]);
+    }).catch(reason => {
+      const msg = messageOf(reason);
+      setError(msg);
+      toast.error(msg);
+    }).finally(() => setLoadingOptions(false));
+  }, [open, companyId, factoryId, toast]);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
+    const rules: FieldRule[] = [
+      { name: 'gateNumber', label: t.tableGate, value: gateNumber, required: true },
+      { name: 'direction', label: bn ? 'গেটের দিক' : 'Gate direction', value: direction, required: true, isSelect: true },
+      { name: 'purpose', label: bn ? 'আগমনের উদ্দেশ্য' : 'Visit purpose', value: purpose, required: true, isSelect: true },
+      ...(!vehicleId ? [{ name: 'vehicleNumber', label: bn ? 'গাড়ি নম্বর' : 'Vehicle number', value: vehicleNumber, required: true }] : []),
+      { name: 'enteredAt', label: bn ? 'তারিখ ও সময়' : 'Gate date and time', value: enteredAt, required: true, type: 'date' },
+    ];
+    const validation = validateFormFields(rules, language);
+    if (!validation.valid) {
+      setFieldErrors(validation.errors);
+      setError(validation.summary);
+      toast.warning(validation.summary);
+      focusFieldByName(validation.firstField);
+      return;
+    }
+
     setBusy(true);
     setError('');
+    setFieldErrors({});
     try {
       await apiRequest('/gate/entries', {
         method: 'POST',
         body: JSON.stringify({
-          companyId, factoryId, gateNumber, direction, purpose,
-          ...(vehicleId ? { vehicleId } : { vehicleNumber }),
-          ...(driverName ? { driverName } : {}),
-          ...(driverMobile ? { driverMobile } : {}),
+          companyId, factoryId, gateNumber: gateNumber.trim(), direction, purpose,
+          ...(vehicleId ? { vehicleId } : { vehicleNumber: vehicleNumber.trim() }),
+          ...(driverName.trim() ? { driverName: driverName.trim() } : {}),
+          ...(driverMobile.trim() ? { driverMobile: driverMobile.trim() } : {}),
           ...(partnerId ? { partnerId } : {}),
           ...(itemId ? { itemId } : {}),
-          ...(challanNumber ? { challanNumber } : {}),
-          ...(referenceNumber ? { referenceNumber } : {}),
-          ...(remarks ? { remarks } : {}),
+          ...(challanNumber.trim() ? { challanNumber: challanNumber.trim() } : {}),
+          ...(referenceNumber.trim() ? { referenceNumber: referenceNumber.trim() } : {}),
+          ...(remarks.trim() ? { remarks: remarks.trim() } : {}),
           enteredAt: new Date(enteredAt).toISOString(),
         }),
       });
+      setGateNumber('');
+      setVehicleId('');
+      setVehicleNumber('');
+      setDriverName('');
+      setDriverMobile('');
+      setPartnerId('');
+      setItemId('');
+      setChallanNumber('');
+      setReferenceNumber('');
+      setRemarks('');
       onSaved();
       onClose();
-    } catch (reason) { setError(messageOf(reason)); }
-    finally { setBusy(false); }
+    } catch (reason) {
+      const msg = messageOf(reason);
+      setError(msg);
+      toast.error(msg);
+    } finally {
+      setBusy(false);
+    }
   }
 
-  return <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
-    <DialogTitle className="brand-font" fontWeight={800}>{t.newGate}</DialogTitle>
-    <Box component="form" onSubmit={submit}>
-      <DialogContent>
-        <Stack spacing={2}>
-          {error && <Alert severity="error">{error}</Alert>}
-          <TextField label={t.tableGate} value={gateNumber} onChange={event => setGateNumber(event.target.value)} required />
-          <FormControl fullWidth><InputLabel>Gate direction</InputLabel><Select label="Gate direction" value={direction} onChange={event => setDirection(event.target.value)}>{['INWARD', 'OUTWARD'].map(value => <MenuItem key={value} value={value}>{value}</MenuItem>)}</Select></FormControl>
-          <FormControl fullWidth><InputLabel>Visit purpose</InputLabel><Select label="Visit purpose" value={purpose} onChange={event => setPurpose(event.target.value)}>{['PROCUREMENT', 'SALES', 'TRANSFER', 'TOLL_MILLING', 'OTHER'].map(value => <MenuItem key={value} value={value}>{value.replaceAll('_', ' ')}</MenuItem>)}</Select></FormControl>
-          <FormControl fullWidth><InputLabel>{t.vehicle}</InputLabel><Select label={t.vehicle} value={vehicleId} onChange={event => setVehicleId(event.target.value)}><MenuItem value="">Enter an unregistered vehicle</MenuItem>{vehicles.map(row => <MenuItem key={row.id} value={row.id}>{row.vehicleNumber}</MenuItem>)}</Select></FormControl>
-          {!vehicleId && <TextField label={t.vehicle} value={vehicleNumber} onChange={event => setVehicleNumber(event.target.value)} required />}
-          <TextField label="Driver name" value={driverName} onChange={event => setDriverName(event.target.value)} />
-          <TextField label="Driver mobile" value={driverMobile} onChange={event => setDriverMobile(event.target.value)} />
-          <FormControl fullWidth><InputLabel>Supplier / customer</InputLabel><Select label="Supplier / customer" value={partnerId} onChange={event => setPartnerId(event.target.value)}><MenuItem value="">Not selected</MenuItem>{partners.map(row => <MenuItem key={row.id} value={row.id}>{row.name} · {row.type}</MenuItem>)}</Select></FormControl>
-          <FormControl fullWidth><InputLabel>{t.item}</InputLabel><Select label={t.item} value={itemId} onChange={event => setItemId(event.target.value)}><MenuItem value="">Not selected</MenuItem>{items.map(row => <MenuItem key={row.id} value={row.id}>{row.name}</MenuItem>)}</Select></FormControl>
-          <TextField label="Gate date and time" type="datetime-local" value={enteredAt} onChange={event => setEnteredAt(event.target.value)} InputLabelProps={{ shrink: true }} required />
-          <TextField label="Challan number" value={challanNumber} onChange={event => setChallanNumber(event.target.value)} />
-          <TextField label="Reference number" value={referenceNumber} onChange={event => setReferenceNumber(event.target.value)} />
-          <TextField label="Remarks" value={remarks} onChange={event => setRemarks(event.target.value)} multiline minRows={2} />
-        </Stack>
-      </DialogContent>
-      <DialogActions sx={{ px: 3, pb: 2 }}><Button onClick={onClose}>Cancel</Button><Button type="submit" variant="contained" disabled={busy}>{busy ? <CircularProgress size={18} /> : 'Create entry'}</Button></DialogActions>
-    </Box>
-  </Dialog>;
+  return (
+    <FormDialog
+      open={open}
+      onClose={onClose}
+      onSubmit={submit}
+      title={t.newGate}
+      subtitle={bn ? 'গেট প্রবেশ/বহির্গমন, যানবাহন ও সরবরাহকারীর তথ্য লিপিবদ্ধ করুন' : 'Record vehicle arrival/dispatch, driver details, and material'}
+      error={error}
+      onClearError={() => setError('')}
+      loading={busy}
+      maxWidth="md"
+      submitLabel={bn ? 'গেট এন্ট্রি সংরক্ষণ' : 'Create entry'}
+      cancelLabel={bn ? 'বাতিল' : 'Cancel'}
+    >
+      <FormGrid columns={2}>
+        <AppTextField
+          fieldName="gateNumber"
+          label={t.tableGate}
+          placeholder="e.g. GATE-101"
+          value={gateNumber}
+          onValueChange={val => { setGateNumber(val); setFieldErrors(p => ({ ...p, gateNumber: '' })); }}
+          errorText={fieldErrors.gateNumber}
+          required
+        />
+        <AppTextField
+          fieldName="enteredAt"
+          label={bn ? 'গেটের তারিখ ও সময়' : 'Gate date and time'}
+          type="datetime-local"
+          value={enteredAt}
+          onValueChange={val => { setEnteredAt(val); setFieldErrors(p => ({ ...p, enteredAt: '' })); }}
+          errorText={fieldErrors.enteredAt}
+          required
+        />
+        <AppSelect
+          fieldName="direction"
+          label={bn ? 'গেটের দিক' : 'Gate direction'}
+          value={direction}
+          onChange={val => { setDirection(val); setFieldErrors(p => ({ ...p, direction: '' })); }}
+          options={['INWARD', 'OUTWARD'].map(value => ({ value, label: value }))}
+          errorText={fieldErrors.direction}
+          required
+        />
+        <AppSelect
+          fieldName="purpose"
+          label={bn ? 'আগমনের উদ্দেশ্য' : 'Visit purpose'}
+          value={purpose}
+          onChange={val => { setPurpose(val); setFieldErrors(p => ({ ...p, purpose: '' })); }}
+          options={['PROCUREMENT', 'SALES', 'TRANSFER', 'TOLL_MILLING', 'OTHER'].map(value => ({ value, label: value.replaceAll('_', ' ') }))}
+          errorText={fieldErrors.purpose}
+          required
+        />
+        <AppAutocomplete
+          fieldName="vehicleId"
+          label={bn ? 'নিবন্ধিত যানবাহন' : 'Registered vehicle'}
+          value={vehicleId}
+          onChange={val => {
+            setVehicleId(val);
+            if (val) setFieldErrors(p => ({ ...p, vehicleNumber: '' }));
+          }}
+          loading={loadingOptions}
+          options={vehicles.map(row => ({ value: row.id, label: row.vehicleNumber }))}
+          placeholder={bn ? 'খুঁজুন অথবা অনিবন্ধিত রাখতে খালি রাখুন' : 'Search or leave blank for unregistered'}
+          emptyMessage={bn ? 'কোনো নিবন্ধিত গাড়ি নেই' : 'No registered vehicles found'}
+        />
+        <AppTextField
+          fieldName="vehicleNumber"
+          label={bn ? 'অনিবন্ধিত গাড়ি নম্বর' : 'Vehicle number (manual)'}
+          placeholder="e.g. DHAKA-METRO-TA-11-2233"
+          value={vehicleNumber}
+          onValueChange={val => { setVehicleNumber(val); setFieldErrors(p => ({ ...p, vehicleNumber: '' })); }}
+          disabled={Boolean(vehicleId)}
+          disabledReason={bn ? 'উপরে নিবন্ধিত যানবাহন নির্বাচন করা হয়েছে; ম্যানুয়াল নম্বর লিখতে তা ক্লিয়ার করুন।' : 'A registered vehicle is selected above; clear it to enter a custom vehicle number.'}
+          errorText={fieldErrors.vehicleNumber}
+          required={!vehicleId}
+        />
+        <AppTextField
+          fieldName="driverName"
+          label={bn ? 'ড্রাইভারের নাম' : 'Driver name'}
+          value={driverName}
+          onValueChange={setDriverName}
+        />
+        <AppTextField
+          fieldName="driverMobile"
+          label={bn ? 'ড্রাইভারের মোবাইল' : 'Driver mobile'}
+          placeholder="01XXXXXXXXX"
+          value={driverMobile}
+          onValueChange={setDriverMobile}
+        />
+        <AppAutocomplete
+          fieldName="partnerId"
+          label={bn ? 'সরবরাহকারী / ক্রেতা' : 'Supplier / customer'}
+          value={partnerId}
+          onChange={setPartnerId}
+          loading={loadingOptions}
+          options={partners.map(row => ({ value: row.id, label: row.name, badge: row.type }))}
+          emptyMessage={bn ? 'কোনো পার্টনার পাওয়া যায়নি' : 'No partners available'}
+        />
+        <AppAutocomplete
+          fieldName="itemId"
+          label={t.item}
+          value={itemId}
+          onChange={setItemId}
+          loading={loadingOptions}
+          options={items.map(row => ({ value: row.id, label: row.name, badge: row.kind }))}
+          emptyMessage={bn ? 'কোনো পণ্য পাওয়া যায়নি' : 'No items available'}
+        />
+        <AppTextField
+          fieldName="challanNumber"
+          label={bn ? 'চালান নম্বর' : 'Challan number'}
+          value={challanNumber}
+          onValueChange={setChallanNumber}
+        />
+        <AppTextField
+          fieldName="referenceNumber"
+          label={bn ? 'রেফারেন্স নম্বর' : 'Reference number'}
+          value={referenceNumber}
+          onValueChange={setReferenceNumber}
+        />
+        <Box sx={{ gridColumn: { sm: '1 / -1' } }}>
+          <AppTextField
+            fieldName="remarks"
+            label={bn ? 'মন্তব্য' : 'Remarks'}
+            value={remarks}
+            onValueChange={setRemarks}
+            multiline
+            minRows={2}
+          />
+        </Box>
+      </FormGrid>
+    </FormDialog>
+  );
 }
 
-function ActionDialog({ open, onClose, onDone, title, action, fields, t }: {
+function ActionDialog({ open, onClose, onDone, title, action, fields, t, language }: {
   open: boolean; onClose: () => void; onDone: () => void; title: string; action: (values: Record<string, string>) => Promise<void>;
   fields: Array<{ name: string; label: string; type?: 'text' | 'number' | 'datetime-local' | 'select'; options?: Array<{ value: string; label: string }>; required?: boolean; defaultValue?: string }>;
   t: Translation;
+  language: 'en' | 'bn';
 }) {
+  const bn = language === 'bn';
+  const toast = useToast();
   const [values, setValues] = useState<Record<string, string>>({});
   const [error, setError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
+
   useEffect(() => {
-    if (open) setValues(Object.fromEntries(fields.map(field => [field.name, field.defaultValue ?? ''])));
+    if (open) {
+      setValues(Object.fromEntries(fields.map(field => [field.name, field.defaultValue ?? ''])));
+      setError('');
+      setFieldErrors({});
+    }
   }, [open, fields]);
+
   async function submit(event: FormEvent) {
     event.preventDefault();
+    const rules: FieldRule[] = fields.map(field => ({
+      name: field.name,
+      label: field.label,
+      value: values[field.name] ?? '',
+      required: field.required,
+      isSelect: field.type === 'select',
+      type: field.type === 'number' ? 'nonNegativeNumber' : field.type === 'datetime-local' ? 'date' : 'string',
+    }));
+    const validation = validateFormFields(rules, language);
+    if (!validation.valid) {
+      setFieldErrors(validation.errors);
+      setError(validation.summary);
+      toast.warning(validation.summary);
+      focusFieldByName(validation.firstField);
+      return;
+    }
+
+    if (
+      values.grossWeight !== undefined &&
+      values.tareWeight !== undefined &&
+      Number(values.grossWeight) < Number(values.tareWeight)
+    ) {
+      const msg = bn
+        ? 'মোট ওজন (Gross) অবশ্যই খালি ওজনের (Tare) চেয়ে বেশি বা সমান হতে হবে।'
+        : 'Gross weight cannot be less than Tare weight.';
+      setFieldErrors({ grossWeight: msg });
+      setError(msg);
+      toast.warning(msg);
+      focusFieldByName('grossWeight');
+      return;
+    }
+
     setBusy(true);
     setError('');
-    try { await action(values); onDone(); onClose(); }
-    catch (reason) { setError(messageOf(reason)); }
-    finally { setBusy(false); }
+    setFieldErrors({});
+    try {
+      await action(values);
+      onDone();
+      onClose();
+    } catch (reason) {
+      const msg = messageOf(reason);
+      setError(msg);
+      toast.error(msg);
+    } finally {
+      setBusy(false);
+    }
   }
-  return <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
-    <DialogTitle className="brand-font" fontWeight={800}>{title}</DialogTitle>
-    <Box component="form" onSubmit={submit}>
-      <DialogContent><Stack spacing={2}>
-        {error && <Alert severity="error">{error}</Alert>}
-        {fields.map(field => field.type === 'select'
-          ? <FormControl fullWidth key={field.name}><InputLabel>{field.label}</InputLabel><Select label={field.label} value={values[field.name] ?? ''} required={field.required} onChange={event => setValues(prev => ({ ...prev, [field.name]: event.target.value }))}>{(field.options ?? []).map(option => <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>)}</Select></FormControl>
-          : <TextField key={field.name} label={field.label} type={field.type ?? 'text'} value={values[field.name] ?? ''} onChange={event => setValues(prev => ({ ...prev, [field.name]: event.target.value }))} required={field.required} inputProps={field.type === 'number' ? { min: 0, step: 'any' } : undefined} />)}
-      </Stack></DialogContent>
-      <DialogActions sx={{ px: 3, pb: 2 }}><Button onClick={onClose}>Cancel</Button><Button type="submit" variant="contained" disabled={busy}>{busy ? <CircularProgress size={18} /> : 'Save'}</Button></DialogActions>
-    </Box>
-  </Dialog>;
+
+  return (
+    <FormDialog
+      open={open}
+      onClose={onClose}
+      onSubmit={submit}
+      title={title}
+      error={error}
+      onClearError={() => setError('')}
+      loading={busy}
+      maxWidth={fields.length > 4 ? 'md' : 'sm'}
+      submitLabel={bn ? 'সংরক্ষণ করুন' : 'Save'}
+      cancelLabel={bn ? 'বাতিল' : 'Cancel'}
+    >
+      <FormGrid columns={fields.length > 3 ? 2 : 1}>
+        {fields.map(field =>
+          field.type === 'select' ? (
+            <AppSelect
+              key={field.name}
+              fieldName={field.name}
+              label={field.label}
+              value={values[field.name] ?? ''}
+              required={field.required}
+              errorText={fieldErrors[field.name]}
+              emptyMessage={bn ? 'কোনো অপশন পাওয়া যায়নি' : 'No options available'}
+              onChange={val => {
+                setValues(prev => ({ ...prev, [field.name]: val }));
+                setFieldErrors(prev => ({ ...prev, [field.name]: '' }));
+              }}
+              options={(field.options ?? []).map(opt => ({ value: opt.value, label: opt.label }))}
+            />
+          ) : (
+            <AppTextField
+              key={field.name}
+              fieldName={field.name}
+              label={field.label}
+              type={field.type ?? 'text'}
+              value={values[field.name] ?? ''}
+              required={field.required}
+              errorText={fieldErrors[field.name]}
+              inputProps={field.type === 'number' ? { min: 0, step: 'any' } : undefined}
+              onValueChange={val => {
+                setValues(prev => ({ ...prev, [field.name]: val }));
+                setFieldErrors(prev => ({ ...prev, [field.name]: '' }));
+              }}
+            />
+          ),
+        )}
+      </FormGrid>
+    </FormDialog>
+  );
 }
 
 export default function HomePage() {
@@ -649,7 +917,14 @@ export default function HomePage() {
   const [stackOptions, setStackOptions] = useState<StackOption[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const [toast, setToast] = useState('');
+  const toastApi = useToast();
+  const setToast = useCallback((msg: string) => {
+    if (msg) toastApi.success(msg);
+  }, [toastApi]);
+  const reportError = useCallback((msg: string) => {
+    setError(msg);
+    if (msg) toastApi.error(msg);
+  }, [toastApi]);
   const [entryDialog, setEntryDialog] = useState(false);
   const [action, setAction] = useState<{ title: string; fields: Array<{ name: string; label: string; type?: 'text' | 'number' | 'datetime-local' | 'select'; options?: Array<{ value: string; label: string }>; required?: boolean; defaultValue?: string }>; run: (values: Record<string, string>) => Promise<void> } | null>(null);
   const [actionTarget, setActionTarget] = useState('');
@@ -657,6 +932,7 @@ export default function HomePage() {
   const [isGlobalSearchOpen, setIsGlobalSearchOpen] = useState(false);
   const t = translations[language];
   const isClassic = design === 'classic';
+  const theme = useMemo(() => createAppTheme(design), [design]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -870,7 +1146,7 @@ export default function HomePage() {
       await apiRequest(`/gate/entries/${entry.id}/attachments?${queryString({ companyId, factoryId })}`, { method: 'POST', body });
       setToast('Gate attachment uploaded');
       await loadData();
-    } catch (reason) { setError(messageOf(reason)); }
+    } catch (reason) { reportError(messageOf(reason)); }
   }
 
   async function downloadGateAttachment(entry: GateEntry, attachment: GateAttachment) {
@@ -884,7 +1160,7 @@ export default function HomePage() {
       link.click();
       link.remove();
       window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-    } catch (reason) { setError(messageOf(reason)); }
+    } catch (reason) { reportError(messageOf(reason)); }
   }
 
   function startPurchase(entry: GateEntry) {
@@ -929,12 +1205,12 @@ export default function HomePage() {
       actions.push(<Button key="sample" size="small" onClick={() => startSample(entry)}>{t.newSample}</Button>);
       entry.qualitySamples?.filter(sample => sample.status === 'SAMPLE').forEach(sample => actions.push(<Button key={sample.id} size="small" onClick={() => startResults(sample.id)}>{t.results}</Button>));
       entry.qualitySamples?.filter(sample => sample.status === 'TESTED').forEach(sample => {
-        actions.push(<Button key={`${sample.id}-accept`} size="small" color="success" onClick={() => apiRequest(`/quality/samples/${sample.id}/approve`, { method: 'POST', body: JSON.stringify({ companyId, factoryId, decision: 'ACCEPT' }) }).then(() => { setToast('Quality accepted'); loadData(); }).catch(reason => setError(messageOf(reason)))}>{t.accept}</Button>);
-        actions.push(<Button key={`${sample.id}-reject`} size="small" color="error" onClick={() => apiRequest(`/quality/samples/${sample.id}/approve`, { method: 'POST', body: JSON.stringify({ companyId, factoryId, decision: 'REJECT' }) }).then(() => { setToast('Quality rejected'); loadData(); }).catch(reason => setError(messageOf(reason)))}>{t.reject}</Button>);
+        actions.push(<Button key={`${sample.id}-accept`} size="small" color="success" onClick={() => apiRequest(`/quality/samples/${sample.id}/approve`, { method: 'POST', body: JSON.stringify({ companyId, factoryId, decision: 'ACCEPT' }) }).then(() => { setToast('Quality accepted'); loadData(); }).catch(reason => reportError(messageOf(reason)))}>{t.accept}</Button>);
+        actions.push(<Button key={`${sample.id}-reject`} size="small" color="error" onClick={() => apiRequest(`/quality/samples/${sample.id}/approve`, { method: 'POST', body: JSON.stringify({ companyId, factoryId, decision: 'REJECT' }) }).then(() => { setToast('Quality rejected'); loadData(); }).catch(reason => reportError(messageOf(reason)))}>{t.reject}</Button>);
       });
     }
     if (entry.status === 'RECEIVING' && entry.direction === 'INWARD' && entry.purpose === 'PROCUREMENT') actions.push(<Button key="purchase" size="small" variant="contained" onClick={() => startPurchase(entry)}>{t.newPurchase}</Button>);
-    if (entry.status === 'RECEIVING' && entry.purpose !== 'PROCUREMENT') actions.push(<Button key="complete" size="small" onClick={() => apiRequest(`/gate/entries/${entry.id}/complete`, { method: 'POST', body: JSON.stringify({ companyId, factoryId }) }).then(() => { setToast('Gate entry completed'); loadData(); }).catch(reason => setError(messageOf(reason)))}>{t.complete}</Button>);
+    if (entry.status === 'RECEIVING' && entry.purpose !== 'PROCUREMENT') actions.push(<Button key="complete" size="small" onClick={() => apiRequest(`/gate/entries/${entry.id}/complete`, { method: 'POST', body: JSON.stringify({ companyId, factoryId }) }).then(() => { setToast('Gate entry completed'); loadData(); }).catch(reason => reportError(messageOf(reason)))}>{t.complete}</Button>);
     return <Stack direction="row" spacing={0.25} useFlexGap flexWrap="wrap">{actions}</Stack>;
   }
 
@@ -983,30 +1259,44 @@ export default function HomePage() {
               <Typography className="brand-font" fontWeight={800} fontSize={16}>{t[page]}</Typography>
               <Typography color="text.secondary" fontSize={11}>{selectedCompany?.name ?? t.workspace} · {selectedFactory?.name ?? 'Select a factory'}</Typography>
             </Box>
-            <FormControl size="small" sx={{ minWidth: { xs: 110, sm: 165 } }}>
-              <InputLabel>{t.company}</InputLabel>
-              <Select label={t.company} value={companyId} onChange={event => {
-                const newComp = event.target.value;
-                setFactories([]);
-                setFactoryId('');
-                setFactorySummaries([]);
-                setCompanyId(newComp);
-                if (typeof window !== 'undefined') {
-                  window.localStorage.setItem('rice-mill-company-id', newComp);
-                  window.localStorage.removeItem('rice-mill-factory-id');
-                }
-              }}>{companies.map(row => <MenuItem key={row.id} value={row.id}>{row.name}</MenuItem>)}</Select>
-            </FormControl>
-            <FormControl size="small" sx={{ minWidth: { xs: 105, sm: 155 } }}>
-              <InputLabel>{t.factory}</InputLabel>
-              <Select label={t.factory} value={factoryId} onChange={event => {
-                const newFact = event.target.value;
-                setFactoryId(newFact);
-                if (typeof window !== 'undefined') {
-                  window.localStorage.setItem('rice-mill-factory-id', newFact);
-                }
-              }}>{factories.map(row => <MenuItem key={row.id} value={row.id}>{row.name}</MenuItem>)}</Select>
-            </FormControl>
+            <Box sx={{ minWidth: { xs: 120, sm: 175 } }}>
+              <AppSelect
+                name="topbar-company"
+                label={t.company}
+                value={companyId}
+                options={companies.map(row => ({ value: row.id, label: row.name, badge: row.code }))}
+                onChange={newComp => {
+                  setFactories([]);
+                  setFactoryId('');
+                  setFactorySummaries([]);
+                  setCompanyId(newComp);
+                  if (typeof window !== 'undefined') {
+                    window.localStorage.setItem('rice-mill-company-id', newComp);
+                    window.localStorage.removeItem('rice-mill-factory-id');
+                  }
+                }}
+              />
+            </Box>
+            <Box sx={{ minWidth: { xs: 115, sm: 165 } }}>
+              <AppSelect
+                name="topbar-factory"
+                label={t.factory}
+                value={factoryId}
+                options={factories.map(row => ({ value: row.id, label: row.name, badge: row.code }))}
+                prerequisite={{
+                  met: Boolean(companyId),
+                  message: language === 'bn' ? 'প্রথমে কোম্পানি নির্বাচন করুন' : 'Please select a company first',
+                  focusField: 'topbar-company',
+                }}
+                emptyMessage={language === 'bn' ? 'এই কোম্পানিতে কোনো কারখানা নেই' : 'No factories in this company'}
+                onChange={newFact => {
+                  setFactoryId(newFact);
+                  if (typeof window !== 'undefined') {
+                    window.localStorage.setItem('rice-mill-factory-id', newFact);
+                  }
+                }}
+              />
+            </Box>
             <Button
               size="small"
               variant="outlined"
@@ -1047,8 +1337,8 @@ export default function HomePage() {
 
           {page === 'dashboard' && <DashboardPage t={t} companyId={companyId} factoryId={factoryId} language={language} gateEntries={gateEntries} openGates={openGates} openPurchases={openPurchases} unpostedReceipts={unpostedReceipts} inventory={inventory} factorySummaries={factorySummaries} factoryComparisonRestricted={factoryComparisonRestricted} onNavigate={setPage} />}
           {page === 'gate' && <GatePage t={t} entries={filteredGates} onNew={() => setEntryDialog(true)} onAction={actionForGate} onUploadAttachment={uploadGateAttachment} onDownloadAttachment={downloadGateAttachment} />}
-          {page === 'procurement' && <ProcurementPage t={t} purchases={filteredPurchases} receipts={receipts} onNewReceipt={startReceipt} onApprove={purchase => apiRequest(`/procurement/purchases/${purchase.id}/approve`, { method: 'POST', body: JSON.stringify({ companyId, factoryId }) }).then(() => { setToast('Purchase approved'); loadData(); }).catch(reason => setError(messageOf(reason)))} />}
-          {page === 'receipts' && <ReceiptsPage t={t} receipts={filteredReceipts} onApprove={receipt => apiRequest(`/goods-receipts/${receipt.id}/approve`, { method: 'POST', body: JSON.stringify({ companyId, factoryId }) }).then(() => { setToast('GRN approved'); loadData(); }).catch(reason => setError(messageOf(reason)))} onPost={receipt => apiRequest(`/goods-receipts/${receipt.id}/post`, { method: 'POST', body: JSON.stringify({ companyId, factoryId }) }).then(() => { setToast('Stock posted from GRN'); loadData(); }).catch(reason => setError(messageOf(reason)))} />}
+          {page === 'procurement' && <ProcurementPage t={t} purchases={filteredPurchases} receipts={receipts} onNewReceipt={startReceipt} onApprove={purchase => apiRequest(`/procurement/purchases/${purchase.id}/approve`, { method: 'POST', body: JSON.stringify({ companyId, factoryId }) }).then(() => { setToast('Purchase approved'); loadData(); }).catch(reason => reportError(messageOf(reason)))} />}
+          {page === 'receipts' && <ReceiptsPage t={t} receipts={filteredReceipts} onApprove={receipt => apiRequest(`/goods-receipts/${receipt.id}/approve`, { method: 'POST', body: JSON.stringify({ companyId, factoryId }) }).then(() => { setToast('GRN approved'); loadData(); }).catch(reason => reportError(messageOf(reason)))} onPost={receipt => apiRequest(`/goods-receipts/${receipt.id}/post`, { method: 'POST', body: JSON.stringify({ companyId, factoryId }) }).then(() => { setToast('Stock posted from GRN'); loadData(); }).catch(reason => reportError(messageOf(reason)))} />}
           {page === 'inventory' && <Stack spacing={2}><StockLedgerPage companyId={companyId} factoryId={factoryId} language={language} onSaved={setToast} /><WarehousePage companyId={companyId} factoryId={factoryId} language={language} onSaved={setToast} /></Stack>}
           {page === 'paddyMaster' && <PaddyMasterPage companyId={companyId} language={language} onSaved={setToast} />}
           {page === 'riceMaster' && <RiceProductMasterPage companyId={companyId} language={language} onSaved={setToast} />}
@@ -1056,8 +1346,8 @@ export default function HomePage() {
           {page === 'packagingMaster' && <PackagingMasterPage companyId={companyId} factoryId={factoryId} language={language} onSaved={setToast} />}
           {page === 'partnerMaster' && <SupplierFarmerMasterPage companyId={companyId} language={language} onSaved={setToast} />}
           {page === 'brokerMaster' && <BrokerMasterPage companyId={companyId} language={language} onSaved={setToast} />}
-          {page === 'vehicleMaster' && <VehicleMasterPage companyId={companyId} factoryId={factoryId} language={language} onSaved={setToast} onError={setError} />}
-          {page === 'qualityControl' && <QualityControlPage companyId={companyId} factoryId={factoryId} language={language} onSaved={setToast} onError={setError} />}
+          {page === 'vehicleMaster' && <VehicleMasterPage companyId={companyId} factoryId={factoryId} language={language} onSaved={setToast} onError={reportError} />}
+          {page === 'qualityControl' && <QualityControlPage companyId={companyId} factoryId={factoryId} language={language} onSaved={setToast} onError={reportError} />}
           {page === 'moisturePolicies' && <MoisturePolicyPage companyId={companyId} factoryId={factoryId} language={language} onSaved={setToast} />}
           {page === 'purchaseInvoices' && <PurchaseInvoicePage companyId={companyId} factoryId={factoryId} language={language} onSaved={setToast} />}
           {page === 'landedCosts' && <LandedCostPage companyId={companyId} factoryId={factoryId} language={language} onSaved={setToast} />}
@@ -1091,7 +1381,7 @@ export default function HomePage() {
           {page === 'mobileOwner' && <MobileOwnerPage companyId={companyId} language={language} />}
           {page === 'backupManagement' && <BackupPage companyId={companyId} language={language} />}
           {page === 'transactionTrace' && <TransactionTracePage companyId={companyId} language={language} />}
-          {page === 'roles' && <RolesPage companyId={companyId} language={language} onSaved={setToast} onError={setError} />}
+          {page === 'roles' && <RolesPage companyId={companyId} language={language} onSaved={setToast} onError={reportError} />}
           {page === 'companyMaster' && <CompanyPage
             companies={companies}
             companyId={companyId}
@@ -1103,7 +1393,7 @@ export default function HomePage() {
               void loadCompanies();
             }}
             onCompanyCreated={setCompanyId}
-            onError={setError}
+            onError={reportError}
           />}
           {page === 'factoryMaster' && <FactoryPage
             companies={companies}
@@ -1114,11 +1404,11 @@ export default function HomePage() {
               setToast(message);
               void loadFactories(companyId);
             }}
-            onError={setError}
+            onError={reportError}
           />}
         </Box>
       </Box>
-      <EntryDialog open={entryDialog} onClose={() => setEntryDialog(false)} companyId={companyId} factoryId={factoryId} onSaved={() => { setToast(t.entryCreated); loadData(); }} t={t} />
+      <EntryDialog open={entryDialog} onClose={() => setEntryDialog(false)} companyId={companyId} factoryId={factoryId} onSaved={() => { setToast(t.entryCreated); loadData(); }} t={t} language={language} />
       <GlobalSearchDialog
         isOpen={isGlobalSearchOpen}
         onClose={() => setIsGlobalSearchOpen(false)}
@@ -1139,8 +1429,7 @@ export default function HomePage() {
         }}
         onMessage={setToast}
       />}
-      {action && <ActionDialog key={`${action.title}-${actionTarget}`} open onClose={() => setAction(null)} onDone={() => { setAction(null); loadData(); }} title={action.title} fields={action.fields} action={action.run} t={t} />}
-      <Snackbar open={Boolean(toast)} autoHideDuration={3500} onClose={() => setToast('')}><Alert severity="success" variant="filled" onClose={() => setToast('')}>{toast}</Alert></Snackbar>
+      {action && <ActionDialog key={`${action.title}-${actionTarget}`} open onClose={() => setAction(null)} onDone={() => { setAction(null); loadData(); }} title={action.title} fields={action.fields} action={action.run} t={t} language={language} />}
     </Box>
   </ThemeProvider>;
 }

@@ -2,12 +2,15 @@
 
 import { FormEvent, useEffect, useState } from 'react';
 import {
-  Alert, Box, Button, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle,
-  FormControl, InputLabel, MenuItem, Paper, Select, Stack, Table, TableBody, TableCell, TableHead,
-  TableRow, TextField, Typography,
+  Alert, Box, Button, Chip, CircularProgress,
+  Paper, Stack, Table, TableBody, TableCell, TableHead,
+  TableRow, Typography,
 } from '@mui/material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ApiError, apiRequest, queryString } from '@/lib/api';
+import { extractApiError, useToast } from '@/components/ui/toast-provider';
+import { focusFieldByName, validateFormFields } from '@/lib/form-validation';
+import { AppAutocomplete, AppSelect, AppTextField, FormDialog, FormGrid } from '@/components/form';
 
 type PackagingSpec = {
   bagType: string | null;
@@ -153,6 +156,7 @@ export function PackagingMasterPage({
   onSaved: (message: string) => void;
 }) {
   const t = labels[language];
+  const toast = useToast();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [activeFilter, setActiveFilter] = useState<'all' | 'true' | 'false'>('all');
@@ -161,9 +165,11 @@ export function PackagingMasterPage({
   const [editing, setEditing] = useState<PackagingItem | null>(null);
   const [values, setValues] = useState<PackagingForm>(blankForm);
   const [formError, setFormError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [costItem, setCostItem] = useState<PackagingItem | null>(null);
   const [unitCost, setUnitCost] = useState('');
   const [costError, setCostError] = useState('');
+  const [costFieldError, setCostFieldError] = useState('');
 
   const itemsQuery = useQuery({
     queryKey: ['packaging-master', companyId, search, activeFilter, page],
@@ -230,7 +236,11 @@ export function PackagingMasterPage({
       setFormError('');
       onSaved(language === 'bn' ? 'প্যাকেজিং সংরক্ষিত হয়েছে।' : 'Packaging saved.');
     },
-    onError: reason => setFormError(messageOf(reason, t.failed)),
+    onError: reason => {
+      const msg = extractApiError(reason, t.failed);
+      setFormError(msg);
+      toast.error(msg);
+    },
   });
 
   const updateMutation = useMutation({
@@ -254,9 +264,14 @@ export function PackagingMasterPage({
       await queryClient.invalidateQueries({ queryKey: ['packaging-master', companyId] });
       setOpen(false);
       setEditing(null);
+      setFieldErrors({});
       onSaved(language === 'bn' ? 'প্যাকেজিং হালনাগাদ হয়েছে।' : 'Packaging updated.');
     },
-    onError: reason => setFormError(messageOf(reason, t.failed)),
+    onError: reason => {
+      const msg = extractApiError(reason, t.failed);
+      setFormError(msg);
+      toast.error(msg);
+    },
   });
 
   const costMutation = useMutation({
@@ -271,15 +286,21 @@ export function PackagingMasterPage({
       await queryClient.invalidateQueries({ queryKey: ['packaging-cost', companyId, costItem?.id] });
       setCostItem(null);
       setCostError('');
+      setCostFieldError('');
       onSaved(language === 'bn' ? 'একক খরচ সংরক্ষিত হয়েছে।' : 'Unit cost saved.');
     },
-    onError: reason => setCostError(messageOf(reason, t.financialPermission)),
+    onError: reason => {
+      const msg = extractApiError(reason, t.financialPermission);
+      setCostError(msg);
+      toast.error(msg);
+    },
   });
 
   function startCreate() {
     setEditing(null);
     setValues(blankForm);
     setFormError('');
+    setFieldErrors({});
     setOpen(true);
   }
 
@@ -287,6 +308,7 @@ export function PackagingMasterPage({
     setEditing(item);
     setValues(toForm(item));
     setFormError('');
+    setFieldErrors({});
     setOpen(true);
   }
 
@@ -294,18 +316,49 @@ export function PackagingMasterPage({
     setCostItem(item);
     setUnitCost('');
     setCostError('');
+    setCostFieldError('');
   }
 
   function submit(event: FormEvent) {
     event.preventDefault();
+    const validation = validateFormFields(
+      [
+        { name: 'name', label: t.name, value: values.name, required: true },
+        { name: 'code', label: t.code, value: values.code, required: true },
+        { name: 'sizeKg', label: t.size, value: values.sizeKg, required: true, type: 'positiveNumber' },
+        { name: 'material', label: t.material, value: values.material, required: true },
+        ...(!editing ? [{ name: 'unitCost', label: t.unitCost, value: values.unitCost, required: true, type: 'nonNegativeNumber' as const, min: 0 }] : []),
+      ],
+      language,
+    );
+    if (!validation.valid) {
+      setFieldErrors(validation.errors);
+      setFormError(validation.summary);
+      toast.warning(validation.summary);
+      focusFieldByName(validation.firstField);
+      return;
+    }
     setFormError('');
+    setFieldErrors({});
     if (editing) updateMutation.mutate();
     else createMutation.mutate();
   }
 
   function submitCost(event: FormEvent) {
     event.preventDefault();
+    const validation = validateFormFields(
+      [{ name: 'costUnitCost', label: t.unitCost, value: unitCost, required: true, type: 'nonNegativeNumber', min: 0 }],
+      language,
+    );
+    if (!validation.valid) {
+      setCostFieldError(validation.errors.costUnitCost ?? '');
+      setCostError(validation.summary);
+      toast.warning(validation.summary);
+      focusFieldByName('costUnitCost');
+      return;
+    }
     setCostError('');
+    setCostFieldError('');
     costMutation.mutate();
   }
 
@@ -317,15 +370,25 @@ export function PackagingMasterPage({
       <Button variant="contained" onClick={startCreate}>{t.add}</Button>
     </Box>
     <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
-      <TextField size="small" fullWidth value={search} placeholder={t.search} onChange={event => { setSearch(event.target.value); setPage(1); }} />
-      <FormControl size="small" sx={{ minWidth: 160 }}><InputLabel>{t.filter}</InputLabel><Select label={t.filter} value={activeFilter} onChange={event => { setActiveFilter(event.target.value as typeof activeFilter); setPage(1); }}>
-        <MenuItem value="all">{t.all}</MenuItem><MenuItem value="true">{t.activeOnly}</MenuItem><MenuItem value="false">{t.inactiveOnly}</MenuItem>
-      </Select></FormControl>
+      <AppTextField fieldName="search" value={search} placeholder={t.search} onValueChange={v => { setSearch(v); setPage(1); }} />
+      <Box sx={{ minWidth: 180 }}>
+        <AppSelect
+          name="filter"
+          label={t.filter}
+          value={activeFilter}
+          onChange={v => { setActiveFilter(v as typeof activeFilter); setPage(1); }}
+          options={[
+            { value: 'all', label: t.all },
+            { value: 'true', label: t.activeOnly },
+            { value: 'false', label: t.inactiveOnly },
+          ]}
+        />
+      </Box>
     </Stack>
-    {itemsQuery.error && <Alert severity="error">{messageOf(itemsQuery.error, t.failed)}</Alert>}
-    {stockQuery.error && !(stockQuery.error instanceof ApiError && stockQuery.error.status === 403) && <Alert severity="error">{messageOf(stockQuery.error, t.failed)}</Alert>}
+    {itemsQuery.error && <Alert severity="error">{extractApiError(itemsQuery.error, t.failed)}</Alert>}
+    {stockQuery.error && !(stockQuery.error instanceof ApiError && stockQuery.error.status === 403) && <Alert severity="error">{extractApiError(stockQuery.error, t.failed)}</Alert>}
     {stockQuery.error instanceof ApiError && stockQuery.error.status === 403 && <Alert severity="info">{t.inventoryPermission}</Alert>}
-    {suppliersQuery.error && !suppliersForbidden && <Alert severity="error">{messageOf(suppliersQuery.error, t.failed)}</Alert>}
+    {suppliersQuery.error && !suppliersForbidden && <Alert severity="error">{extractApiError(suppliersQuery.error, t.failed)}</Alert>}
     <Paper variant="outlined" sx={{ overflowX: 'auto' }}>
       {itemsQuery.isLoading
         ? <Stack direction="row" spacing={1} alignItems="center" p={3}><CircularProgress size={18} /><Typography>{t.loading}</Typography></Stack>
@@ -369,37 +432,67 @@ export function PackagingMasterPage({
       <Button size="small" disabled={items.length < 100 || itemsQuery.isFetching} onClick={() => setPage(current => current + 1)}>{t.next}</Button>
     </Stack>
 
-    <Dialog open={open} onClose={() => setOpen(false)} fullWidth maxWidth="sm">
-      <DialogTitle>{editing ? t.edit : t.add}</DialogTitle>
-      <Box component="form" onSubmit={submit}>
-        <DialogContent><Stack spacing={2}>
-          {formError && <Alert severity="error">{formError}</Alert>}
-          <TextField label={t.name} required value={values.name} onChange={event => setValues(current => ({ ...current, name: event.target.value }))} />
-          <TextField label={t.code} required value={values.code} onChange={event => setValues(current => ({ ...current, code: event.target.value }))} />
-          <TextField label={t.bagType} value={values.bagType} onChange={event => setValues(current => ({ ...current, bagType: event.target.value }))} />
-          <TextField label={t.size} required type="number" inputProps={{ min: 0.001, step: 0.001 }} value={values.sizeKg} onChange={event => setValues(current => ({ ...current, sizeKg: event.target.value }))} />
-          <TextField label={t.material} required value={values.material} onChange={event => setValues(current => ({ ...current, material: event.target.value }))} />
-          {!editing && <TextField label={t.unitCost} required type="number" inputProps={{ min: 0, step: 0.0001 }} value={values.unitCost} onChange={event => setValues(current => ({ ...current, unitCost: event.target.value }))} />}
-          <FormControl fullWidth><InputLabel>{t.supplier}</InputLabel><Select label={t.supplier} value={values.supplierPartnerId} onChange={event => setValues(current => ({ ...current, supplierPartnerId: event.target.value }))}><MenuItem value="">{t.noSupplier}</MenuItem>{suppliers.map(supplier => <MenuItem key={supplier.id} value={supplier.id}>{supplier.name}</MenuItem>)}</Select></FormControl>
-          {suppliersForbidden && <Typography variant="caption" color="text.secondary">{t.noSupplier}</Typography>}
-          {editing && <FormControl fullWidth><InputLabel>{t.status}</InputLabel><Select label={t.status} value={values.active ? 'true' : 'false'} onChange={event => setValues(current => ({ ...current, active: event.target.value === 'true' }))}><MenuItem value="true">{t.enabled}</MenuItem><MenuItem value="false">{t.disabled}</MenuItem></Select></FormControl>}
-        </Stack></DialogContent>
-        <DialogActions><Button onClick={() => setOpen(false)}>{t.cancel}</Button><Button type="submit" variant="contained" disabled={createMutation.isPending || updateMutation.isPending}>{createMutation.isPending || updateMutation.isPending ? <CircularProgress size={18} /> : t.save}</Button></DialogActions>
-      </Box>
-    </Dialog>
+    <FormDialog
+      open={open}
+      onClose={() => setOpen(false)}
+      onSubmit={submit}
+      title={editing ? t.edit : t.add}
+      error={formError}
+      onClearError={() => setFormError('')}
+      loading={createMutation.isPending || updateMutation.isPending}
+      submitLabel={t.save}
+      cancelLabel={t.cancel}
+      maxWidth="md"
+    >
+      <FormGrid columns={2}>
+        <AppTextField fieldName="name" label={t.name} required value={values.name} errorText={fieldErrors.name} onValueChange={v => { setValues(c => ({ ...c, name: v })); setFieldErrors(p => ({ ...p, name: '' })); }} />
+        <AppTextField fieldName="code" label={t.code} required value={values.code} errorText={fieldErrors.code} onValueChange={v => { setValues(c => ({ ...c, code: v })); setFieldErrors(p => ({ ...p, code: '' })); }} />
+        <AppTextField fieldName="bagType" label={t.bagType} value={values.bagType} onValueChange={v => setValues(c => ({ ...c, bagType: v }))} />
+        <AppTextField fieldName="sizeKg" label={t.size} unit="KG" required type="number" inputProps={{ min: 0.001, step: 0.001 }} value={values.sizeKg} errorText={fieldErrors.sizeKg} onValueChange={v => { setValues(c => ({ ...c, sizeKg: v })); setFieldErrors(p => ({ ...p, sizeKg: '' })); }} />
+        <AppTextField fieldName="material" label={t.material} required value={values.material} errorText={fieldErrors.material} onValueChange={v => { setValues(c => ({ ...c, material: v })); setFieldErrors(p => ({ ...p, material: '' })); }} />
+        {!editing && (
+          <AppTextField fieldName="unitCost" label={t.unitCost} prefixText="৳" required type="number" inputProps={{ min: 0, step: 0.0001 }} value={values.unitCost} errorText={fieldErrors.unitCost} onValueChange={v => { setValues(c => ({ ...c, unitCost: v })); setFieldErrors(p => ({ ...p, unitCost: '' })); }} />
+        )}
+        <AppAutocomplete
+          fieldName="supplierPartnerId"
+          label={t.supplier}
+          value={values.supplierPartnerId}
+          loading={suppliersQuery.isLoading}
+          disabled={suppliersForbidden}
+          disabledReason={suppliersForbidden ? (language === 'bn' ? 'সরবরাহকারী তালিকা দেখার অনুমতি নেই' : 'Supplier directory access is restricted') : undefined}
+          onChange={v => setValues(c => ({ ...c, supplierPartnerId: v }))}
+          options={suppliers.map(s => ({ value: s.id, label: s.name }))}
+          placeholder={t.noSupplier}
+          emptyMessage={t.noSupplier}
+        />
+        {editing && (
+          <AppSelect
+            fieldName="active"
+            label={t.status}
+            value={values.active ? 'true' : 'false'}
+            onChange={v => setValues(c => ({ ...c, active: v === 'true' }))}
+            options={[{ value: 'true', label: t.enabled }, { value: 'false', label: t.disabled }]}
+          />
+        )}
+      </FormGrid>
+    </FormDialog>
 
-    <Dialog open={Boolean(costItem)} onClose={() => setCostItem(null)} fullWidth maxWidth="xs">
-      <DialogTitle>{t.cost}: {costItem?.name}</DialogTitle>
-      <Box component="form" onSubmit={submitCost}>
-        <DialogContent><Stack spacing={2}>
-          {costError && <Alert severity="error">{costError}</Alert>}
-          {costQuery.isError && !(costQuery.error instanceof ApiError && costQuery.error.status === 403) && <Alert severity="error">{messageOf(costQuery.error, t.financialPermission)}</Alert>}
-          {costQuery.error instanceof ApiError && costQuery.error.status === 403 && <Alert severity="info">{t.financialPermission}</Alert>}
-          {costQuery.isLoading && <CircularProgress size={20} />}
-          <TextField label={t.unitCost} required type="number" inputProps={{ min: 0, step: 0.0001 }} value={unitCost} onChange={event => setUnitCost(event.target.value)} />
-        </Stack></DialogContent>
-        <DialogActions><Button onClick={() => setCostItem(null)}>{t.cancel}</Button><Button type="submit" variant="contained" disabled={costMutation.isPending || costQuery.isLoading || Boolean(costQuery.error)}>{costMutation.isPending ? <CircularProgress size={18} /> : t.saveCost}</Button></DialogActions>
-      </Box>
-    </Dialog>
+    <FormDialog
+      open={Boolean(costItem)}
+      onClose={() => setCostItem(null)}
+      onSubmit={submitCost}
+      title={`${t.cost}: ${costItem?.name ?? ''}`}
+      error={costError || (costQuery.isError && !(costQuery.error instanceof ApiError && costQuery.error.status === 403) ? extractApiError(costQuery.error, t.financialPermission) : '')}
+      onClearError={() => setCostError('')}
+      loading={costMutation.isPending}
+      submitDisabled={costQuery.isLoading || Boolean(costQuery.error)}
+      submitLabel={t.saveCost}
+      cancelLabel={t.cancel}
+      maxWidth="xs"
+    >
+      {costQuery.error instanceof ApiError && costQuery.error.status === 403 && <Alert severity="info">{t.financialPermission}</Alert>}
+      {costQuery.isLoading && <Stack direction="row" spacing={1} alignItems="center"><CircularProgress size={18} /><Typography variant="caption">Loading unit cost...</Typography></Stack>}
+      <AppTextField fieldName="costUnitCost" label={t.unitCost} prefixText="৳" required type="number" inputProps={{ min: 0, step: 0.0001 }} value={unitCost} errorText={costFieldError} onValueChange={v => { setUnitCost(v); setCostFieldError(''); }} />
+    </FormDialog>
   </Stack>;
 }

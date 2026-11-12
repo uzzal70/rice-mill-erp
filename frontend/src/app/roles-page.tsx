@@ -3,11 +3,13 @@
 import { useMemo, useState } from 'react';
 import {
   Accordion, AccordionDetails, AccordionSummary, Alert, Box, Button, Checkbox, Chip, CircularProgress,
-  Divider, FormControl, FormControlLabel, InputLabel, MenuItem, Paper, Select, Stack, Typography,
+  Divider, FormControlLabel, Paper, Stack, Typography,
 } from '@mui/material';
 import ExpandMoreRoundedIcon from '@mui/icons-material/ExpandMoreRounded';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/api';
+import { AppAutocomplete } from '@/components/form';
+import { extractApiError, useToast } from '@/components/ui/toast-provider';
 
 type Permission = { id: string; resource: string; action: string; description?: string | null };
 type Role = {
@@ -63,6 +65,7 @@ export function RolesPage({
   onError: (message: string) => void;
 }) {
   const t = labels[language];
+  const toast = useToast();
   const queryClient = useQueryClient();
   const [roleId, setRoleId] = useState('');
   const [permissionIds, setPermissionIds] = useState<string[]>([]);
@@ -100,7 +103,11 @@ export function RolesPage({
       await queryClient.invalidateQueries({ queryKey: ['roles', companyId] });
       onSaved(t.saved);
     },
-    onError: error => onError(error instanceof Error ? error.message : t.failed),
+    onError: (err) => {
+      const msg = extractApiError(err, t.failed);
+      onError(msg);
+      toast.error(msg);
+    },
   });
 
   function chooseRole(nextRoleId: string) {
@@ -127,18 +134,21 @@ export function RolesPage({
     {selectedRole?.systemRole && <Alert severity="info">{t.readOnly}</Alert>}
     <Paper className="workspace-card" elevation={0} sx={{ p: 2.5 }}>
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} alignItems={{ sm: 'center' }}>
-        <FormControl size="small" sx={{ minWidth: { sm: 300 }, flex: 1 }}>
-          <InputLabel>{t.role}</InputLabel>
-          <Select label={t.role} value={roleId} onChange={event => chooseRole(event.target.value)}>
-            {roles.map(role => <MenuItem key={role.id} value={role.id}>
-              <Stack direction="row" spacing={1} alignItems="center">
-                <span>{role.name}</span><Chip size="small" label={role.code} />
-                {role.systemRole && <Chip size="small" color="default" label="SYSTEM" />}
-              </Stack>
-            </MenuItem>)}
-          </Select>
-        </FormControl>
-        <Button onClick={() => { void rolesQuery.refetch(); void permissionsQuery.refetch(); }} disabled={loading}>{t.refresh}</Button>
+        <Box sx={{ minWidth: { sm: 320 }, flex: 1 }}>
+          <AppAutocomplete
+            fieldName="roleId"
+            label={t.role}
+            value={roleId}
+            loading={rolesQuery.isLoading}
+            options={roles.map((role) => ({
+              value: role.id,
+              label: role.name,
+              badge: role.systemRole ? `${role.code} · SYSTEM` : role.code,
+            }))}
+            onChange={(val) => chooseRole(val)}
+          />
+        </Box>
+        <Button variant="outlined" onClick={() => { void rolesQuery.refetch(); void permissionsQuery.refetch(); }} disabled={loading}>{t.refresh}</Button>
       </Stack>
     </Paper>
     {loading && <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}><CircularProgress size={26} /><Typography ml={1.5}>{t.loading}</Typography></Box>}

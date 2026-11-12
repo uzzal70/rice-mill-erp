@@ -2,11 +2,14 @@
 
 import { FormEvent, useState } from 'react';
 import {
-  Alert, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle, Paper, Stack, Table, TableBody,
-  TableCell, TableHead, TableRow, TextField, Typography,
+  Alert, Box, Button, Chip, Paper, Stack, Table, TableBody,
+  TableCell, TableHead, TableRow, Typography,
 } from '@mui/material';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiRequest, queryString } from '@/lib/api';
+import { extractApiError, useToast } from '@/components/ui/toast-provider';
+import { focusFieldByName, validateFormFields } from '@/lib/form-validation';
+import { AppTextField, FormDialog, FormGrid, FormSection } from '@/components/form';
 
 type PurchaseInvoice = {
   id: string;
@@ -103,10 +106,16 @@ export function PurchaseInvoicePage({
   onSaved: (message: string) => void;
 }) {
   const t = labels[language];
+  const bn = language === 'bn';
+  const toast = useToast();
   const queryClient = useQueryClient();
   const [receipt, setReceipt] = useState<GoodsReceipt | null>(null);
   const [form, setForm] = useState<InvoiceForm>(emptyForm);
   const [error, setError] = useState('');
+  const [dialogError, setDialogError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
+  const [actionBusyId, setActionBusyId] = useState('');
   const scope = queryString({ companyId, factoryId, page: 1, pageSize: 100 });
   const invoicesQuery = useQuery({
     queryKey: ['purchase-invoices', companyId, factoryId],
@@ -122,7 +131,8 @@ export function PurchaseInvoicePage({
   const eligibleReceipts = (receiptsQuery.data?.data ?? []).filter(row => row.status === 'POSTED' && !row.purchaseInvoice);
 
   function startInvoice(row: GoodsReceipt) {
-    setError('');
+    setDialogError('');
+    setFieldErrors({});
     setForm(emptyForm());
     setReceipt(row);
   }
@@ -130,7 +140,29 @@ export function PurchaseInvoicePage({
   async function createInvoice(event: FormEvent) {
     event.preventDefault();
     if (!receipt) return;
-    setError('');
+    const validation = validateFormFields(
+      [
+        { name: 'invoiceNumber', label: t.invoice, value: form.invoiceNumber, required: true },
+        { name: 'invoiceDate', label: t.date, value: form.invoiceDate, required: true, type: 'date' },
+        { name: 'qualityDeductionAmount', label: t.qualityDeduction, value: form.qualityDeductionAmount, required: true, type: 'nonNegativeNumber', min: 0 },
+        { name: 'transportCost', label: t.transport, value: form.transportCost, type: 'nonNegativeNumber', min: 0 },
+        { name: 'loadingCost', label: t.loadingCost, value: form.loadingCost, type: 'nonNegativeNumber', min: 0 },
+        { name: 'unloadingCost', label: t.unloading, value: form.unloadingCost, type: 'nonNegativeNumber', min: 0 },
+        { name: 'otherCost', label: t.otherCost, value: form.otherCost, type: 'nonNegativeNumber', min: 0 },
+      ],
+      language,
+    );
+    if (!validation.valid) {
+      setFieldErrors(validation.errors);
+      setDialogError(validation.summary);
+      toast.warning(validation.summary);
+      focusFieldByName(validation.firstField);
+      return;
+    }
+
+    setDialogError('');
+    setFieldErrors({});
+    setSaving(true);
     try {
       await apiRequest('/purchase-invoices', {
         method: 'POST',
@@ -139,6 +171,7 @@ export function PurchaseInvoicePage({
           factoryId,
           goodsReceiptId: receipt.id,
           ...form,
+          invoiceNumber: form.invoiceNumber.trim(),
         }),
       });
       setReceipt(null);
@@ -148,20 +181,30 @@ export function PurchaseInvoicePage({
         queryClient.invalidateQueries({ queryKey: ['purchase-invoice-grns', companyId, factoryId] }),
       ]);
     } catch (reason) {
-      setError(messageOf(reason, t.invalidDeduction));
+      const msg = extractApiError(reason, t.invalidDeduction);
+      setDialogError(msg);
+      toast.error(msg);
+    } finally {
+      setSaving(false);
     }
   }
 
   async function action(invoice: PurchaseInvoice, operation: 'approve' | 'post') {
     setError('');
+    setActionBusyId(invoice.id);
     try {
       await apiRequest(`/purchase-invoices/${encodeURIComponent(invoice.id)}/${operation}`, {
         method: 'POST',
         body: JSON.stringify({ companyId, factoryId }),
       });
+      onSaved(operation === 'approve' ? (bn ? 'ইনভয়েস অনুমোদিত হয়েছে।' : 'Invoice approved.') : (bn ? 'ইনভয়েস পোস্ট হয়েছে।' : 'Invoice posted.'));
       await queryClient.invalidateQueries({ queryKey: ['purchase-invoices', companyId, factoryId] });
     } catch (reason) {
-      setError(messageOf(reason, t.forbidden));
+      const msg = extractApiError(reason, t.forbidden);
+      setError(msg);
+      toast.error(msg);
+    } finally {
+      setActionBusyId('');
     }
   }
 
@@ -169,7 +212,7 @@ export function PurchaseInvoicePage({
   if (invoicesQuery.isLoading || receiptsQuery.isLoading) return <Typography color="text.secondary">{t.loading}</Typography>;
 
   return <Stack spacing={2}>
-    {(invoicesQuery.isError || receiptsQuery.isError) && <Alert severity="error">{messageOf(invoicesQuery.error ?? receiptsQuery.error, t.forbidden)}</Alert>}
+    {(invoicesQuery.isError || receiptsQuery.isError) && <Alert severity="error">{extractApiError(invoicesQuery.error ?? receiptsQuery.error, t.forbidden)}</Alert>}
     {error && <Alert severity="error" onClose={() => setError('')}>{error}</Alert>}
     <Paper className="workspace-card" elevation={0} sx={{ p: 2, overflowX: 'auto' }}>
       <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ xs: 'stretch', sm: 'center' }} gap={2} mb={2}>
@@ -230,34 +273,38 @@ export function PurchaseInvoicePage({
             <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums', fontWeight: 700, color: 'primary.dark' }}>{money(invoice.netSupplierPayable)}</TableCell>
             <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{money(String(Number(invoice.transportCost) + Number(invoice.loadingCost) + Number(invoice.unloadingCost) + Number(invoice.otherCost)))}</TableCell>
             <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}><Chip size="small" label={invoice.status} color={invoice.status === 'POSTED' ? 'success' : invoice.status === 'APPROVED' ? 'info' : 'default'} /></TableCell>
-            <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>{invoice.status === 'DRAFT' ? <Button size="small" variant="outlined" onClick={() => action(invoice, 'approve')}>{t.approve}</Button> : invoice.status === 'APPROVED' ? <Button size="small" variant="contained" onClick={() => action(invoice, 'post')}>{t.post}</Button> : '—'}</TableCell>
+            <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>{invoice.status === 'DRAFT' ? <Button size="small" variant="outlined" disabled={actionBusyId === invoice.id} onClick={() => action(invoice, 'approve')}>{t.approve}</Button> : invoice.status === 'APPROVED' ? <Button size="small" variant="contained" disabled={actionBusyId === invoice.id} onClick={() => action(invoice, 'post')}>{t.post}</Button> : '—'}</TableCell>
           </TableRow>)}
           {!invoices.length && <TableRow><TableCell colSpan={14} align="center" sx={{ color: 'text.secondary', py: 3 }}>{t.noInvoices}</TableCell></TableRow>}
         </TableBody>
       </Table>
     </Paper>
-    <Dialog open={Boolean(receipt)} onClose={() => setReceipt(null)} fullWidth maxWidth="md">
-      <Box component="form" onSubmit={createInvoice}>
-        <DialogTitle>{t.editTitle} · {receipt?.receiptNumber}</DialogTitle>
-        <DialogContent>
-          {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-          <Stack spacing={2} sx={{ pt: 1 }}>
-            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-              <TextField required fullWidth label={t.invoice} value={form.invoiceNumber} onChange={event => setForm({ ...form, invoiceNumber: event.target.value })} />
-              <TextField required type="date" label={t.date} value={form.invoiceDate} onChange={event => setForm({ ...form, invoiceDate: event.target.value })} InputLabelProps={{ shrink: true }} />
-              <TextField required type="number" inputProps={{ min: 0, step: 0.01 }} label={t.qualityDeduction} value={form.qualityDeductionAmount} onChange={event => setForm({ ...form, qualityDeductionAmount: event.target.value })} />
-            </Stack>
-            <Typography variant="caption" color="text.secondary">{t.costsHelp}</Typography>
-            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-              <TextField type="number" inputProps={{ min: 0, step: 0.01 }} label={t.transport} value={form.transportCost} onChange={event => setForm({ ...form, transportCost: event.target.value })} />
-              <TextField type="number" inputProps={{ min: 0, step: 0.01 }} label={t.loadingCost} value={form.loadingCost} onChange={event => setForm({ ...form, loadingCost: event.target.value })} />
-              <TextField type="number" inputProps={{ min: 0, step: 0.01 }} label={t.unloading} value={form.unloadingCost} onChange={event => setForm({ ...form, unloadingCost: event.target.value })} />
-              <TextField type="number" inputProps={{ min: 0, step: 0.01 }} label={t.otherCost} value={form.otherCost} onChange={event => setForm({ ...form, otherCost: event.target.value })} />
-            </Stack>
-          </Stack>
-        </DialogContent>
-        <DialogActions><Button onClick={() => setReceipt(null)}>{t.cancel}</Button><Button type="submit" variant="contained">{t.save}</Button></DialogActions>
-      </Box>
-    </Dialog>
+    <FormDialog
+      open={Boolean(receipt)}
+      onClose={() => setReceipt(null)}
+      onSubmit={createInvoice}
+      title={`${t.editTitle} · ${receipt?.receiptNumber ?? ''}`}
+      subtitle={receipt ? `${receipt.purchaseOrder.supplier.name} · ${receipt.purchaseOrder.item.name} (${receipt.quantity} KG)` : undefined}
+      error={dialogError}
+      onClearError={() => setDialogError('')}
+      loading={saving}
+      submitLabel={t.save}
+      cancelLabel={t.cancel}
+      maxWidth="md"
+    >
+      <FormGrid columns={3}>
+        <AppTextField fieldName="invoiceNumber" required label={t.invoice} value={form.invoiceNumber} errorText={fieldErrors.invoiceNumber} onValueChange={v => { setForm({ ...form, invoiceNumber: v }); setFieldErrors(p => ({ ...p, invoiceNumber: '' })); }} />
+        <AppTextField fieldName="invoiceDate" required type="date" label={t.date} value={form.invoiceDate} errorText={fieldErrors.invoiceDate} onValueChange={v => { setForm({ ...form, invoiceDate: v }); setFieldErrors(p => ({ ...p, invoiceDate: '' })); }} />
+        <AppTextField fieldName="qualityDeductionAmount" required prefixText="৳" type="number" inputProps={{ min: 0, step: 0.01 }} label={t.qualityDeduction} value={form.qualityDeductionAmount} errorText={fieldErrors.qualityDeductionAmount} onValueChange={v => { setForm({ ...form, qualityDeductionAmount: v }); setFieldErrors(p => ({ ...p, qualityDeductionAmount: '' })); }} />
+      </FormGrid>
+      <FormSection title={bn ? 'পৃথক পরিবহন ও হ্যান্ডলিং খরচ' : 'Separate Operating Costs'} subtitle={t.costsHelp}>
+        <FormGrid columns={{ xs: 1, sm: 2, md: 4 }}>
+          <AppTextField fieldName="transportCost" prefixText="৳" type="number" inputProps={{ min: 0, step: 0.01 }} label={t.transport} value={form.transportCost} errorText={fieldErrors.transportCost} onValueChange={v => { setForm({ ...form, transportCost: v }); setFieldErrors(p => ({ ...p, transportCost: '' })); }} />
+          <AppTextField fieldName="loadingCost" prefixText="৳" type="number" inputProps={{ min: 0, step: 0.01 }} label={t.loadingCost} value={form.loadingCost} errorText={fieldErrors.loadingCost} onValueChange={v => { setForm({ ...form, loadingCost: v }); setFieldErrors(p => ({ ...p, loadingCost: '' })); }} />
+          <AppTextField fieldName="unloadingCost" prefixText="৳" type="number" inputProps={{ min: 0, step: 0.01 }} label={t.unloading} value={form.unloadingCost} errorText={fieldErrors.unloadingCost} onValueChange={v => { setForm({ ...form, unloadingCost: v }); setFieldErrors(p => ({ ...p, unloadingCost: '' })); }} />
+          <AppTextField fieldName="otherCost" prefixText="৳" type="number" inputProps={{ min: 0, step: 0.01 }} label={t.otherCost} value={form.otherCost} errorText={fieldErrors.otherCost} onValueChange={v => { setForm({ ...form, otherCost: v }); setFieldErrors(p => ({ ...p, otherCost: '' })); }} />
+        </FormGrid>
+      </FormSection>
+    </FormDialog>
   </Stack>;
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import React, { useState } from 'react';
 import {
   Alert,
   Box,
@@ -8,11 +8,6 @@ import {
   Card,
   CardContent,
   Chip,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  Divider,
   IconButton,
   Paper,
   Stack,
@@ -23,7 +18,6 @@ import {
   TableHead,
   TableRow,
   Tabs,
-  TextField,
   Tooltip,
   Typography,
 } from '@mui/material';
@@ -38,6 +32,9 @@ import InsertDriveFileRoundedIcon from '@mui/icons-material/InsertDriveFileRound
 import VerifiedUserRoundedIcon from '@mui/icons-material/VerifiedUserRounded';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/api';
+import { AppSelect, AppTextField, FormDialog, FormGrid, FormSection } from '@/components/form';
+import { extractApiError, useToast } from '@/components/ui/toast-provider';
+import { FieldRule, focusFieldByName, validateFormFields } from '@/lib/form-validation';
 
 interface DocumentsPageProps {
   companyId: string;
@@ -67,12 +64,16 @@ export function DocumentsPage({
   onSaved,
 }: DocumentsPageProps) {
   const queryClient = useQueryClient();
+  const toast = useToast();
   const isBn = language === 'bn';
 
   const [selectedCategory, setSelectedCategory] = useState('ALL');
   const [searchTerm, setSearchTerm] = useState('');
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [editingDoc, setEditingDoc] = useState<any | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   // Form states
   const [formCategory, setFormCategory] = useState('TRADE_LICENSE');
@@ -121,6 +122,8 @@ export function DocumentsPage({
     setFormFileName('');
     setFormFileUrl('');
     setFormRemarks('');
+    setErrorMsg(null);
+    setFieldErrors({});
     setCreateDialogOpen(true);
   };
 
@@ -136,25 +139,58 @@ export function DocumentsPage({
     setFormFileName(doc.fileName || '');
     setFormFileUrl(doc.fileUrl || '');
     setFormRemarks(doc.remarks || '');
+    setErrorMsg(null);
+    setFieldErrors({});
     setCreateDialogOpen(true);
   };
 
-  const handleSaveDocument = async () => {
+  const handleSaveDocument = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    const rules: FieldRule[] = [
+      { name: 'formCategory', label: isBn ? 'নথির ধরন' : 'Document Category', value: formCategory, required: true, isSelect: true },
+      { name: 'formTitle', label: isBn ? 'নথির শিরোনাম' : 'Document Title', value: formTitle, required: true },
+    ];
+    if (formReminderDays.trim()) {
+      rules.push({ name: 'formReminderDays', label: isBn ? 'রিমাইন্ডার দিন' : 'Reminder Days', value: formReminderDays, type: 'nonNegativeNumber' });
+    }
+    if (formIssueDate && formExpiryDate && formExpiryDate < formIssueDate) {
+      rules.push({
+        name: 'formExpiryDate',
+        label: isBn ? 'মেয়াদ উত্তীর্ণের তারিখ' : 'Expiry Date',
+        value: formExpiryDate,
+        custom: () =>
+          isBn
+            ? 'মেয়াদ উত্তীর্ণের তারিখ ইস্যুর তারিখের আগে হতে পারবে না।'
+            : 'Expiry Date cannot be earlier than Issue Date.',
+      });
+    }
+    const validation = validateFormFields(rules, language);
+    if (!validation.valid) {
+      setFieldErrors(validation.errors);
+      setErrorMsg(validation.summary);
+      toast.warning(validation.summary);
+      focusFieldByName(validation.firstField);
+      return;
+    }
+
+    setBusy(true);
+    setErrorMsg(null);
+    setFieldErrors({});
     try {
       if (editingDoc) {
         await apiRequest(`/documents/${editingDoc.id}?companyId=${companyId}`, {
           method: 'PUT',
           body: JSON.stringify({
             category: formCategory,
-            title: formTitle,
-            documentNumber: formDocNumber || undefined,
-            issuingAuthority: formAuthority || undefined,
+            title: formTitle.trim(),
+            documentNumber: formDocNumber.trim() || undefined,
+            issuingAuthority: formAuthority.trim() || undefined,
             issueDate: formIssueDate || undefined,
             expiryDate: formExpiryDate || undefined,
             reminderDaysBefore: Number(formReminderDays) || 30,
-            fileName: formFileName || undefined,
-            fileUrl: formFileUrl || undefined,
-            remarks: formRemarks || undefined,
+            fileName: formFileName.trim() || undefined,
+            fileUrl: formFileUrl.trim() || undefined,
+            remarks: formRemarks.trim() || undefined,
           }),
         });
         onSaved(isBn ? 'নথিপত্র সফলভাবে আপডেট করা হয়েছে।' : 'Document updated successfully.');
@@ -163,15 +199,15 @@ export function DocumentsPage({
           method: 'POST',
           body: JSON.stringify({
             category: formCategory,
-            title: formTitle,
-            documentNumber: formDocNumber || undefined,
-            issuingAuthority: formAuthority || undefined,
+            title: formTitle.trim(),
+            documentNumber: formDocNumber.trim() || undefined,
+            issuingAuthority: formAuthority.trim() || undefined,
             issueDate: formIssueDate || undefined,
             expiryDate: formExpiryDate || undefined,
             reminderDaysBefore: Number(formReminderDays) || 30,
-            fileName: formFileName || undefined,
-            fileUrl: formFileUrl || undefined,
-            remarks: formRemarks || undefined,
+            fileName: formFileName.trim() || undefined,
+            fileUrl: formFileUrl.trim() || undefined,
+            remarks: formRemarks.trim() || undefined,
             factoryId: factoryId || undefined,
           }),
         });
@@ -179,8 +215,12 @@ export function DocumentsPage({
       }
       setCreateDialogOpen(false);
       handleRefresh();
-    } catch (err: any) {
-      alert(err.message || 'Error saving document');
+    } catch (err: unknown) {
+      const msg = extractApiError(err, 'Error saving document');
+      setErrorMsg(msg);
+      toast.error(msg);
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -194,8 +234,8 @@ export function DocumentsPage({
       });
       onSaved(isBn ? 'নথি মুছে ফেলা হয়েছে।' : 'Document deleted successfully.');
       handleRefresh();
-    } catch (err: any) {
-      alert(err.message || 'Error deleting document');
+    } catch (err: unknown) {
+      toast.error(extractApiError(err, 'Error deleting document'));
     }
   };
 
@@ -339,11 +379,12 @@ export function DocumentsPage({
               />
             ))}
           </Box>
-          <TextField
-            size="small"
+          <AppTextField
+            fieldName="searchDocuments"
+            fullWidth={false}
             placeholder={isBn ? 'নথি খুঁজুন (নাম, নম্বর, কর্তৃপক্ষ)...' : 'Search documents...'}
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onValueChange={(val) => setSearchTerm(val)}
             sx={{ minWidth: 260 }}
           />
         </Stack>
@@ -461,117 +502,140 @@ export function DocumentsPage({
       </Paper>
 
       {/* Dialog: Create or Edit Document */}
-      <Dialog open={createDialogOpen} onClose={() => setCreateDialogOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>
-          {editingDoc
+      <FormDialog
+        open={createDialogOpen}
+        onClose={() => !busy && setCreateDialogOpen(false)}
+        onSubmit={handleSaveDocument}
+        title={
+          editingDoc
             ? (isBn ? 'নথিপত্র তথ্য হালনাগাদ' : 'Update Document')
-            : (isBn ? 'নতুন নথিপত্র আপলোড ও সংরক্ষণ' : 'Upload & Register Document')}
-        </DialogTitle>
-        <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 2 }}>
-          <TextField
-            select
-            SelectProps={{ native: true }}
-            label={isBn ? 'নথির ধরন / ক্যাটাগরি' : 'Document Category'}
-            value={formCategory}
-            onChange={(e) => setFormCategory(e.target.value)}
-            required
-            fullWidth
-          >
-            {CATEGORIES.filter((c) => c.key !== 'ALL').map((c) => (
-              <option key={c.key} value={c.key}>
-                {isBn ? c.labelBn : c.labelEn}
-              </option>
-            ))}
-          </TextField>
-
-          <TextField
-            label={isBn ? 'নথির শিরোনাম / বিবরণ' : 'Document Title'}
-            value={formTitle}
-            onChange={(e) => setFormTitle(e.target.value)}
-            required
-            fullWidth
-          />
-
-          <Stack direction="row" gap={2}>
-            <TextField
-              label={isBn ? 'লাইসেন্স / সার্টিফিকেট নম্বর' : 'Document / Certificate #'}
-              value={formDocNumber}
-              onChange={(e) => setFormDocNumber(e.target.value)}
-              fullWidth
+            : (isBn ? 'নতুন নথিপত্র আপলোড ও সংরক্ষণ' : 'Upload & Register Document')
+        }
+        error={errorMsg}
+        onClearError={() => setErrorMsg(null)}
+        loading={busy}
+        submitLabel={
+          editingDoc
+            ? (isBn ? 'আপডেট করুন' : 'Update')
+            : (isBn ? 'সংরক্ষণ করুন' : 'Save Document')
+        }
+        cancelLabel={isBn ? 'বাতিল' : 'Cancel'}
+        maxWidth="sm"
+      >
+        <FormGrid columns={{ xs: 1, sm: 2 }}>
+          <Box sx={{ gridColumn: { sm: 'span 2' } }}>
+            <AppSelect
+              fieldName="formCategory"
+              required
+              label={isBn ? 'নথির ধরন / ক্যাটাগরি' : 'Document Category'}
+              value={formCategory}
+              errorText={fieldErrors.formCategory}
+              options={CATEGORIES.filter((c) => c.key !== 'ALL').map((c) => ({
+                value: c.key,
+                label: isBn ? c.labelBn : c.labelEn,
+              }))}
+              onChange={(val) => {
+                setFormCategory(val);
+                setFieldErrors((p) => ({ ...p, formCategory: '' }));
+              }}
             />
-            <TextField
-              label={isBn ? 'প্রদানকারী সংস্থা / কর্তৃপক্ষ' : 'Issuing Authority'}
-              value={formAuthority}
-              onChange={(e) => setFormAuthority(e.target.value)}
-              fullWidth
+          </Box>
+
+          <Box sx={{ gridColumn: { sm: 'span 2' } }}>
+            <AppTextField
+              fieldName="formTitle"
+              required
+              label={isBn ? 'নথির শিরোনাম / বিবরণ' : 'Document Title'}
+              value={formTitle}
+              errorText={fieldErrors.formTitle}
+              onValueChange={(val) => {
+                setFormTitle(val);
+                setFieldErrors((p) => ({ ...p, formTitle: '' }));
+              }}
             />
-          </Stack>
+          </Box>
 
-          <Stack direction="row" gap={2}>
-            <TextField
-              label={isBn ? 'ইস্যুর তারিখ' : 'Issue Date'}
-              type="date"
-              InputLabelProps={{ shrink: true }}
-              value={formIssueDate}
-              onChange={(e) => setFormIssueDate(e.target.value)}
-              fullWidth
+          <AppTextField
+            fieldName="formDocNumber"
+            label={isBn ? 'লাইসেন্স / সার্টিফিকেট নম্বর' : 'Document / Certificate #'}
+            value={formDocNumber}
+            onValueChange={(val) => setFormDocNumber(val)}
+          />
+          <AppTextField
+            fieldName="formAuthority"
+            label={isBn ? 'প্রদানকারী সংস্থা / কর্তৃপক্ষ' : 'Issuing Authority'}
+            value={formAuthority}
+            onValueChange={(val) => setFormAuthority(val)}
+          />
+
+          <AppTextField
+            fieldName="formIssueDate"
+            label={isBn ? 'ইস্যুর তারিখ' : 'Issue Date'}
+            type="date"
+            InputLabelProps={{ shrink: true }}
+            value={formIssueDate}
+            onValueChange={(val) => {
+              setFormIssueDate(val);
+              setFieldErrors((p) => ({ ...p, formExpiryDate: '' }));
+            }}
+          />
+          <AppTextField
+            fieldName="formExpiryDate"
+            label={isBn ? 'মেয়াদ উত্তীর্ণের তারিখ' : 'Expiry Date'}
+            type="date"
+            InputLabelProps={{ shrink: true }}
+            value={formExpiryDate}
+            errorText={fieldErrors.formExpiryDate}
+            onValueChange={(val) => {
+              setFormExpiryDate(val);
+              setFieldErrors((p) => ({ ...p, formExpiryDate: '' }));
+            }}
+          />
+
+          <Box sx={{ gridColumn: { sm: 'span 2' } }}>
+            <AppTextField
+              fieldName="formReminderDays"
+              label={isBn ? 'কত দিন পূর্বে রিমাইন্ডার পাবেন' : 'Reminder Days Before Expiry'}
+              type="number"
+              unit="DAYS"
+              value={formReminderDays}
+              errorText={fieldErrors.formReminderDays}
+              inputProps={{ min: 0 }}
+              onValueChange={(val) => {
+                setFormReminderDays(val);
+                setFieldErrors((p) => ({ ...p, formReminderDays: '' }));
+              }}
             />
-            <TextField
-              label={isBn ? 'মেয়াদ উত্তীর্ণের তারিখ' : 'Expiry Date'}
-              type="date"
-              InputLabelProps={{ shrink: true }}
-              value={formExpiryDate}
-              onChange={(e) => setFormExpiryDate(e.target.value)}
-              fullWidth
+          </Box>
+        </FormGrid>
+
+        <FormSection title={isBn ? 'সংযুক্তি ও ফাইল তথ্য' : 'File Attachment'}>
+          <FormGrid columns={1}>
+            <AppTextField
+              fieldName="formFileName"
+              label={isBn ? 'ফাইলের নাম (উদাঃ trade_license_2026.pdf)' : 'File Name'}
+              value={formFileName}
+              onValueChange={(val) => setFormFileName(val)}
             />
-          </Stack>
 
-          <TextField
-            label={isBn ? 'কত দিন পূর্বে রিমাইন্ডার পাবেন' : 'Reminder Days Before Expiry'}
-            type="number"
-            value={formReminderDays}
-            onChange={(e) => setFormReminderDays(e.target.value)}
-            fullWidth
-          />
+            <AppTextField
+              fieldName="formFileUrl"
+              label={isBn ? 'ফাইল ইউআরএল / স্টোরেজ পাথ' : 'File URL / Cloud Link'}
+              value={formFileUrl}
+              onValueChange={(val) => setFormFileUrl(val)}
+            />
 
-          <Divider>{isBn ? 'সংযুক্তি ও ফাইল তথ্য' : 'File Attachment'}</Divider>
-
-          <TextField
-            label={isBn ? 'ফাইলের নাম (উদাঃ trade_license_2026.pdf)' : 'File Name'}
-            value={formFileName}
-            onChange={(e) => setFormFileName(e.target.value)}
-            fullWidth
-          />
-
-          <TextField
-            label={isBn ? 'ফাইল ইউআরএল / স্টোরেজ পাথ' : 'File URL / Cloud Link'}
-            value={formFileUrl}
-            onChange={(e) => setFormFileUrl(e.target.value)}
-            fullWidth
-          />
-
-          <TextField
-            label={isBn ? 'মন্তব্য / রিমার্কস' : 'Remarks'}
-            multiline
-            rows={2}
-            value={formRemarks}
-            onChange={(e) => setFormRemarks(e.target.value)}
-            fullWidth
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setCreateDialogOpen(false)}>{isBn ? 'বাতিল' : 'Cancel'}</Button>
-          <Button
-            variant="contained"
-            onClick={handleSaveDocument}
-            disabled={!formTitle.trim()}
-          >
-            {editingDoc
-              ? (isBn ? 'আপডেট করুন' : 'Update')
-              : (isBn ? 'সংরক্ষণ করুন' : 'Save Document')}
-          </Button>
-        </DialogActions>
-      </Dialog>
+            <AppTextField
+              fieldName="formRemarks"
+              label={isBn ? 'মন্তব্য / রিমার্কস' : 'Remarks'}
+              multiline
+              rows={2}
+              value={formRemarks}
+              onValueChange={(val) => setFormRemarks(val)}
+            />
+          </FormGrid>
+        </FormSection>
+      </FormDialog>
     </Box>
   );
 }

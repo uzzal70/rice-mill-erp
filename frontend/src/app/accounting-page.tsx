@@ -12,7 +12,6 @@ import {
   DialogTitle,
   Divider,
   IconButton,
-  MenuItem,
   Paper,
   Stack,
   Tab,
@@ -22,7 +21,6 @@ import {
   TableHead,
   TableRow,
   Tabs,
-  TextField,
   Typography,
 } from '@mui/material';
 import AccountBalanceRoundedIcon from '@mui/icons-material/AccountBalanceRounded';
@@ -40,6 +38,9 @@ import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import AutoFixHighRoundedIcon from '@mui/icons-material/AutoFixHighRounded';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiRequest, queryString } from '@/lib/api';
+import { AppAutocomplete, AppSelect, AppTextField, FormDialog, FormGrid, FormSection } from '@/components/form';
+import { extractApiError, useToast } from '@/components/ui/toast-provider';
+import { FieldRule, focusFieldByName, validateFormFields } from '@/lib/form-validation';
 
 type AccountType = 'ASSET' | 'LIABILITY' | 'EQUITY' | 'REVENUE' | 'EXPENSE';
 type AccountSubtype =
@@ -271,6 +272,7 @@ export function AccountingPage({
   onSaved,
 }: AccountingPageProps) {
   const queryClient = useQueryClient();
+  const toast = useToast();
   const isBn = language === 'bn';
 
   const [activeTab, setActiveTab] = useState(0);
@@ -287,8 +289,11 @@ export function AccountingPage({
   // Dialog States
   const [accountDialogOpen, setAccountDialogOpen] = useState(false);
   const [voucherDialogOpen, setVoucherDialogOpen] = useState(false);
+  const [reverseDialogJournal, setReverseDialogJournal] = useState<Journal | null>(null);
+  const [reverseReason, setReverseReason] = useState('');
   const [printJournal, setPrintJournal] = useState<Journal | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
 
   // New Account Form Fields
@@ -456,8 +461,21 @@ export function AccountingPage({
       { accountCode: '', debit: '', credit: '', description: '' },
       { accountCode: '', debit: '', credit: '', description: '' },
     ]);
+    setFieldErrors({});
     setErrorMsg(null);
     setVoucherDialogOpen(true);
+  };
+
+  const handleOpenNewAccount = () => {
+    setNewAccCode('');
+    setNewAccName('');
+    setNewAccType('ASSET');
+    setNewAccSubtype('');
+    setNewAccOpening('0');
+    setNewAccDesc('');
+    setFieldErrors({});
+    setErrorMsg(null);
+    setAccountDialogOpen(true);
   };
 
   const handleVoucherLineChange = (
@@ -465,6 +483,12 @@ export function AccountingPage({
     field: keyof JournalLine,
     value: string,
   ) => {
+    setFieldErrors((prev) => ({
+      ...prev,
+      [`vline-${index}-${String(field)}`]: '',
+      [`vline-${index}-debit`]: field === 'credit' || field === 'debit' ? '' : prev[`vline-${index}-debit`],
+      [`vline-${index}-credit`]: field === 'debit' || field === 'credit' ? '' : prev[`vline-${index}-credit`],
+    }));
     setVoucherLines((prev) => {
       const next = [...prev];
       const item = { ...next[index], [field]: value };
@@ -499,12 +523,54 @@ export function AccountingPage({
     e.preventDefault();
     setErrorMsg(null);
 
+    const rules: FieldRule[] = [
+      { name: 'voucherType', label: isBn ? 'ভাউচারের ধরন' : 'Voucher Type', value: voucherType, required: true, isSelect: true },
+      { name: 'voucherDate', label: isBn ? 'তারিখ' : 'Date', value: voucherDate, required: true, type: 'date' },
+    ];
+    voucherLines.forEach((l, i) => {
+      const hasAmount = Number(l.debit) > 0 || Number(l.credit) > 0;
+      if (i < 2 || hasAmount || l.accountCode.trim()) {
+        rules.push({
+          name: `vline-${i}-accountCode`,
+          label: `${isBn ? 'হিসাব খাত' : 'Account'} (#${i + 1})`,
+          value: l.accountCode,
+          required: true,
+          isSelect: true,
+        });
+      }
+      if ((i < 2 || l.accountCode.trim()) && !hasAmount) {
+        rules.push({
+          name: `vline-${i}-debit`,
+          label: `${isBn ? 'ডেবিট বা ক্রেডিট পরিমাণ' : 'Debit or Credit Amount'} (#${i + 1})`,
+          value: '',
+          custom: () =>
+            isBn ? 'ডেবিট অথবা ক্রেডিট পরিমাণ লিখুন।' : 'Enter a Debit or Credit amount.',
+        });
+      }
+      if (Number(l.debit) < 0) {
+        rules.push({ name: `vline-${i}-debit`, label: `Debit (#${i + 1})`, value: l.debit, type: 'nonNegativeNumber' });
+      }
+      if (Number(l.credit) < 0) {
+        rules.push({ name: `vline-${i}-credit`, label: `Credit (#${i + 1})`, value: l.credit, type: 'nonNegativeNumber' });
+      }
+    });
+
+    const validation = validateFormFields(rules, language);
+    if (!validation.valid) {
+      setFieldErrors(validation.errors);
+      setErrorMsg(validation.summary);
+      toast.warning(validation.summary);
+      focusFieldByName(validation.firstField);
+      return;
+    }
+
     if (!isVoucherBalanced) {
-      setErrorMsg(
-        isBn
-          ? `ভাউচার ডেবিট এবং ক্রেডিট সমান নয়! ডেবিট: ৳ ${voucherTotalDebit.toFixed(2)}, ক্রেডিট: ৳ ${voucherTotalCredit.toFixed(2)}`
-          : `Double-entry rule violation: Total Debit (৳ ${voucherTotalDebit.toFixed(2)}) must equal Total Credit (৳ ${voucherTotalCredit.toFixed(2)})`,
-      );
+      const diffMsg = isBn
+        ? `ভাউচার ডেবিট এবং ক্রেডিট সমান নয়! ডেবিট: ৳ ${voucherTotalDebit.toFixed(2)}, ক্রেডিট: ৳ ${voucherTotalCredit.toFixed(2)}`
+        : `Double-entry rule violation: Total Debit (৳ ${voucherTotalDebit.toFixed(2)}) must equal Total Credit (৳ ${voucherTotalCredit.toFixed(2)})`;
+      setErrorMsg(diffMsg);
+      toast.warning(diffMsg);
+      focusFieldByName('vline-0-debit');
       return;
     }
 
@@ -513,11 +579,14 @@ export function AccountingPage({
     );
 
     if (validLines.length < 2) {
-      setErrorMsg(isBn ? 'কমপক্ষে দুটি বৈধ এন্ট্রি দিন' : 'Provide at least 2 valid debit/credit lines');
+      const msg = isBn ? 'কমপক্ষে দুটি বৈধ এন্ট্রি দিন' : 'Provide at least 2 valid debit/credit lines';
+      setErrorMsg(msg);
+      toast.warning(msg);
       return;
     }
 
     setBusy(true);
+    setFieldErrors({});
     try {
       const payload = {
         companyId,
@@ -550,8 +619,10 @@ export function AccountingPage({
           ? `ভাউচার ${res.number} সফলভাবে সংরক্ষিত ও পোস্ট হয়েছে`
           : `Journal voucher ${res.number} posted successfully`,
       );
-    } catch (err: any) {
-      setErrorMsg(err.message || 'Error saving voucher');
+    } catch (err: unknown) {
+      const msg = extractApiError(err, 'Error saving voucher');
+      setErrorMsg(msg);
+      toast.error(msg);
     } finally {
       setBusy(false);
     }
@@ -559,7 +630,25 @@ export function AccountingPage({
 
   const handleCreateAccount = async (e: FormEvent) => {
     e.preventDefault();
+    const rules: FieldRule[] = [
+      { name: 'newAccCode', label: isBn ? 'হিসাব কোড' : 'Account Code', value: newAccCode, required: true },
+      { name: 'newAccName', label: isBn ? 'হিসাবের নাম' : 'Account Name', value: newAccName, required: true },
+      { name: 'newAccType', label: isBn ? 'শ্রেণী (Type)' : 'Classification Type', value: newAccType, required: true, isSelect: true },
+    ];
+    if (newAccOpening.trim()) {
+      rules.push({ name: 'newAccOpening', label: isBn ? 'প্রারম্ভিক জের' : 'Opening Balance', value: newAccOpening, type: 'number' });
+    }
+    const validation = validateFormFields(rules, language);
+    if (!validation.valid) {
+      setFieldErrors(validation.errors);
+      setErrorMsg(validation.summary);
+      toast.warning(validation.summary);
+      focusFieldByName(validation.firstField);
+      return;
+    }
+
     setErrorMsg(null);
+    setFieldErrors({});
     setBusy(true);
     try {
       const payload = {
@@ -588,8 +677,10 @@ export function AccountingPage({
           ? `নতুন হিসাব ${payload.code} - ${payload.name} যুক্ত হয়েছে`
           : `Account ${payload.code} - ${payload.name} created successfully`,
       );
-    } catch (err: any) {
-      setErrorMsg(err.message || 'Error creating account');
+    } catch (err: unknown) {
+      const msg = extractApiError(err, 'Error creating account');
+      setErrorMsg(msg);
+      toast.error(msg);
     } finally {
       setBusy(false);
     }
@@ -611,8 +702,8 @@ export function AccountingPage({
       });
       queryClient.invalidateQueries({ queryKey: ['coa'] });
       onSaved(res.message);
-    } catch (err: any) {
-      alert(err.message);
+    } catch (err: unknown) {
+      toast.error(extractApiError(err, 'Failed to seed standard COA'));
     }
   };
 
@@ -630,29 +721,57 @@ export function AccountingPage({
           ? `ভাউচার ${j.number} পোস্ট হয়েছে`
           : `Journal voucher ${j.number} posted successfully`,
       );
-    } catch (err: any) {
-      alert(err.message);
+    } catch (err: unknown) {
+      toast.error(extractApiError(err, 'Failed to post voucher'));
     }
   };
 
-  const handleReverseJournal = async (j: Journal) => {
-    const reason = window.prompt(isBn ? 'রিভার্সালের কারণ লিখুন:' : 'Enter reversal reason:');
-    if (reason === null) return;
+  const handleReverseJournal = (j: Journal) => {
+    setReverseDialogJournal(j);
+    setReverseReason('');
+    setFieldErrors({});
+    setErrorMsg(null);
+  };
+
+  const handleConfirmReverseJournal = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!reverseDialogJournal) return;
+    const validation = validateFormFields(
+      [{ name: 'reverseReason', label: isBn ? 'রিভার্সালের কারণ' : 'Reversal Reason', value: reverseReason, required: true }],
+      language,
+    );
+    if (!validation.valid) {
+      setFieldErrors(validation.errors);
+      setErrorMsg(validation.summary);
+      toast.warning(validation.summary);
+      focusFieldByName(validation.firstField);
+      return;
+    }
+
+    setBusy(true);
+    setErrorMsg(null);
+    setFieldErrors({});
     try {
-      const res: any = await apiRequest(`/accounting/journals/${j.id}/reverse`, {
+      const res: any = await apiRequest(`/accounting/journals/${reverseDialogJournal.id}/reverse`, {
         method: 'POST',
-        body: JSON.stringify({ companyId, reason }),
+        body: JSON.stringify({ companyId, reason: reverseReason.trim() }),
       });
+      const num = reverseDialogJournal.number;
+      setReverseDialogJournal(null);
       queryClient.invalidateQueries({ queryKey: ['journals'] });
       queryClient.invalidateQueries({ queryKey: ['coa'] });
       queryClient.invalidateQueries({ queryKey: ['trial-balance'] });
       onSaved(
         isBn
-          ? `ভাউচার ${j.number} রিভার্স করা হয়েছে (নতুন ভাউচার: ${res.number})`
-          : `Journal ${j.number} reversed successfully (${res.number})`,
+          ? `ভাউচার ${num} রিভার্স করা হয়েছে (নতুন ভাউচার: ${res.number})`
+          : `Journal ${num} reversed successfully (${res.number})`,
       );
-    } catch (err: any) {
-      alert(err.message);
+    } catch (err: unknown) {
+      const msg = extractApiError(err, 'Failed to reverse voucher');
+      setErrorMsg(msg);
+      toast.error(msg);
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -720,21 +839,22 @@ export function AccountingPage({
           <Paper variant="outlined" sx={{ p: 2, mb: 2, borderRadius: 2.5 }}>
             <Stack direction="row" spacing={2} justifyContent="space-between" alignItems="center">
               <Stack direction="row" spacing={2} alignItems="center">
-                <TextField
-                  select
-                  size="small"
+                <AppSelect
+                  fieldName="accountTypeFilter"
+                  fullWidth={false}
                   label={isBn ? 'হিসাবের ধরন' : 'Account Type'}
                   value={accountTypeFilter}
-                  onChange={(e) => setAccountTypeFilter(e.target.value)}
-                  sx={{ minWidth: 160 }}
-                >
-                  <MenuItem value="ALL">{isBn ? 'সকল ধরন' : 'All Types'}</MenuItem>
-                  <MenuItem value="ASSET">ASSET (সম্পদ)</MenuItem>
-                  <MenuItem value="LIABILITY">LIABILITY (দায়)</MenuItem>
-                  <MenuItem value="EQUITY">EQUITY (মালিকানাস্বত্ব)</MenuItem>
-                  <MenuItem value="REVENUE">REVENUE (আয়)</MenuItem>
-                  <MenuItem value="EXPENSE">EXPENSE (ব্যয়)</MenuItem>
-                </TextField>
+                  options={[
+                    { value: 'ALL', label: isBn ? 'সকল ধরন' : 'All Types' },
+                    { value: 'ASSET', label: 'ASSET (সম্পদ)' },
+                    { value: 'LIABILITY', label: 'LIABILITY (দায়)' },
+                    { value: 'EQUITY', label: 'EQUITY (মালিকানাস্বত্ব)' },
+                    { value: 'REVENUE', label: 'REVENUE (আয়)' },
+                    { value: 'EXPENSE', label: 'EXPENSE (ব্যয়)' },
+                  ]}
+                  onChange={(val) => setAccountTypeFilter(val)}
+                  sx={{ minWidth: 200 }}
+                />
                 <Typography variant="body2" color="text.secondary">
                   {isBn ? `মোট অ্যাকাউন্ট: ${accounts.length}` : `${accounts.length} Accounts Found`}
                 </Typography>
@@ -743,7 +863,7 @@ export function AccountingPage({
                 variant="outlined"
                 size="small"
                 startIcon={<AddCircleOutlineRoundedIcon />}
-                onClick={() => setAccountDialogOpen(true)}
+                onClick={handleOpenNewAccount}
               >
                 {isBn ? '+ কাস্টম অ্যাকাউন্ট' : '+ Add Account'}
               </Button>
@@ -815,23 +935,24 @@ export function AccountingPage({
           <Paper variant="outlined" sx={{ p: 2, mb: 2, borderRadius: 2.5 }}>
             <Stack direction="row" spacing={2} justifyContent="space-between" alignItems="center">
               <Stack direction="row" spacing={2} alignItems="center">
-                <TextField
-                  select
-                  size="small"
+                <AppSelect
+                  fieldName="voucherTypeFilter"
+                  fullWidth={false}
                   label={isBn ? 'ভাউচারের ধরন' : 'Voucher Type'}
                   value={voucherTypeFilter}
-                  onChange={(e) => setVoucherTypeFilter(e.target.value)}
-                  sx={{ minWidth: 160 }}
-                >
-                  <MenuItem value="ALL">{isBn ? 'সকল ভাউচার' : 'All Vouchers'}</MenuItem>
-                  <MenuItem value="JOURNAL">JOURNAL (সাধারণ জার্নাল)</MenuItem>
-                  <MenuItem value="PAYMENT">PAYMENT (পেমেন্ট ভাউচার)</MenuItem>
-                  <MenuItem value="RECEIPT">RECEIPT (রিসিট ভাউচার)</MenuItem>
-                  <MenuItem value="CONTRA">CONTRA (কন্ট্রা ভাউচার)</MenuItem>
-                  <MenuItem value="SALES">SALES (বিক্রয়)</MenuItem>
-                  <MenuItem value="PURCHASE">PURCHASE (ক্রয়)</MenuItem>
-                  <MenuItem value="EXPENSE">EXPENSE (ব্যয়)</MenuItem>
-                </TextField>
+                  options={[
+                    { value: 'ALL', label: isBn ? 'সকল ভাউচার' : 'All Vouchers' },
+                    { value: 'JOURNAL', label: 'JOURNAL (সাধারণ জার্নাল)' },
+                    { value: 'PAYMENT', label: 'PAYMENT (পেমেন্ট ভাউচার)' },
+                    { value: 'RECEIPT', label: 'RECEIPT (রিসিট ভাউচার)' },
+                    { value: 'CONTRA', label: 'CONTRA (কন্ট্রা ভাউচার)' },
+                    { value: 'SALES', label: 'SALES (বিক্রয়)' },
+                    { value: 'PURCHASE', label: 'PURCHASE (ক্রয়)' },
+                    { value: 'EXPENSE', label: 'EXPENSE (ব্যয়)' },
+                  ]}
+                  onChange={(val) => setVoucherTypeFilter(val)}
+                  sx={{ minWidth: 210 }}
+                />
               </Stack>
               <Stack direction="row" spacing={1}>
                 <Button size="small" variant="outlined" onClick={() => handleOpenNewVoucher('PAYMENT')}>
@@ -942,21 +1063,20 @@ export function AccountingPage({
         <Box>
           <Paper variant="outlined" sx={{ p: 2, mb: 2, borderRadius: 2.5 }}>
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="center">
-              <TextField
-                select
-                size="small"
-                label={isBn ? 'হিসাব নির্বাচন করুন (Account)' : 'Select Account'}
-                value={selectedGlAccountId}
-                onChange={(e) => setSelectedGlAccountId(e.target.value)}
-                sx={{ minWidth: 280 }}
-              >
-                <MenuItem value="">{isBn ? '-- হিসাব নির্বাচন করুন --' : '-- Select Account --'}</MenuItem>
-                {accounts.map((a) => (
-                  <MenuItem key={a.id} value={a.id}>
-                    {a.code} - {a.name} ({a.type})
-                  </MenuItem>
-                ))}
-              </TextField>
+              <Box sx={{ minWidth: { xs: '100%', sm: 340 } }}>
+                <AppAutocomplete
+                  fieldName="selectedGlAccountId"
+                  label={isBn ? 'হিসাব নির্বাচন করুন (Account)' : 'Select Account'}
+                  value={selectedGlAccountId}
+                  options={accounts.map((a) => ({
+                    value: a.id,
+                    label: `${a.code} - ${a.name}`,
+                    badge: a.type,
+                  }))}
+                  emptyMessage={isBn ? 'কোনো হিসাব পাওয়া যায়নি' : 'No accounts found'}
+                  onChange={(val) => setSelectedGlAccountId(val)}
+                />
+              </Box>
             </Stack>
           </Paper>
 
@@ -1656,124 +1776,133 @@ export function AccountingPage({
       )}
 
       {/* New Voucher Dialog */}
-      <Dialog
+      <FormDialog
         open={voucherDialogOpen}
         onClose={() => !busy && setVoucherDialogOpen(false)}
+        onSubmit={(e) => handleSaveVoucher(e, true)}
+        title={isBn ? 'নতুন ডাবল-এন্ট্রি ভাউচার এন্ট্রি' : 'New Double-Entry Voucher'}
+        error={errorMsg}
+        onClearError={() => setErrorMsg(null)}
+        loading={busy}
+        submitLabel={isBn ? 'পোস্ট করুন' : 'Post Voucher'}
+        cancelLabel={isBn ? 'বাতিল' : 'Cancel'}
+        submitColor="success"
         maxWidth="md"
-        fullWidth
       >
-        <form onSubmit={(e) => handleSaveVoucher(e, true)}>
-          <DialogTitle sx={{ fontWeight: 700 }}>
-            {isBn ? 'নতুন ডাবল-এন্ট্রি ভাউচার এন্ট্রি' : 'New Double-Entry Voucher'}
-          </DialogTitle>
-          <DialogContent dividers>
-            {errorMsg && <Alert severity="error" sx={{ mb: 2 }}>{errorMsg}</Alert>}
-
-            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr 1fr' }, gap: 2, mb: 2 }}>
-              <TextField
-                select
-                required
-                size="small"
-                label={isBn ? 'ভাউচারের ধরন' : 'Voucher Type'}
-                value={voucherType}
-                onChange={(e) => setVoucherType(e.target.value as VoucherType)}
-              >
-                <MenuItem value="JOURNAL">JOURNAL (সাধারণ জার্নাল)</MenuItem>
-                <MenuItem value="PAYMENT">PAYMENT (পেমেন্ট ভাউচার)</MenuItem>
-                <MenuItem value="RECEIPT">RECEIPT (রিসিট ভাউচার)</MenuItem>
-                <MenuItem value="CONTRA">CONTRA (কন্ট্রা ভাউচার)</MenuItem>
-                <MenuItem value="OPENING">OPENING (প্রারম্ভিক জের)</MenuItem>
-              </TextField>
-
-              <TextField
-                required
-                type="date"
-                size="small"
-                label={isBn ? 'তারিখ' : 'Date'}
-                value={voucherDate}
-                onChange={(e) => setVoucherDate(e.target.value)}
-                InputLabelProps={{ shrink: true }}
-              />
-
-              <TextField
-                size="small"
-                label={isBn ? 'চেক / রেফারেন্স নং' : 'Cheque / Ref No.'}
-                value={chequeOrRefNo}
-                onChange={(e) => setChequeOrRefNo(e.target.value)}
-              />
-            </Box>
-
-            <TextField
-              fullWidth
-              size="small"
-              label={isBn ? 'বর্ণনা / Narration' : 'Narration / Purpose'}
-              value={narration}
-              onChange={(e) => setNarration(e.target.value)}
-              sx={{ mb: 2 }}
+        <FormSection title={isBn ? 'ভাউচারের তথ্য' : 'Voucher Details'}>
+          <FormGrid columns={{ xs: 1, sm: 3 }}>
+            <AppSelect
+              fieldName="voucherType"
+              required
+              label={isBn ? 'ভাউচারের ধরন' : 'Voucher Type'}
+              value={voucherType}
+              errorText={fieldErrors.voucherType}
+              options={[
+                { value: 'JOURNAL', label: 'JOURNAL (সাধারণ জার্নাল)' },
+                { value: 'PAYMENT', label: 'PAYMENT (পেমেন্ট ভাউচার)' },
+                { value: 'RECEIPT', label: 'RECEIPT (রিসিট ভাউচার)' },
+                { value: 'CONTRA', label: 'CONTRA (কন্ট্রা ভাউচার)' },
+                { value: 'OPENING', label: 'OPENING (প্রারম্ভিক জের)' },
+              ]}
+              onChange={(val) => {
+                setVoucherType(val as VoucherType);
+                setFieldErrors((p) => ({ ...p, voucherType: '' }));
+              }}
             />
 
-            <Divider sx={{ my: 2 }} />
+            <AppTextField
+              fieldName="voucherDate"
+              required
+              type="date"
+              label={isBn ? 'তারিখ' : 'Date'}
+              value={voucherDate}
+              errorText={fieldErrors.voucherDate}
+              onValueChange={(val) => {
+                setVoucherDate(val);
+                setFieldErrors((p) => ({ ...p, voucherDate: '' }));
+              }}
+              InputLabelProps={{ shrink: true }}
+            />
 
-            {/* Voucher Lines */}
-            <Typography variant="subtitle2" fontWeight={700} mb={1}>
-              {isBn ? 'ডেবিট ও ক্রেডিট হিসাব খাতসমূহ' : 'Debit & Credit Accounting Distribution'}
-            </Typography>
+            <AppTextField
+              fieldName="chequeOrRefNo"
+              label={isBn ? 'চেক / রেফারেন্স নং' : 'Cheque / Ref No.'}
+              value={chequeOrRefNo}
+              onValueChange={(val) => setChequeOrRefNo(val)}
+            />
+          </FormGrid>
 
-            <Table size="small">
+          <Box sx={{ mt: 2 }}>
+            <AppTextField
+              fieldName="narration"
+              label={isBn ? 'বর্ণনা / Narration' : 'Narration / Purpose'}
+              value={narration}
+              onValueChange={(val) => setNarration(val)}
+            />
+          </Box>
+        </FormSection>
+
+        <FormSection title={isBn ? 'ডেবিট ও ক্রেডিট হিসাব খাতসমূহ' : 'Debit & Credit Accounting Distribution'}>
+          <Paper variant="outlined" sx={{ overflowX: 'auto', borderRadius: 2 }}>
+            <Table size="small" sx={{ minWidth: 700 }}>
               <TableHead sx={{ bgcolor: 'action.hover' }}>
                 <TableRow>
-                  <TableCell width="35%">{isBn ? 'হিসাব খাত (Account)' : 'Account'}</TableCell>
-                  <TableCell width="25%">{isBn ? 'বিবরণ' : 'Description'}</TableCell>
-                  <TableCell width="18%" align="right">{isBn ? 'ডেবিট (Dr BDT)' : 'Debit (Dr BDT)'}</TableCell>
-                  <TableCell width="18%" align="right">{isBn ? 'ক্রেডিট (Cr BDT)' : 'Credit (Cr BDT)'}</TableCell>
-                  <TableCell width="4%" align="center"></TableCell>
+                  <TableCell width="36%" sx={{ whiteSpace: 'nowrap' }}>{isBn ? 'হিসাব খাত (Account)' : 'Account'}</TableCell>
+                  <TableCell width="24%" sx={{ whiteSpace: 'nowrap' }}>{isBn ? 'বিবরণ' : 'Description'}</TableCell>
+                  <TableCell width="18%" align="right" sx={{ whiteSpace: 'nowrap' }}>{isBn ? 'ডেবিট (Dr BDT)' : 'Debit (Dr BDT)'}</TableCell>
+                  <TableCell width="18%" align="right" sx={{ whiteSpace: 'nowrap' }}>{isBn ? 'ক্রেডিট (Cr BDT)' : 'Credit (Cr BDT)'}</TableCell>
+                  <TableCell width="4%" align="center" />
                 </TableRow>
               </TableHead>
               <TableBody>
                 {voucherLines.map((line, idx) => (
                   <TableRow key={idx}>
                     <TableCell>
-                      <TextField
-                        select
+                      <AppAutocomplete
+                        fieldName={`vline-${idx}-accountCode`}
                         required
-                        size="small"
-                        fullWidth
+                        label={isBn ? 'হিসাব খাত' : 'Account'}
                         value={line.accountCode}
-                        onChange={(e) => handleVoucherLineChange(idx, 'accountCode', e.target.value)}
-                      >
-                        <MenuItem value="">{isBn ? '-- হিসাব নির্বাচন করুন --' : '-- Select Account --'}</MenuItem>
-                        {accounts.map((a) => (
-                          <MenuItem key={a.id} value={a.code}>
-                            {a.code} - {a.name}
-                          </MenuItem>
-                        ))}
-                      </TextField>
+                        errorText={fieldErrors[`vline-${idx}-accountCode`]}
+                        options={accounts.map((a) => ({
+                          value: a.code,
+                          label: `${a.code} - ${a.name}`,
+                          badge: a.type,
+                        }))}
+                        emptyMessage={isBn ? 'কোনো হিসাব পাওয়া যায়নি' : 'No accounts'}
+                        onChange={(val) => handleVoucherLineChange(idx, 'accountCode', val)}
+                      />
                     </TableCell>
                     <TableCell>
-                      <TextField
-                        size="small"
-                        fullWidth
-                        placeholder="Line note"
+                      <AppTextField
+                        fieldName={`vline-${idx}-description`}
+                        placeholder={isBn ? 'নোট' : 'Line note'}
                         value={line.description || ''}
-                        onChange={(e) => handleVoucherLineChange(idx, 'description', e.target.value)}
+                        onValueChange={(val) => handleVoucherLineChange(idx, 'description', val)}
                       />
                     </TableCell>
                     <TableCell align="right">
-                      <TextField
-                        size="small"
+                      <AppTextField
+                        fieldName={`vline-${idx}-debit`}
                         type="number"
+                        prefixText="৳"
                         placeholder="0.00"
                         value={line.debit}
-                        onChange={(e) => handleVoucherLineChange(idx, 'debit', e.target.value)}
+                        errorText={fieldErrors[`vline-${idx}-debit`]}
+                        inputProps={{ min: 0, step: '.01' }}
+                        onValueChange={(val) => handleVoucherLineChange(idx, 'debit', val)}
                       />
                     </TableCell>
                     <TableCell align="right">
-                      <TextField
-                        size="small"
+                      <AppTextField
+                        fieldName={`vline-${idx}-credit`}
                         type="number"
+                        prefixText="৳"
                         placeholder="0.00"
                         value={line.credit}
-                        onChange={(e) => handleVoucherLineChange(idx, 'credit', e.target.value)}
+                        errorText={fieldErrors[`vline-${idx}-credit`]}
+                        inputProps={{ min: 0, step: '.01' }}
+                        onValueChange={(val) => handleVoucherLineChange(idx, 'credit', val)}
                       />
                     </TableCell>
                     <TableCell align="center">
@@ -1790,135 +1919,164 @@ export function AccountingPage({
                 ))}
               </TableBody>
             </Table>
+          </Paper>
 
+          <Box sx={{ mt: 1.5 }}>
             <Button
               size="small"
+              variant="outlined"
               startIcon={<AddCircleOutlineRoundedIcon />}
               onClick={handleAddVoucherLine}
-              sx={{ mt: 1 }}
             >
               {isBn ? '+ আরও লাইন যোগ করুন' : '+ Add Line'}
             </Button>
+          </Box>
 
-            {/* Equilibrium Real-Time Banner */}
-            <Box
-              sx={{
-                mt: 2,
-                p: 2,
-                borderRadius: 2,
-                bgcolor: isVoucherBalanced ? '#e8f5e9' : '#ffebee',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-              }}
-            >
-              <Typography variant="subtitle2" fontWeight={700} color={isVoucherBalanced ? 'success.dark' : 'error.dark'}>
-                {isVoucherBalanced
-                  ? isBn
-                    ? '✓ ডেবিট এবং ক্রেডিট সমান (ভাউচার ব্যালেন্সড)'
-                    : '✓ Balanced: Total Debit equals Total Credit'
-                  : isBn
-                  ? `✕ ডেবিট এবং ক্রেডিট সমান নয় (পার্থক্য: ৳ ${Math.abs(voucherTotalDebit - voucherTotalCredit).toFixed(2)})`
-                  : `✕ Unbalanced (Difference: ৳ ${Math.abs(voucherTotalDebit - voucherTotalCredit).toFixed(2)})`}
+          {/* Equilibrium Real-Time Banner */}
+          <Box
+            sx={{
+              mt: 2,
+              p: 2,
+              borderRadius: 2,
+              bgcolor: isVoucherBalanced ? '#e8f5e9' : '#ffebee',
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: 1.5,
+              justifyContent: 'space-between',
+              alignItems: 'center',
+            }}
+          >
+            <Typography variant="subtitle2" fontWeight={700} color={isVoucherBalanced ? 'success.dark' : 'error.dark'}>
+              {isVoucherBalanced
+                ? isBn
+                  ? '✓ ডেবিট এবং ক্রেডিট সমান (ভাউচার ব্যালেন্সড)'
+                  : '✓ Balanced: Total Debit equals Total Credit'
+                : isBn
+                ? `✕ ডেবিট এবং ক্রেডিট সমান নয় (পার্থক্য: ৳ ${Math.abs(voucherTotalDebit - voucherTotalCredit).toFixed(2)})`
+                : `✕ Unbalanced (Difference: ৳ ${Math.abs(voucherTotalDebit - voucherTotalCredit).toFixed(2)})`}
+            </Typography>
+            <Stack direction="row" spacing={3}>
+              <Typography variant="body2" fontWeight={700}>
+                Total Dr: ৳ {voucherTotalDebit.toFixed(2)}
               </Typography>
-              <Stack direction="row" spacing={3}>
-                <Typography variant="body2" fontWeight={700}>
-                  Total Dr: ৳ {voucherTotalDebit.toFixed(2)}
-                </Typography>
-                <Typography variant="body2" fontWeight={700}>
-                  Total Cr: ৳ {voucherTotalCredit.toFixed(2)}
-                </Typography>
-              </Stack>
-            </Box>
-          </DialogContent>
-          <DialogActions sx={{ px: 3, py: 2 }}>
-            <Button onClick={() => setVoucherDialogOpen(false)} disabled={busy}>
-              {isBn ? 'বাতিল' : 'Cancel'}
-            </Button>
-            <Button
-              type="submit"
-              variant="contained"
-              disabled={busy || !isVoucherBalanced}
-              color="success"
-            >
-              {isBn ? 'পোস্ট করুন' : 'Post Voucher'}
-            </Button>
-          </DialogActions>
-        </form>
-      </Dialog>
+              <Typography variant="body2" fontWeight={700}>
+                Total Cr: ৳ {voucherTotalCredit.toFixed(2)}
+              </Typography>
+            </Stack>
+          </Box>
+        </FormSection>
+      </FormDialog>
 
       {/* Add Custom Account Dialog */}
-      <Dialog
+      <FormDialog
         open={accountDialogOpen}
-        onClose={() => setAccountDialogOpen(false)}
+        onClose={() => !busy && setAccountDialogOpen(false)}
+        onSubmit={handleCreateAccount}
+        title={isBn ? 'নতুন হিসাব খাত তৈরি করুন' : 'Create New Account'}
+        error={errorMsg}
+        onClearError={() => setErrorMsg(null)}
+        loading={busy}
+        submitLabel={isBn ? 'সংরক্ষণ' : 'Save'}
+        cancelLabel={isBn ? 'বাতিল' : 'Cancel'}
         maxWidth="xs"
-        fullWidth
       >
-        <form onSubmit={handleCreateAccount}>
-          <DialogTitle sx={{ fontWeight: 700 }}>
-            {isBn ? 'নতুন হিসাব খাত তৈরি করুন' : 'Create New Account'}
-          </DialogTitle>
-          <DialogContent dividers>
-            {errorMsg && <Alert severity="error" sx={{ mb: 2 }}>{errorMsg}</Alert>}
-            <TextField
-              required
-              fullWidth
-              size="small"
-              label={isBn ? 'হিসাব কোড (e.g. 1025)' : 'Account Code (e.g. 1025)'}
-              value={newAccCode}
-              onChange={(e) => setNewAccCode(e.target.value)}
-              sx={{ mb: 2 }}
-            />
-            <TextField
-              required
-              fullWidth
-              size="small"
-              label={isBn ? 'হিসাবের নাম' : 'Account Name'}
-              value={newAccName}
-              onChange={(e) => setNewAccName(e.target.value)}
-              sx={{ mb: 2 }}
-            />
-            <TextField
-              select
-              required
-              fullWidth
-              size="small"
-              label={isBn ? 'শ্রেণী (Type)' : 'Classification Type'}
-              value={newAccType}
-              onChange={(e) => setNewAccType(e.target.value as AccountType)}
-              sx={{ mb: 2 }}
-            >
-              <MenuItem value="ASSET">ASSET (সম্পদ)</MenuItem>
-              <MenuItem value="LIABILITY">LIABILITY (দায়)</MenuItem>
-              <MenuItem value="EQUITY">EQUITY (মালিকানাস্বত্ব)</MenuItem>
-              <MenuItem value="REVENUE">REVENUE (আয়)</MenuItem>
-              <MenuItem value="EXPENSE">EXPENSE (ব্যয়)</MenuItem>
-            </TextField>
-            <TextField
-              fullWidth
-              size="small"
-              type="number"
-              label={isBn ? 'প্রারম্ভিক জের (Opening Balance)' : 'Opening Balance'}
-              value={newAccOpening}
-              onChange={(e) => setNewAccOpening(e.target.value)}
-              sx={{ mb: 2 }}
-            />
-            <TextField
-              fullWidth
-              size="small"
-              label={isBn ? 'বিবরণ' : 'Description'}
-              value={newAccDesc}
-              onChange={(e) => setNewAccDesc(e.target.value)}
-            />
-          </DialogContent>
-          <DialogActions sx={{ px: 3, py: 1.5 }}>
-            <Button onClick={() => setAccountDialogOpen(false)}>{isBn ? 'বাতিল' : 'Cancel'}</Button>
-            <Button type="submit" variant="contained" disabled={busy}>
-              {isBn ? 'সংরক্ষণ' : 'Save'}
-            </Button>
-          </DialogActions>
-        </form>
-      </Dialog>
+        <FormGrid columns={1}>
+          <AppTextField
+            fieldName="newAccCode"
+            required
+            label={isBn ? 'হিসাব কোড (e.g. 1025)' : 'Account Code (e.g. 1025)'}
+            value={newAccCode}
+            errorText={fieldErrors.newAccCode}
+            onValueChange={(val) => {
+              setNewAccCode(val);
+              setFieldErrors((p) => ({ ...p, newAccCode: '' }));
+            }}
+          />
+          <AppTextField
+            fieldName="newAccName"
+            required
+            label={isBn ? 'হিসাবের নাম' : 'Account Name'}
+            value={newAccName}
+            errorText={fieldErrors.newAccName}
+            onValueChange={(val) => {
+              setNewAccName(val);
+              setFieldErrors((p) => ({ ...p, newAccName: '' }));
+            }}
+          />
+          <AppSelect
+            fieldName="newAccType"
+            required
+            label={isBn ? 'শ্রেণী (Type)' : 'Classification Type'}
+            value={newAccType}
+            errorText={fieldErrors.newAccType}
+            options={[
+              { value: 'ASSET', label: 'ASSET (সম্পদ)' },
+              { value: 'LIABILITY', label: 'LIABILITY (দায়)' },
+              { value: 'EQUITY', label: 'EQUITY (মালিকানাস্বত্ব)' },
+              { value: 'REVENUE', label: 'REVENUE (আয়)' },
+              { value: 'EXPENSE', label: 'EXPENSE (ব্যয়)' },
+            ]}
+            onChange={(val) => {
+              setNewAccType(val as AccountType);
+              setFieldErrors((p) => ({ ...p, newAccType: '' }));
+            }}
+          />
+          <AppTextField
+            fieldName="newAccOpening"
+            type="number"
+            prefixText="৳"
+            label={isBn ? 'প্রারম্ভিক জের (Opening Balance)' : 'Opening Balance'}
+            value={newAccOpening}
+            errorText={fieldErrors.newAccOpening}
+            onValueChange={(val) => {
+              setNewAccOpening(val);
+              setFieldErrors((p) => ({ ...p, newAccOpening: '' }));
+            }}
+          />
+          <AppTextField
+            fieldName="newAccDesc"
+            multiline
+            minRows={2}
+            label={isBn ? 'বিবরণ' : 'Description'}
+            value={newAccDesc}
+            onValueChange={(val) => setNewAccDesc(val)}
+          />
+        </FormGrid>
+      </FormDialog>
+
+      {/* Reverse Journal Dialog */}
+      <FormDialog
+        open={Boolean(reverseDialogJournal)}
+        onClose={() => !busy && setReverseDialogJournal(null)}
+        onSubmit={handleConfirmReverseJournal}
+        title={
+          isBn
+            ? `ভাউচার রিভার্স (${reverseDialogJournal?.number ?? ''})`
+            : `Reverse Voucher (${reverseDialogJournal?.number ?? ''})`
+        }
+        error={errorMsg}
+        onClearError={() => setErrorMsg(null)}
+        loading={busy}
+        submitLabel={isBn ? 'রিভার্স নিশ্চিত করুন' : 'Confirm Reversal'}
+        cancelLabel={isBn ? 'বাতিল' : 'Cancel'}
+        submitColor="error"
+        maxWidth="xs"
+      >
+        <AppTextField
+          fieldName="reverseReason"
+          required
+          multiline
+          minRows={2}
+          label={isBn ? 'রিভার্সালের কারণ' : 'Reversal Reason'}
+          placeholder={isBn ? 'কেন রিভার্স করা হচ্ছে তা লিখুন...' : 'Explain why this voucher is being reversed...'}
+          value={reverseReason}
+          errorText={fieldErrors.reverseReason}
+          onValueChange={(val) => {
+            setReverseReason(val);
+            setFieldErrors((p) => ({ ...p, reverseReason: '' }));
+          }}
+        />
+      </FormDialog>
 
       {/* Printable Voucher Dialog */}
       <Dialog

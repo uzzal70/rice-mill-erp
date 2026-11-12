@@ -2,12 +2,15 @@
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import {
-  Alert, Box, Button, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle,
-  FormControl, InputLabel, LinearProgress, MenuItem, Paper, Select, Stack, Table, TableBody,
-  TableCell, TableHead, TableRow, TextField, Typography,
+  Alert, Box, Button, Chip, CircularProgress,
+  LinearProgress, Paper, Stack, Table, TableBody,
+  TableCell, TableHead, TableRow, Typography,
 } from '@mui/material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiRequest, queryString } from '@/lib/api';
+import { extractApiError, useToast } from '@/components/ui/toast-provider';
+import { focusFieldByName, validateFormFields } from '@/lib/form-validation';
+import { AppAutocomplete, AppSelect, AppTextField, FormDialog, FormGrid } from '@/components/form';
 
 type Material = { id: string; name: string; kind: string; variety: string | null; cropYear: number | null };
 type StackRow = {
@@ -117,7 +120,9 @@ function messageOf(error: unknown, fallback: string) {
 }
 
 function dateInput(value: string | null) {
-  return value ? new Date(value).toISOString().slice(0, 16) : '';
+  if (!value) return '';
+  const d = new Date(value);
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
 }
 
 export function WarehousePage({
@@ -132,6 +137,8 @@ export function WarehousePage({
   onSaved: (message: string) => void;
 }) {
   const t = labels[language];
+  const bn = language === 'bn';
+  const toast = useToast();
   const queryClient = useQueryClient();
   const [godownOpen, setGodownOpen] = useState(false);
   const [stackOpen, setStackOpen] = useState(false);
@@ -140,6 +147,8 @@ export function WarehousePage({
   const [godownCode, setGodownCode] = useState('');
   const [stackValues, setStackValues] = useState<StackForm>(blankStack);
   const [error, setError] = useState('');
+  const [dialogError, setDialogError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   const warehouseQuery = useQuery({
     queryKey: ['warehouse', companyId, factoryId],
@@ -200,15 +209,22 @@ export function WarehousePage({
       setGodownCode('');
       setStackValues(blankStack);
       setError('');
-      onSaved(language === 'bn' ? 'গুদামের তথ্য সংরক্ষিত হয়েছে।' : 'Warehouse details saved.');
+      setDialogError('');
+      setFieldErrors({});
+      onSaved(bn ? 'গুদামের তথ্য সংরক্ষিত হয়েছে।' : 'Warehouse details saved.');
     },
-    onError: reason => setError(messageOf(reason, t.failed)),
+    onError: reason => {
+      const msg = extractApiError(reason, t.failed);
+      setDialogError(msg);
+      toast.error(msg);
+    },
   });
 
   function openNewStack(godownId: string) {
     setEditingStack(null);
     setStackValues({ ...blankStack, godownId });
-    setError('');
+    setDialogError('');
+    setFieldErrors({});
     setStackOpen(true);
   }
 
@@ -225,25 +241,83 @@ export function WarehousePage({
       lotNumber: stack.lotNumber ?? '',
       receivedAt: dateInput(stack.receivedAt),
     });
-    setError('');
+    setDialogError('');
+    setFieldErrors({});
     setStackOpen(true);
   }
 
-  function submit(event: FormEvent) {
+  function submitGodown(event: FormEvent) {
     event.preventDefault();
-    setError('');
+    const validation = validateFormFields(
+      [
+        { name: 'godownName', label: t.name, value: godownName, required: true },
+        { name: 'godownCode', label: t.code, value: godownCode, required: true },
+      ],
+      language,
+    );
+    if (!validation.valid) {
+      setFieldErrors(validation.errors);
+      setDialogError(validation.summary);
+      toast.warning(validation.summary);
+      focusFieldByName(validation.firstField);
+      return;
+    }
+    setDialogError('');
+    setFieldErrors({});
+    mutation.mutate();
+  }
+
+  function submitStack(event: FormEvent) {
+    event.preventDefault();
+    const validation = validateFormFields(
+      [
+        { name: 'godownId', label: t.godown, value: stackValues.godownId, required: true, isSelect: true },
+        { name: 'code', label: t.code, value: stackValues.code, required: true },
+        { name: 'capacityKg', label: t.capacity, value: stackValues.capacityKg, required: true, type: 'positiveNumber' },
+        { name: 'cropYear', label: t.cropYear, value: stackValues.cropYear, type: 'integer', min: 1900, max: 2200 },
+      ],
+      language,
+    );
+    if (!validation.valid) {
+      setFieldErrors(validation.errors);
+      setDialogError(validation.summary);
+      toast.warning(validation.summary);
+      focusFieldByName(validation.firstField);
+      return;
+    }
+    setDialogError('');
+    setFieldErrors({});
     mutation.mutate();
   }
 
   if (!companyId || !factoryId) return <Alert severity="info">{t.noFactory}</Alert>;
   if (warehouseQuery.isLoading) return <Stack direction="row" spacing={1} alignItems="center"><CircularProgress size={20} /><Typography>{t.loading}</Typography></Stack>;
 
+  const activeGodown = godowns.find(row => row.active);
+
   return <Stack spacing={2.5}>
     <Box display="flex" justifyContent="space-between" alignItems={{ xs: 'flex-start', sm: 'center' }} flexDirection={{ xs: 'column', sm: 'row' }} gap={1.5}>
       <Box><Typography className="brand-font" variant="h5" fontWeight={800}>{t.title}</Typography><Typography color="text.secondary" fontSize={13}>{t.subtitle}</Typography></Box>
-      <Stack direction="row" spacing={1}><Button variant="outlined" onClick={() => { setGodownOpen(true); setError(''); }}>{t.addGodown}</Button><Button variant="contained" disabled={!godowns.some(row => row.active)} onClick={() => openNewStack(godowns.find(row => row.active)!.id)}>{t.addStack}</Button></Stack>
+      <Stack direction="row" spacing={1}>
+        <Button variant="outlined" onClick={() => { setGodownOpen(true); setDialogError(''); setFieldErrors({}); }}>{t.addGodown}</Button>
+        <Button
+          variant="contained"
+          onClick={() => {
+            if (!activeGodown) {
+              toast.warning(bn ? 'স্ট্যাক যোগ করার আগে প্রথমে অন্তত একটি সক্রিয় গুদাম তৈরি করুন।' : 'Please create an active Godown first before adding a stack.');
+              setGodownOpen(true);
+              setDialogError('');
+              setFieldErrors({});
+              return;
+            }
+            openNewStack(activeGodown.id);
+          }}
+        >
+          {t.addStack}
+        </Button>
+      </Stack>
     </Box>
-    {(warehouseQuery.error || materialsQuery.error || error) && <Alert severity="error">{error || messageOf(warehouseQuery.error ?? materialsQuery.error, t.failed)}</Alert>}
+    {(warehouseQuery.error || materialsQuery.error || error) && <Alert severity="error">{error || extractApiError(warehouseQuery.error ?? materialsQuery.error, t.failed)}</Alert>}
     <Paper variant="outlined" sx={{ p: 2 }}>
       <Typography fontWeight={750} mb={1}>{t.stockAging}</Typography>
       <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
@@ -279,46 +353,80 @@ export function WarehousePage({
           <TableCell sx={{ whiteSpace: 'nowrap' }}>{stack.cropYear ?? stack.materialItem?.cropYear ?? '—'}</TableCell>
           <TableCell sx={{ whiteSpace: 'nowrap', fontFamily: 'monospace' }}>{stack.batchNumber ?? '—'}</TableCell>
           <TableCell sx={{ whiteSpace: 'nowrap', fontFamily: 'monospace' }}>{stack.lotNumber ?? '—'}</TableCell>
-          <TableCell sx={{ whiteSpace: 'nowrap' }}>{stack.receivedAt ? new Date(stack.receivedAt).toLocaleDateString(language === 'bn' ? 'bn-BD' : 'en-BD') : '—'}</TableCell>
+          <TableCell sx={{ whiteSpace: 'nowrap' }}>{stack.receivedAt ? new Date(stack.receivedAt).toLocaleDateString(bn ? 'bn-BD' : 'en-BD') : '—'}</TableCell>
           <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>{Number(stack.onHand).toLocaleString()} KG</TableCell>
           <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{Number(stack.capacityKg).toLocaleString()} KG</TableCell>
           <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{Number(stack.availableCapacityKg).toLocaleString()} KG</TableCell>
           <TableCell align="center" sx={{ minWidth: 140, whiteSpace: 'nowrap' }}><Stack spacing={0.5}><LinearProgress variant="determinate" value={stack.occupancyPercent} color={stack.occupancyPercent >= 90 ? 'warning' : 'primary'} /><Typography variant="caption">{stack.occupancyPercent.toFixed(1)}%</Typography></Stack></TableCell>
           <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}>{stack.ageDays === null ? t.noAge : `${stack.ageDays} ${t.days}`}</TableCell>
-          <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}><Button size="small" onClick={() => openEditStack(stack, godown.id)}>{language === 'bn' ? 'সম্পাদনা' : 'Edit'}</Button></TableCell>
+          <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}><Button size="small" onClick={() => openEditStack(stack, godown.id)}>{bn ? 'সম্পাদনা' : 'Edit'}</Button></TableCell>
         </TableRow>)}
           {!godown.stacks.length && <TableRow><TableCell colSpan={13} align="center" sx={{ py: 3, color: 'text.secondary' }}>—</TableCell></TableRow>}
         </TableBody>
       </Table>
     </Paper>)}
 
-    <Dialog open={godownOpen} onClose={() => setGodownOpen(false)} fullWidth maxWidth="xs">
-      <DialogTitle>{t.addGodown}</DialogTitle>
-      <Box component="form" onSubmit={submit}>
-        <DialogContent><Stack spacing={2}>
-          <TextField label={t.name} required value={godownName} onChange={event => setGodownName(event.target.value)} />
-          <TextField label={t.code} required value={godownCode} onChange={event => setGodownCode(event.target.value)} />
-        </Stack></DialogContent>
-        <DialogActions><Button onClick={() => setGodownOpen(false)}>{t.cancel}</Button><Button type="submit" disabled={mutation.isPending}>{t.save}</Button></DialogActions>
-      </Box>
-    </Dialog>
+    <FormDialog
+      open={godownOpen}
+      onClose={() => setGodownOpen(false)}
+      onSubmit={submitGodown}
+      title={t.addGodown}
+      error={dialogError}
+      onClearError={() => setDialogError('')}
+      loading={mutation.isPending}
+      submitLabel={t.save}
+      cancelLabel={t.cancel}
+      maxWidth="xs"
+    >
+      <FormGrid columns={1}>
+        <AppTextField fieldName="godownName" label={t.name} required value={godownName} errorText={fieldErrors.godownName} onValueChange={v => { setGodownName(v); setFieldErrors(p => ({ ...p, godownName: '' })); }} />
+        <AppTextField fieldName="godownCode" label={t.code} required value={godownCode} errorText={fieldErrors.godownCode} onValueChange={v => { setGodownCode(v); setFieldErrors(p => ({ ...p, godownCode: '' })); }} />
+      </FormGrid>
+    </FormDialog>
 
-    <Dialog open={stackOpen} onClose={() => setStackOpen(false)} fullWidth maxWidth="sm">
-      <DialogTitle>{editingStack ? t.editStack : t.addStack}</DialogTitle>
-      <Box component="form" onSubmit={submit}>
-        <DialogContent><Stack spacing={2}>
-          <FormControl fullWidth><InputLabel>{t.godown}</InputLabel><Select label={t.godown} required disabled={Boolean(editingStack)} value={stackValues.godownId} onChange={event => setStackValues(current => ({ ...current, godownId: event.target.value }))}>{godowns.filter(row => row.active).map(row => <MenuItem key={row.id} value={row.id}>{row.name}</MenuItem>)}</Select></FormControl>
-          <TextField label={t.code} required value={stackValues.code} onChange={event => setStackValues(current => ({ ...current, code: event.target.value }))} />
-          <TextField label={t.capacity} required type="number" inputProps={{ min: 0.001, step: 0.001 }} value={stackValues.capacityKg} onChange={event => setStackValues(current => ({ ...current, capacityKg: event.target.value }))} />
-          <FormControl fullWidth><InputLabel>{t.material}</InputLabel><Select label={t.material} value={stackValues.materialItemId} onChange={event => setStackValues(current => ({ ...current, materialItemId: event.target.value }))}><MenuItem value="">{t.noMaterial}</MenuItem>{materials.map(material => <MenuItem key={material.id} value={material.id}>{material.name}</MenuItem>)}</Select></FormControl>
-          <TextField label={t.variety} value={stackValues.varietyName} onChange={event => setStackValues(current => ({ ...current, varietyName: event.target.value }))} />
-          <TextField label={t.cropYear} type="number" inputProps={{ min: 1900, max: 2200 }} value={stackValues.cropYear} onChange={event => setStackValues(current => ({ ...current, cropYear: event.target.value }))} />
-          <TextField label={t.batch} value={stackValues.batchNumber} onChange={event => setStackValues(current => ({ ...current, batchNumber: event.target.value }))} />
-          <TextField label={t.lot} value={stackValues.lotNumber} onChange={event => setStackValues(current => ({ ...current, lotNumber: event.target.value }))} />
-          <TextField label={t.receivedAt} type="datetime-local" InputLabelProps={{ shrink: true }} value={stackValues.receivedAt} onChange={event => setStackValues(current => ({ ...current, receivedAt: event.target.value }))} />
-        </Stack></DialogContent>
-        <DialogActions><Button onClick={() => setStackOpen(false)}>{t.cancel}</Button><Button type="submit" disabled={mutation.isPending}>{mutation.isPending ? <CircularProgress size={18} /> : t.save}</Button></DialogActions>
-      </Box>
-    </Dialog>
+    <FormDialog
+      open={stackOpen}
+      onClose={() => setStackOpen(false)}
+      onSubmit={submitStack}
+      title={editingStack ? t.editStack : t.addStack}
+      error={dialogError}
+      onClearError={() => setDialogError('')}
+      loading={mutation.isPending}
+      submitLabel={t.save}
+      cancelLabel={t.cancel}
+      maxWidth="md"
+    >
+      <FormGrid columns={2}>
+        <AppSelect
+          fieldName="godownId"
+          label={t.godown}
+          required
+          disabled={Boolean(editingStack)}
+          disabledReason={editingStack ? (bn ? 'সম্পাদনার সময় গুদাম পরিবর্তন করা যাবে না।' : 'Godown cannot be changed after stack creation.') : undefined}
+          value={stackValues.godownId}
+          errorText={fieldErrors.godownId}
+          emptyMessage={bn ? 'কোনো সক্রিয় গুদাম নেই' : 'No active godowns'}
+          onChange={v => { setStackValues(c => ({ ...c, godownId: v })); setFieldErrors(p => ({ ...p, godownId: '' })); }}
+          options={godowns.filter(row => row.active).map(row => ({ value: row.id, label: row.name, badge: row.code }))}
+        />
+        <AppTextField fieldName="code" label={t.code} required value={stackValues.code} errorText={fieldErrors.code} onValueChange={v => { setStackValues(c => ({ ...c, code: v })); setFieldErrors(p => ({ ...p, code: '' })); }} />
+        <AppTextField fieldName="capacityKg" label={t.capacity} unit="KG" required type="number" inputProps={{ min: 0.001, step: 0.001 }} value={stackValues.capacityKg} errorText={fieldErrors.capacityKg} onValueChange={v => { setStackValues(c => ({ ...c, capacityKg: v })); setFieldErrors(p => ({ ...p, capacityKg: '' })); }} />
+        <AppAutocomplete
+          fieldName="materialItemId"
+          label={t.material}
+          loading={materialsQuery.isLoading}
+          value={stackValues.materialItemId}
+          onChange={v => setStackValues(c => ({ ...c, materialItemId: v }))}
+          options={materials.map(m => ({ value: m.id, label: m.name, badge: m.kind }))}
+          placeholder={t.noMaterial}
+          emptyMessage={t.noMaterial}
+        />
+        <AppTextField fieldName="varietyName" label={t.variety} value={stackValues.varietyName} onValueChange={v => setStackValues(c => ({ ...c, varietyName: v }))} />
+        <AppTextField fieldName="cropYear" label={t.cropYear} type="number" inputProps={{ min: 1900, max: 2200 }} value={stackValues.cropYear} errorText={fieldErrors.cropYear} onValueChange={v => { setStackValues(c => ({ ...c, cropYear: v })); setFieldErrors(p => ({ ...p, cropYear: '' })); }} />
+        <AppTextField fieldName="batchNumber" label={t.batch} value={stackValues.batchNumber} onValueChange={v => setStackValues(c => ({ ...c, batchNumber: v }))} />
+        <AppTextField fieldName="lotNumber" label={t.lot} value={stackValues.lotNumber} onValueChange={v => setStackValues(c => ({ ...c, lotNumber: v }))} />
+        <AppTextField fieldName="receivedAt" label={t.receivedAt} type="datetime-local" value={stackValues.receivedAt} onValueChange={v => setStackValues(c => ({ ...c, receivedAt: v }))} />
+      </FormGrid>
+    </FormDialog>
   </Stack>;
 }

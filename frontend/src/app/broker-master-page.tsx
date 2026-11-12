@@ -2,12 +2,15 @@
 
 import { FormEvent, useEffect, useState } from 'react';
 import {
-  Alert, Box, Button, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle,
-  FormControl, InputLabel, MenuItem, Paper, Select, Stack, Table, TableBody, TableCell, TableHead,
-  TableRow, TextField, Typography,
+  Alert, Box, Button, Chip, CircularProgress,
+  Paper, Stack, Table, TableBody, TableCell, TableHead,
+  TableRow, Typography,
 } from '@mui/material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiRequest, queryString } from '@/lib/api';
+import { extractApiError, useToast } from '@/components/ui/toast-provider';
+import { focusFieldByName, validateFormFields } from '@/lib/form-validation';
+import { AppSelect, AppTextField, FormDialog, FormGrid } from '@/components/form';
 
 type Broker = {
   id: string;
@@ -64,6 +67,7 @@ export function BrokerMasterPage({
   onSaved: (message: string) => void;
 }) {
   const t = labels[language];
+  const toast = useToast();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [activeFilter, setActiveFilter] = useState<'all' | 'true' | 'false'>('all');
@@ -74,7 +78,9 @@ export function BrokerMasterPage({
   const [form, setForm] = useState<BrokerForm>(blank);
   const [financial, setFinancial] = useState<BrokerFinancial | null>(null);
   const [formError, setFormError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [financialError, setFinancialError] = useState('');
+  const [financialFieldError, setFinancialFieldError] = useState('');
   const [statusError, setStatusError] = useState('');
   const brokersQuery = useQuery({
     queryKey: ['broker-master', companyId, search, activeFilter, page],
@@ -90,7 +96,12 @@ export function BrokerMasterPage({
     enabled: Boolean(companyId && selectedBroker),
   });
   useEffect(() => {
-    if (financialQuery.data) setFinancial(financialQuery.data);
+    if (financialQuery.data) {
+      setFinancial({
+        ...financialQuery.data,
+        commissionType: financialQuery.data.commissionType ?? 'PER_KG',
+      });
+    }
   }, [financialQuery.data]);
   const brokers = brokersQuery.data ?? [];
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['broker-master', companyId] });
@@ -107,9 +118,14 @@ export function BrokerMasterPage({
       await invalidate();
       setOpen(false);
       setForm(blank);
+      setFieldErrors({});
       onSaved(t.created);
     },
-    onError: error => setFormError(messageOf(error, t.failed)),
+    onError: error => {
+      const msg = extractApiError(error, t.failed);
+      setFormError(msg);
+      toast.error(msg);
+    },
   });
   const updateCommissionMutation = useMutation({
     mutationFn: () => {
@@ -127,9 +143,14 @@ export function BrokerMasterPage({
       await invalidate();
       setCommissionOpen(false);
       setSelectedBroker(null);
+      setFinancialFieldError('');
       onSaved(t.updated);
     },
-    onError: error => setFinancialError(messageOf(error, t.financialRequired)),
+    onError: error => {
+      const msg = extractApiError(error, t.financialRequired);
+      setFinancialError(msg);
+      toast.error(msg);
+    },
   });
   const statusMutation = useMutation({
     mutationFn: (broker: Broker) => apiRequest(`/partners/${encodeURIComponent(broker.id)}`, {
@@ -140,23 +161,57 @@ export function BrokerMasterPage({
       await invalidate();
       onSaved(t.updated);
     },
-    onError: error => setStatusError(messageOf(error, t.statusError)),
+    onError: error => {
+      const msg = extractApiError(error, t.statusError);
+      setStatusError(msg);
+      toast.error(msg);
+    },
   });
 
   function submitCreate(event: FormEvent) {
     event.preventDefault();
+    const validation = validateFormFields(
+      [
+        { name: 'name', label: t.name, value: form.name, required: true },
+        { name: 'code', label: t.code, value: form.code, required: true },
+        { name: 'commissionType', label: t.commissionType, value: form.commissionType, required: true, isSelect: true },
+        { name: 'commissionRate', label: t.commissionRate, value: form.commissionRate, required: true, type: 'positiveNumber' },
+      ],
+      language,
+    );
+    if (!validation.valid) {
+      setFieldErrors(validation.errors);
+      setFormError(validation.summary);
+      toast.warning(validation.summary);
+      focusFieldByName(validation.firstField);
+      return;
+    }
     setFormError('');
+    setFieldErrors({});
     createMutation.mutate();
   }
   function submitCommission(event: FormEvent) {
     event.preventDefault();
+    const validation = validateFormFields(
+      [{ name: 'finCommissionRate', label: t.commissionRate, value: financial?.commissionRate ?? '', required: true, type: 'positiveNumber' }],
+      language,
+    );
+    if (!validation.valid) {
+      setFinancialFieldError(validation.errors.finCommissionRate ?? '');
+      setFinancialError(validation.summary);
+      toast.warning(validation.summary);
+      focusFieldByName('finCommissionRate');
+      return;
+    }
     setFinancialError('');
+    setFinancialFieldError('');
     updateCommissionMutation.mutate();
   }
   function openCommission(broker: Broker) {
     setSelectedBroker(broker);
     setFinancial(null);
     setFinancialError('');
+    setFinancialFieldError('');
     setCommissionOpen(true);
   }
 
@@ -164,18 +219,25 @@ export function BrokerMasterPage({
   return <Stack spacing={2.5}>
     <Box display="flex" justifyContent="space-between" alignItems={{ xs: 'flex-start', sm: 'center' }} flexDirection={{ xs: 'column', sm: 'row' }} gap={1.5}>
       <Box><Typography className="brand-font" variant="h5" fontWeight={800}>{t.title}</Typography><Typography color="text.secondary" fontSize={13}>{t.subtitle}</Typography></Box>
-      <Button variant="contained" onClick={() => { setForm(blank); setFormError(''); setOpen(true); }}>{t.add}</Button>
+      <Button variant="contained" onClick={() => { setForm(blank); setFormError(''); setFieldErrors({}); setOpen(true); }}>{t.add}</Button>
     </Box>
     <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
-      <TextField size="small" fullWidth value={search} placeholder={language === 'bn' ? 'নাম, কোড বা মোবাইল খুঁজুন' : 'Search name, code, or mobile'} onChange={event => { setSearch(event.target.value); setPage(1); }} />
-      <FormControl size="small" sx={{ minWidth: 150 }}>
-        <InputLabel>{t.status}</InputLabel>
-        <Select label={t.status} value={activeFilter} onChange={event => { setActiveFilter(event.target.value as typeof activeFilter); setPage(1); }}>
-          <MenuItem value="all">{t.all}</MenuItem><MenuItem value="true">{t.active}</MenuItem><MenuItem value="false">{t.inactive}</MenuItem>
-        </Select>
-      </FormControl>
+      <AppTextField fieldName="search" value={search} placeholder={language === 'bn' ? 'নাম, কোড বা মোবাইল খুঁজুন' : 'Search name, code, or mobile'} onValueChange={v => { setSearch(v); setPage(1); }} />
+      <Box sx={{ minWidth: 160 }}>
+        <AppSelect
+          name="filter"
+          label={t.status}
+          value={activeFilter}
+          onChange={v => { setActiveFilter(v as typeof activeFilter); setPage(1); }}
+          options={[
+            { value: 'all', label: t.all },
+            { value: 'true', label: t.active },
+            { value: 'false', label: t.inactive },
+          ]}
+        />
+      </Box>
     </Stack>
-    {brokersQuery.error && <Alert severity="error">{messageOf(brokersQuery.error, t.failed)}</Alert>}
+    {brokersQuery.error && <Alert severity="error">{extractApiError(brokersQuery.error, t.failed)}</Alert>}
     {statusError && <Alert severity="error" onClose={() => setStatusError('')}>{statusError}</Alert>}
     <Paper variant="outlined" sx={{ overflowX: 'auto' }}>
       {brokersQuery.isLoading
@@ -210,37 +272,74 @@ export function BrokerMasterPage({
       <Button size="small" disabled={page === 1 || brokersQuery.isFetching} onClick={() => setPage(current => current - 1)}>{t.previous}</Button>
       <Button size="small" disabled={brokers.length < 50 || brokersQuery.isFetching} onClick={() => setPage(current => current + 1)}>{t.next}</Button>
     </Stack>
-    <Dialog open={open} onClose={() => setOpen(false)} fullWidth maxWidth="sm">
-      <DialogTitle>{t.add}</DialogTitle>
-      <Box component="form" onSubmit={submitCreate}>
-        <DialogContent><Stack spacing={2}>
-          {formError && <Alert severity="error">{formError}</Alert>}
-          <TextField required label={t.name} value={form.name} onChange={event => setForm(current => ({ ...current, name: event.target.value }))} />
-          <TextField required label={t.code} value={form.code} onChange={event => setForm(current => ({ ...current, code: event.target.value }))} />
-          <TextField label={t.phone} value={form.phone} onChange={event => setForm(current => ({ ...current, phone: event.target.value }))} />
-          <FormControl><InputLabel>{t.commissionType}</InputLabel><Select label={t.commissionType} value={form.commissionType} onChange={event => setForm(current => ({ ...current, commissionType: event.target.value as CommissionType }))}>
-            {commissionTypes.map(value => <MenuItem key={value} value={value}>{t.typeLabels[value]}</MenuItem>)}
-          </Select></FormControl>
-          <TextField required type="number" label={t.commissionRate} value={form.commissionRate} onChange={event => setForm(current => ({ ...current, commissionRate: event.target.value }))} inputProps={{ min: '0.0001', step: '0.0001' }} />
-        </Stack></DialogContent>
-        <DialogActions><Button onClick={() => setOpen(false)}>{t.cancel}</Button><Button type="submit" variant="contained" disabled={createMutation.isPending}>{t.save}</Button></DialogActions>
-      </Box>
-    </Dialog>
-    <Dialog open={commissionOpen} onClose={() => { setCommissionOpen(false); setSelectedBroker(null); }} fullWidth maxWidth="sm">
-      <DialogTitle>{t.editCommission} · {selectedBroker?.name}</DialogTitle>
-      <Box component="form" onSubmit={submitCommission}>
-        <DialogContent><Stack spacing={2}>
-          {financialQuery.error && <Alert severity="error">{messageOf(financialQuery.error, t.financialRequired)}</Alert>}
-          {financialError && <Alert severity="error">{financialError}</Alert>}
-          {financialQuery.isLoading || !financial ? <CircularProgress size={20} /> : <>
-            <FormControl><InputLabel>{t.commissionType}</InputLabel><Select label={t.commissionType} value={financial.commissionType ?? 'PER_KG'} onChange={event => setFinancial(current => current ? ({ ...current, commissionType: event.target.value as CommissionType }) : current)}>
-              {commissionTypes.map(value => <MenuItem key={value} value={value}>{t.typeLabels[value]}</MenuItem>)}
-            </Select></FormControl>
-            <TextField required type="number" label={t.commissionRate} value={financial.commissionRate ?? ''} onChange={event => setFinancial(current => current ? ({ ...current, commissionRate: event.target.value }) : current)} inputProps={{ min: '0.0001', step: '0.0001' }} />
-          </>}
-        </Stack></DialogContent>
-        <DialogActions><Button onClick={() => { setCommissionOpen(false); setSelectedBroker(null); }}>{t.cancel}</Button><Button type="submit" variant="contained" disabled={financialQuery.isLoading || financialQuery.isError || !financial || updateCommissionMutation.isPending}>{t.save}</Button></DialogActions>
-      </Box>
-    </Dialog>
+    <FormDialog
+      open={open}
+      onClose={() => setOpen(false)}
+      onSubmit={submitCreate}
+      title={t.add}
+      error={formError}
+      onClearError={() => setFormError('')}
+      loading={createMutation.isPending}
+      submitLabel={t.save}
+      cancelLabel={t.cancel}
+      maxWidth="sm"
+    >
+      <FormGrid columns={2}>
+        <AppTextField fieldName="name" required label={t.name} value={form.name} errorText={fieldErrors.name} onValueChange={v => { setForm(c => ({ ...c, name: v })); setFieldErrors(p => ({ ...p, name: '' })); }} />
+        <AppTextField fieldName="code" required label={t.code} value={form.code} errorText={fieldErrors.code} onValueChange={v => { setForm(c => ({ ...c, code: v })); setFieldErrors(p => ({ ...p, code: '' })); }} />
+        <AppTextField fieldName="phone" label={t.phone} placeholder="01XXXXXXXXX" value={form.phone} onValueChange={v => setForm(c => ({ ...c, phone: v }))} />
+        <AppSelect
+          fieldName="commissionType"
+          label={t.commissionType}
+          required
+          value={form.commissionType}
+          onChange={v => { setForm(c => ({ ...c, commissionType: v as CommissionType })); setFieldErrors(p => ({ ...p, commissionType: '' })); }}
+          options={commissionTypes.map(v => ({ value: v, label: t.typeLabels[v] }))}
+          errorText={fieldErrors.commissionType}
+        />
+        <AppTextField fieldName="commissionRate" required type="number" label={t.commissionRate} value={form.commissionRate} errorText={fieldErrors.commissionRate} inputProps={{ min: '0.0001', step: '0.0001' }} onValueChange={v => { setForm(c => ({ ...c, commissionRate: v })); setFieldErrors(p => ({ ...p, commissionRate: '' })); }} />
+      </FormGrid>
+    </FormDialog>
+    <FormDialog
+      open={commissionOpen}
+      onClose={() => { setCommissionOpen(false); setSelectedBroker(null); }}
+      onSubmit={submitCommission}
+      title={`${t.editCommission} · ${selectedBroker?.name ?? ''}`}
+      error={financialError || (financialQuery.error ? extractApiError(financialQuery.error, t.financialRequired) : '')}
+      onClearError={() => setFinancialError('')}
+      loading={updateCommissionMutation.isPending}
+      submitDisabled={financialQuery.isLoading || financialQuery.isError || !financial}
+      submitLabel={t.save}
+      cancelLabel={t.cancel}
+      maxWidth="sm"
+    >
+      {financialQuery.isLoading || !financial ? (
+        <Stack direction="row" spacing={1} alignItems="center" py={2}>
+          <CircularProgress size={20} />
+          <Typography variant="body2" color="text.secondary">Loading commission terms...</Typography>
+        </Stack>
+      ) : (
+        <FormGrid columns={2}>
+          <AppSelect
+            fieldName="finCommissionType"
+            label={t.commissionType}
+            required
+            value={financial.commissionType ?? 'PER_KG'}
+            onChange={v => setFinancial(c => c ? ({ ...c, commissionType: v as CommissionType }) : c)}
+            options={commissionTypes.map(v => ({ value: v, label: t.typeLabels[v] }))}
+          />
+          <AppTextField
+            fieldName="finCommissionRate"
+            required
+            type="number"
+            label={t.commissionRate}
+            value={financial.commissionRate ?? ''}
+            errorText={financialFieldError}
+            inputProps={{ min: '0.0001', step: '0.0001' }}
+            onValueChange={v => { setFinancial(c => c ? ({ ...c, commissionRate: v }) : c); setFinancialFieldError(''); }}
+          />
+        </FormGrid>
+      )}
+    </FormDialog>
   </Stack>;
 }

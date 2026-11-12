@@ -1,6 +1,10 @@
 'use client';
 
 import React, { useState } from 'react';
+import { Box, Checkbox, FormControlLabel } from '@mui/material';
+import { AppSelect, AppTextField, FormDialog, FormGrid } from '@/components/form';
+import { useToast } from '@/components/ui/toast-provider';
+import { focusFieldByName, validateFormFields } from '@/lib/form-validation';
 
 export type TaxType = 'VAT' | 'AIT' | 'TDS' | 'VDS';
 
@@ -33,7 +37,12 @@ interface BangladeshConfigPageProps {
 }
 
 export function BangladeshConfigPage({ companyId, language, onSaved }: BangladeshConfigPageProps) {
+  const toast = useToast();
+  const isBn = language === 'bn';
   const [activeTaxTab, setActiveTaxTab] = useState<'ALL' | TaxType>('ALL');
+  const [taxError, setTaxError] = useState<string | null>(null);
+  const [convError, setConvError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   // Configurable conversion rules (Default 1 MON = 40 KG, configurable)
   const [conversionRules, setConversionRules] = useState<UnitConversionRule[]>([
@@ -155,34 +164,101 @@ export function BangladeshConfigPage({ companyId, language, onSaved }: Banglades
     ? taxRules
     : taxRules.filter((r) => r.taxType === activeTaxTab);
 
+  const handleOpenAddTaxModal = () => {
+    setTaxError(null);
+    setFieldErrors({});
+    setShowAddTaxModal(true);
+  };
+
+  const handleOpenConvModal = () => {
+    setConvError(null);
+    setFieldErrors({});
+    setShowEditConvModal(true);
+  };
+
   const handleAddTaxRule = (e: React.FormEvent) => {
     e.preventDefault();
+    const validation = validateFormFields(
+      [
+        { name: 'newTaxType', label: isBn ? 'করের ধরন' : 'Tax Type', value: newTaxType, required: true, isSelect: true },
+        {
+          name: 'newRatePercent',
+          label: isBn ? 'হার (%)' : 'Rate Percent (%)',
+          value: String(newRatePercent),
+          required: true,
+          type: 'nonNegativeNumber',
+          max: 100,
+        },
+        { name: 'newRuleName', label: isBn ? 'নিয়মের নাম' : 'Rule Name', value: newRuleName, required: true },
+        { name: 'newEffectiveFrom', label: isBn ? 'কার্যকর তারিখ' : 'Effective From Date', value: newEffectiveFrom, required: true, type: 'date' },
+      ],
+      language,
+    );
+    if (!validation.valid) {
+      setFieldErrors(validation.errors);
+      setTaxError(validation.summary);
+      toast.warning(validation.summary);
+      focusFieldByName(validation.firstField);
+      return;
+    }
+
     const created: TaxRule = {
       id: `tx-${Date.now()}`,
       taxType: newTaxType,
-      name: newRuleName || `${newTaxType} Rule ${newRatePercent}%`,
-      category: newCategory,
+      name: newRuleName.trim(),
+      category: newCategory.trim() || 'GENERAL',
       ratePercent: Number(newRatePercent),
       effectiveFrom: newEffectiveFrom,
       effectiveTo: null,
-      sroReference: newSroRef || 'NBR Compliance',
-      description: newDesc,
+      sroReference: newSroRef.trim() || 'NBR Compliance',
+      description: newDesc.trim(),
       active: true,
     };
     setTaxRules([created, ...taxRules]);
+    setNewRuleName('');
+    setNewSroRef('');
+    setNewDesc('');
+    setFieldErrors({});
+    setTaxError(null);
     setShowAddTaxModal(false);
-    onSaved?.('New Bangladesh tax rule configured successfully.');
+    const msg = isBn ? 'নতুন বাংলাদেশ কর নিয়ম সংরক্ষিত হয়েছে।' : 'New Bangladesh tax rule configured successfully.';
+    if (onSaved) onSaved(msg);
+    else toast.success(msg);
   };
 
   const handleSaveConversion = (e: React.FormEvent) => {
     e.preventDefault();
+    const validation = validateFormFields(
+      [
+        {
+          name: 'convFactor',
+          label: isBn ? 'কেজি / মণ' : 'Kilograms per 1 MON',
+          value: String(convFactor),
+          required: true,
+          type: 'positiveNumber',
+        },
+      ],
+      language,
+    );
+    if (!validation.valid) {
+      setFieldErrors(validation.errors);
+      setConvError(validation.summary);
+      toast.warning(validation.summary);
+      focusFieldByName(validation.firstField);
+      return;
+    }
+
     setConversionRules(
       conversionRules.map((c) =>
         c.fromUnit === 'MON' ? { ...c, factor: Number(convFactor) } : c
       )
     );
+    setFieldErrors({});
+    setConvError(null);
     setShowEditConvModal(false);
-    onSaved?.(`Updated 1 MON conversion to ${convFactor} KG.`);
+    const msg = `Updated 1 MON conversion to ${convFactor} KG.`;
+    if (onSaved) onSaved(msg);
+    else toast.success(msg);
   };
 
   // Run live tax calculation using active configurable rules
@@ -238,7 +314,7 @@ export function BangladeshConfigPage({ companyId, language, onSaved }: Banglades
 
         <div className="flex items-center gap-3">
           <button
-            onClick={() => setShowAddTaxModal(true)}
+            onClick={handleOpenAddTaxModal}
             className="inline-flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-xl shadow-sm transition-all text-sm"
           >
             <span>➕</span> Add Tax Rule (নতুন কর নিয়ম)
@@ -457,48 +533,57 @@ export function BangladeshConfigPage({ companyId, language, onSaved }: Banglades
         <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
           {/* Controls */}
           <div className="md:col-span-5 space-y-4 bg-slate-50 p-4 rounded-xl border border-slate-200 text-xs">
-            <div>
-              <label className="block font-medium text-slate-700 mb-1">Base Amount (টাকা):</label>
-              <div className="relative">
-                <span className="absolute left-3 top-2.5 text-slate-400 font-bold">৳</span>
-                <input
-                  type="number"
-                  value={simBaseAmount}
-                  onChange={(e) => setSimBaseAmount(Number(e.target.value) || 0)}
-                  className="w-full pl-8 pr-3 py-2 bg-white border border-slate-300 rounded-lg text-sm font-mono font-semibold focus:ring-2 focus:ring-emerald-500"
-                />
-              </div>
-            </div>
+            <AppTextField
+              fieldName="simBaseAmount"
+              type="number"
+              prefixText="৳"
+              label={isBn ? 'বেস পরিমাণ (টাকা)' : 'Base Amount (টাকা)'}
+              value={simBaseAmount}
+              inputProps={{ min: 0 }}
+              onValueChange={(val) => setSimBaseAmount(Number(val) || 0)}
+            />
 
-            <div>
-              <label className="block font-medium text-slate-700 mb-1">Commodity / Service Category:</label>
-              <select
-                value={simCategory}
-                onChange={(e) => setSimCategory(e.target.value)}
-                className="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs"
-              >
-                <option value="PADDY">Raw Paddy (কাঁচা ধান)</option>
-                <option value="BY_PRODUCT">Rice Bran / Husk (কুঁড়া / তুষ)</option>
-                <option value="TRANSPORT">Truck Freight Transport (পরিবহন)</option>
-                <option value="CONTRACTOR">Workshop Spares / Contractor (যন্ত্রাংশ)</option>
-              </select>
-            </div>
+            <AppSelect
+              fieldName="simCategory"
+              label={isBn ? 'পণ্য / সার্ভিস ক্যাটাগরি' : 'Commodity / Service Category'}
+              value={simCategory}
+              options={[
+                { value: 'PADDY', label: 'Raw Paddy (কাঁচা ধান)' },
+                { value: 'BY_PRODUCT', label: 'Rice Bran / Husk (কুঁড়া / তুষ)' },
+                { value: 'TRANSPORT', label: 'Truck Freight Transport (পরিবহন)' },
+                { value: 'CONTRACTOR', label: 'Workshop Spares / Contractor (যন্ত্রাংশ)' },
+              ]}
+              onChange={(val) => setSimCategory(val)}
+            />
 
             <div>
               <label className="block font-medium text-slate-700 mb-2">Evaluate Tax Deductions / Withholdings:</label>
-              <div className="grid grid-cols-2 gap-2">
+              <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1 }}>
                 {(['VAT', 'AIT', 'TDS', 'VDS'] as TaxType[]).map((t) => (
-                  <label key={t} className="flex items-center gap-2 p-2 bg-white rounded-lg border border-slate-200 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={simSelectedTaxes[t]}
-                      onChange={(e) => setSimSelectedTaxes({ ...simSelectedTaxes, [t]: e.target.checked })}
-                      className="rounded text-emerald-600 focus:ring-emerald-500"
+                  <Box
+                    key={t}
+                    sx={{
+                      px: 1.25,
+                      py: 0.5,
+                      bgcolor: 'background.paper',
+                      borderRadius: 1.5,
+                      border: '1px solid',
+                      borderColor: 'divider',
+                    }}
+                  >
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          size="small"
+                          checked={simSelectedTaxes[t]}
+                          onChange={(e) => setSimSelectedTaxes({ ...simSelectedTaxes, [t]: e.target.checked })}
+                        />
+                      }
+                      label={<span style={{ fontWeight: 700, fontSize: 13 }}>{t}</span>}
                     />
-                    <span className="font-semibold text-slate-800">{t}</span>
-                  </label>
+                  </Box>
                 ))}
-              </div>
+              </Box>
             </div>
           </div>
 
@@ -543,156 +628,135 @@ export function BangladeshConfigPage({ companyId, language, onSaved }: Banglades
       </div>
 
       {/* MODAL: ADD TAX RULE */}
-      {showAddTaxModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl border border-slate-200">
-            <h3 className="text-lg font-bold text-slate-900 mb-1">Configure New Tax Rule (নতুন কর নিয়ম)</h3>
-            <p className="text-xs text-slate-500 mb-4">Add effective-date based VAT, AIT, TDS, or VDS rule.</p>
+      <FormDialog
+        open={showAddTaxModal}
+        onClose={() => setShowAddTaxModal(false)}
+        onSubmit={handleAddTaxRule}
+        title={isBn ? 'নতুন কর নিয়ম কনফিগার করুন' : 'Configure New Tax Rule'}
+        subtitle={isBn ? 'কার্যকর তারিখ ভিত্তিক ভ্যাট, এআইটি, টিডিএস বা ভিডিএস নিয়ম যুক্ত করুন।' : 'Add effective-date based VAT, AIT, TDS, or VDS rule.'}
+        error={taxError}
+        onClearError={() => setTaxError(null)}
+        submitLabel={isBn ? 'কর নিয়ম সংরক্ষণ' : 'Save Tax Rule'}
+        cancelLabel={isBn ? 'বাতিল' : 'Cancel'}
+        maxWidth="sm"
+      >
+        <FormGrid columns={{ xs: 1, sm: 2 }}>
+          <AppSelect
+            fieldName="newTaxType"
+            required
+            label={isBn ? 'করের ধরন' : 'Tax Type'}
+            value={newTaxType}
+            errorText={fieldErrors.newTaxType}
+            options={[
+              { value: 'VAT', label: 'VAT (মূসক)' },
+              { value: 'AIT', label: 'AIT (অগ্রিম আয়কর)' },
+              { value: 'TDS', label: 'TDS (উৎস কর)' },
+              { value: 'VDS', label: 'VDS (উৎস মূসক)' },
+            ]}
+            onChange={(val) => {
+              setNewTaxType(val as TaxType);
+              setFieldErrors((p) => ({ ...p, newTaxType: '' }));
+            }}
+          />
+          <AppTextField
+            fieldName="newRatePercent"
+            required
+            type="number"
+            unit="%"
+            label={isBn ? 'হার (%)' : 'Rate Percent (%)'}
+            value={newRatePercent}
+            errorText={fieldErrors.newRatePercent}
+            inputProps={{ min: 0, max: 100, step: '.01' }}
+            onValueChange={(val) => {
+              setNewRatePercent(val === '' ? 0 : Number(val));
+              setFieldErrors((p) => ({ ...p, newRatePercent: '' }));
+            }}
+          />
+        </FormGrid>
 
-            <form onSubmit={handleAddTaxRule} className="space-y-3 text-xs">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-medium text-slate-700 mb-1">Tax Type:</label>
-                  <select
-                    value={newTaxType}
-                    onChange={(e) => setNewTaxType(e.target.value as TaxType)}
-                    className="w-full p-2 border border-slate-300 rounded-lg"
-                  >
-                    <option value="VAT">VAT (মূসক)</option>
-                    <option value="AIT">AIT (অগ্রিম আয়কর)</option>
-                    <option value="TDS">TDS (উৎস কর)</option>
-                    <option value="VDS">VDS (উৎস মূসক)</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block font-medium text-slate-700 mb-1">Rate Percent (%):</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={newRatePercent}
-                    onChange={(e) => setNewRatePercent(Number(e.target.value))}
-                    required
-                    className="w-full p-2 border border-slate-300 rounded-lg"
-                  />
-                </div>
-              </div>
+        <AppTextField
+          fieldName="newRuleName"
+          required
+          label={isBn ? 'নিয়মের নাম' : 'Rule Name'}
+          placeholder="e.g. Rice Bran NBR VAT"
+          value={newRuleName}
+          errorText={fieldErrors.newRuleName}
+          onValueChange={(val) => {
+            setNewRuleName(val);
+            setFieldErrors((p) => ({ ...p, newRuleName: '' }));
+          }}
+        />
 
-              <div>
-                <label className="block font-medium text-slate-700 mb-1">Rule Name:</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Rice Bran NBR VAT"
-                  value={newRuleName}
-                  onChange={(e) => setNewRuleName(e.target.value)}
-                  required
-                  className="w-full p-2 border border-slate-300 rounded-lg"
-                />
-              </div>
+        <FormGrid columns={{ xs: 1, sm: 2 }}>
+          <AppTextField
+            fieldName="newCategory"
+            label={isBn ? 'ক্যাটাগরি' : 'Category'}
+            placeholder="e.g. PADDY, BRAN, TRANSPORT"
+            value={newCategory}
+            onValueChange={(val) => setNewCategory(val.toUpperCase())}
+          />
+          <AppTextField
+            fieldName="newEffectiveFrom"
+            required
+            type="date"
+            InputLabelProps={{ shrink: true }}
+            label={isBn ? 'কার্যকর তারিখ' : 'Effective From Date'}
+            value={newEffectiveFrom}
+            errorText={fieldErrors.newEffectiveFrom}
+            onValueChange={(val) => {
+              setNewEffectiveFrom(val);
+              setFieldErrors((p) => ({ ...p, newEffectiveFrom: '' }));
+            }}
+          />
+        </FormGrid>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-medium text-slate-700 mb-1">Category:</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. PADDY, BRAN, TRANSPORT"
-                    value={newCategory}
-                    onChange={(e) => setNewCategory(e.target.value.toUpperCase())}
-                    className="w-full p-2 border border-slate-300 rounded-lg"
-                  />
-                </div>
-                <div>
-                  <label className="block font-medium text-slate-700 mb-1">Effective From Date:</label>
-                  <input
-                    type="date"
-                    value={newEffectiveFrom}
-                    onChange={(e) => setNewEffectiveFrom(e.target.value)}
-                    required
-                    className="w-full p-2 border border-slate-300 rounded-lg"
-                  />
-                </div>
-              </div>
+        <AppTextField
+          fieldName="newSroRef"
+          label={isBn ? 'এনবিআর এসআরও রেফারেন্স' : 'NBR SRO / Regulatory Reference'}
+          placeholder="e.g. SRO No. 182-Ain/2021/140-Mushak"
+          value={newSroRef}
+          onValueChange={(val) => setNewSroRef(val)}
+        />
 
-              <div>
-                <label className="block font-medium text-slate-700 mb-1">NBR SRO / Regulatory Reference:</label>
-                <input
-                  type="text"
-                  placeholder="e.g. SRO No. 182-Ain/2021/140-Mushak"
-                  value={newSroRef}
-                  onChange={(e) => setNewSroRef(e.target.value)}
-                  className="w-full p-2 border border-slate-300 rounded-lg"
-                />
-              </div>
-
-              <div>
-                <label className="block font-medium text-slate-700 mb-1">Description:</label>
-                <textarea
-                  rows={2}
-                  placeholder="Policy details..."
-                  value={newDesc}
-                  onChange={(e) => setNewDesc(e.target.value)}
-                  className="w-full p-2 border border-slate-300 rounded-lg"
-                />
-              </div>
-
-              <div className="flex justify-end gap-2 pt-3 border-t border-slate-200">
-                <button
-                  type="button"
-                  onClick={() => setShowAddTaxModal(false)}
-                  className="px-4 py-2 border border-slate-300 rounded-lg hover:bg-slate-50 font-medium"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-medium"
-                >
-                  Save Tax Rule
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+        <AppTextField
+          fieldName="newDesc"
+          multiline
+          rows={2}
+          label={isBn ? 'বিবরণ' : 'Description'}
+          placeholder="Policy details..."
+          value={newDesc}
+          onValueChange={(val) => setNewDesc(val)}
+        />
+      </FormDialog>
 
       {/* MODAL: EDIT MON CONVERSION FACTOR */}
-      {showEditConvModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-xl border border-slate-200">
-            <h3 className="text-base font-bold text-slate-900 mb-1">Configure Mon Conversion (মণ রূপান্তর)</h3>
-            <p className="text-xs text-slate-500 mb-4">Default benchmark is 40.0 KG per Mon.</p>
-
-            <form onSubmit={handleSaveConversion} className="space-y-4 text-xs">
-              <div>
-                <label className="block font-medium text-slate-700 mb-1">Kilograms per 1 MON (কেজি / মণ):</label>
-                <input
-                  type="number"
-                  step="0.1"
-                  value={convFactor}
-                  onChange={(e) => setConvFactor(Number(e.target.value))}
-                  required
-                  className="w-full p-2.5 border border-slate-300 rounded-lg text-base font-mono font-bold"
-                />
-              </div>
-
-              <div className="flex justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowEditConvModal(false)}
-                  className="px-4 py-2 border border-slate-300 rounded-lg hover:bg-slate-50 font-medium"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-medium"
-                >
-                  Apply Factor
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <FormDialog
+        open={showEditConvModal}
+        onClose={() => setShowEditConvModal(false)}
+        onSubmit={handleSaveConversion}
+        title={isBn ? 'মণ রূপান্তর নির্ধারণ' : 'Configure Mon Conversion'}
+        subtitle={isBn ? 'সাধারণ স্ট্যান্ডার্ড ১ মণ = ৪০ কেজি।' : 'Default benchmark is 40.0 KG per Mon.'}
+        error={convError}
+        onClearError={() => setConvError(null)}
+        submitLabel={isBn ? 'প্রয়োগ করুন' : 'Apply Factor'}
+        cancelLabel={isBn ? 'বাতিল' : 'Cancel'}
+        maxWidth="xs"
+      >
+        <AppTextField
+          fieldName="convFactor"
+          required
+          type="number"
+          unit="KG / MON"
+          label={isBn ? '১ মণে কত কেজি' : 'Kilograms per 1 MON'}
+          value={convFactor}
+          errorText={fieldErrors.convFactor}
+          inputProps={{ min: 1, step: '.1' }}
+          onValueChange={(val) => {
+            setConvFactor(val === '' ? 0 : Number(val));
+            setFieldErrors((p) => ({ ...p, convFactor: '' }));
+          }}
+        />
+      </FormDialog>
     </div>
   );
 }

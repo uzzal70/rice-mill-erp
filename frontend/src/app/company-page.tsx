@@ -1,11 +1,14 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import {
-  Alert, Box, Button, CircularProgress, FormControl, InputLabel, MenuItem, Paper, Select, Stack, TextField, Typography,
+  Alert, Box, Button, CircularProgress, Paper, Stack, Typography,
 } from '@mui/material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ApiError, apiRequest } from '@/lib/api';
+import { extractApiError, useToast } from '@/components/ui/toast-provider';
+import { focusFieldByName, validateFormFields } from '@/lib/form-validation';
+import { AppSelect, AppTextField, FormGrid } from '@/components/form';
 
 type Company = {
   id: string;
@@ -144,9 +147,11 @@ export function CompanyPage({
   onCompanyCreated: (companyId: string) => void;
 }) {
   const t = labels[language];
+  const toast = useToast();
   const queryClient = useQueryClient();
   const [values, setValues] = useState<CompanyForm>(emptyCompany);
   const [createMode, setCreateMode] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const companyQuery = useQuery({
     queryKey: ['company-profile', companyId],
     queryFn: () => apiRequest<Company>(`/companies/${encodeURIComponent(companyId)}`),
@@ -158,8 +163,11 @@ export function CompanyPage({
   });
 
   useEffect(() => {
-    if (companyQuery.data) setValues(formValues(companyQuery.data));
-  }, [companyQuery.data]);
+    if (!createMode && companyQuery.data) {
+      setValues(formValues(companyQuery.data));
+      setFieldErrors({});
+    }
+  }, [companyQuery.data, createMode]);
 
   const updateMutation = useMutation({
     mutationFn: () => {
@@ -188,12 +196,36 @@ export function CompanyPage({
       }
       onSaved(t.saved, createMode ? company : undefined);
       setValues(formValues(company));
+      setFieldErrors({});
     },
-    onError: error => onError(error instanceof Error ? error.message : t.failed),
+    onError: error => onError(extractApiError(error, t.failed)),
   });
 
   function setField<K extends keyof CompanyForm>(key: K, value: CompanyForm[K]) {
     setValues(current => ({ ...current, [key]: value }));
+    setFieldErrors(current => ({ ...current, [String(key)]: '' }));
+  }
+
+  function handleSubmit(event: FormEvent) {
+    event.preventDefault();
+    const validation = validateFormFields(
+      [
+        { name: 'name', label: t.name, value: values.name, required: true },
+        { name: 'code', label: t.code, value: values.code, required: true },
+        { name: 'email', label: t.email, value: values.email ?? '', type: 'email' },
+        { name: 'fiscalYearStart', label: t.fiscalYearStart, value: values.fiscalYearStart, required: true, isSelect: true },
+        { name: 'currency', label: t.currency, value: values.currency, required: true, minLength: 3 },
+      ],
+      language,
+    );
+    if (!validation.valid) {
+      setFieldErrors(validation.errors);
+      toast.warning(validation.summary);
+      focusFieldByName(validation.firstField);
+      return;
+    }
+    setFieldErrors({});
+    updateMutation.mutate();
   }
 
   const loading = companyQuery.isLoading;
@@ -208,63 +240,74 @@ export function CompanyPage({
       <Typography className="brand-font" variant="h5" fontWeight={800}>{t.title}</Typography>
       <Typography color="text.secondary" fontSize={13} mt={.5}>{t.subtitle}</Typography>
     </Box>
-    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems={{ sm: 'center' }}>
-      {!createMode && companies.length > 1 && <FormControl size="small" sx={{ maxWidth: 420, minWidth: 300 }}>
-        <InputLabel>{t.company}</InputLabel>
-        <Select label={t.company} value={companyId} onChange={event => onCompanyChanged(event.target.value)}>
-          {companies.map(company => <MenuItem key={company.id} value={company.id}>{company.name} · {company.code}</MenuItem>)}
-        </Select>
-      </FormControl>}
+    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} alignItems={{ sm: 'center' }}>
+      {!createMode && companies.length > 1 && <Box sx={{ minWidth: { xs: '100%', sm: 320 }, maxWidth: 420 }}>
+        <AppSelect
+          name="company-selector"
+          label={t.company}
+          value={companyId}
+          options={companies.map(company => ({ value: company.id, label: company.name, badge: company.code }))}
+          onChange={onCompanyChanged}
+        />
+      </Box>}
       {canCreateCompany && <Button variant={createMode ? 'outlined' : 'contained'} onClick={() => {
         setCreateMode(current => !current);
+        setFieldErrors({});
         setValues(createMode && companyQuery.data ? formValues(companyQuery.data) : emptyCompany);
       }}>{createMode ? t.cancelCreate : t.createCompany}</Button>}
     </Stack>
-    {error && <Alert severity="error">{error instanceof Error ? error.message : t.failed}</Alert>}
-    {capabilityError && <Alert severity="error">{capabilityError instanceof Error ? capabilityError.message : t.failed}</Alert>}
+    {error && <Alert severity="error">{extractApiError(error, t.failed)}</Alert>}
+    {capabilityError && <Alert severity="error">{extractApiError(capabilityError, t.failed)}</Alert>}
     {!createMode && loading && <Stack direction="row" spacing={1} alignItems="center"><CircularProgress size={20} /><Typography>{t.loading}</Typography></Stack>}
     {!createMode && !companyId && !canCreateCompany && <Alert severity="info">{t.noCompanies}</Alert>}
     {!createMode && !companyId && canCreateCompany && <Alert severity="info">{t.noCompanies}</Alert>}
     {!createMode && !loading && companyId && !companyQuery.data && !error && <Alert severity="info">{t.noCompanies}</Alert>}
-    {(createMode || (!loading && companyQuery.data)) && <Box component="form" onSubmit={event => { event.preventDefault(); updateMutation.mutate(); }}>
+    {(createMode || (!loading && companyQuery.data)) && <Box component="form" noValidate onSubmit={handleSubmit}>
       <Stack spacing={2}>
         <Paper className="workspace-card" elevation={0} sx={{ p: { xs: 1.5, sm: 2.5 } }}>
           <Typography className="brand-font" fontWeight={800} mb={2}>{t.identity}</Typography>
-          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
-            <TextField label={t.name} value={values.name} onChange={event => setField('name', event.target.value)} inputProps={{ maxLength: 160 }} required />
-            <TextField label={t.code} value={values.code} onChange={event => setField('code', event.target.value)} inputProps={{ maxLength: 24 }} required />
-            <TextField label={t.logoUrl} value={values.logoUrl ?? ''} onChange={event => setField('logoUrl', event.target.value)} type="url" />
-            <TextField label={t.registrationNumber} value={values.registrationNumber ?? ''} onChange={event => setField('registrationNumber', event.target.value)} />
-            <TextField label={t.tin} value={values.tin ?? ''} onChange={event => setField('tin', event.target.value)} />
-            <TextField label={t.bin} value={values.bin ?? ''} onChange={event => setField('bin', event.target.value)} />
-          </Box>
+          <FormGrid columns={2}>
+            <AppTextField fieldName="name" label={t.name} value={values.name} onValueChange={v => setField('name', v)} inputProps={{ maxLength: 160 }} errorText={fieldErrors.name} required />
+            <AppTextField fieldName="code" label={t.code} value={values.code} onValueChange={v => setField('code', v)} inputProps={{ maxLength: 24 }} errorText={fieldErrors.code} required />
+            <AppTextField fieldName="logoUrl" label={t.logoUrl} value={values.logoUrl ?? ''} onValueChange={v => setField('logoUrl', v)} type="url" />
+            <AppTextField fieldName="registrationNumber" label={t.registrationNumber} value={values.registrationNumber ?? ''} onValueChange={v => setField('registrationNumber', v)} />
+            <AppTextField fieldName="tin" label={t.tin} value={values.tin ?? ''} onValueChange={v => setField('tin', v)} />
+            <AppTextField fieldName="bin" label={t.bin} value={values.bin ?? ''} onValueChange={v => setField('bin', v)} />
+          </FormGrid>
         </Paper>
         <Paper className="workspace-card" elevation={0} sx={{ p: { xs: 1.5, sm: 2.5 } }}>
           <Typography className="brand-font" fontWeight={800} mb={2}>{t.contact}</Typography>
-          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
-            <TextField label={t.address} value={values.address ?? ''} onChange={event => setField('address', event.target.value)} multiline minRows={2} sx={{ gridColumn: { sm: '1 / -1' } }} />
-            <TextField label={t.district} value={values.district ?? ''} onChange={event => setField('district', event.target.value)} />
-            <TextField label={t.division} value={values.division ?? ''} onChange={event => setField('division', event.target.value)} />
-            <TextField label={t.phone} value={values.phone ?? ''} onChange={event => setField('phone', event.target.value)} />
-            <TextField label={t.email} type="email" value={values.email ?? ''} onChange={event => setField('email', event.target.value)} />
-            <TextField label={t.website} type="url" value={values.website ?? ''} onChange={event => setField('website', event.target.value)} sx={{ gridColumn: { sm: '1 / -1' } }} />
-          </Box>
+          <FormGrid columns={2}>
+            <Box sx={{ gridColumn: { sm: '1 / -1' } }}>
+              <AppTextField fieldName="address" label={t.address} value={values.address ?? ''} onValueChange={v => setField('address', v)} multiline minRows={2} />
+            </Box>
+            <AppTextField fieldName="district" label={t.district} value={values.district ?? ''} onValueChange={v => setField('district', v)} />
+            <AppTextField fieldName="division" label={t.division} value={values.division ?? ''} onValueChange={v => setField('division', v)} />
+            <AppTextField fieldName="phone" label={t.phone} value={values.phone ?? ''} onValueChange={v => setField('phone', v)} />
+            <AppTextField fieldName="email" label={t.email} type="email" value={values.email ?? ''} onValueChange={v => setField('email', v)} errorText={fieldErrors.email} />
+            <Box sx={{ gridColumn: { sm: '1 / -1' } }}>
+              <AppTextField fieldName="website" label={t.website} type="url" value={values.website ?? ''} onValueChange={v => setField('website', v)} />
+            </Box>
+          </FormGrid>
         </Paper>
         <Paper className="workspace-card" elevation={0} sx={{ p: { xs: 1.5, sm: 2.5 } }}>
           <Typography className="brand-font" fontWeight={800} mb={2}>{t.financial}</Typography>
-          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
-            <FormControl fullWidth>
-              <InputLabel>{t.fiscalYearStart}</InputLabel>
-              <Select label={t.fiscalYearStart} value={values.fiscalYearStart} onChange={event => setField('fiscalYearStart', Number(event.target.value))}>
-                {t.months.map((month, index) => <MenuItem key={month} value={index + 1}>{month}</MenuItem>)}
-              </Select>
-            </FormControl>
-            <TextField label={t.currency} value={values.currency} onChange={event => setField('currency', event.target.value.toUpperCase())} inputProps={{ maxLength: 3, minLength: 3 }} required />
-          </Box>
+          <FormGrid columns={2}>
+            <AppSelect
+              fieldName="fiscalYearStart"
+              label={t.fiscalYearStart}
+              value={String(values.fiscalYearStart)}
+              onChange={v => setField('fiscalYearStart', Number(v))}
+              options={t.months.map((month, index) => ({ value: String(index + 1), label: month }))}
+              errorText={fieldErrors.fiscalYearStart}
+              required
+            />
+            <AppTextField fieldName="currency" label={t.currency} value={values.currency} onValueChange={v => setField('currency', v.toUpperCase())} inputProps={{ maxLength: 3, minLength: 3 }} errorText={fieldErrors.currency} required />
+          </FormGrid>
         </Paper>
         <Stack direction="row" justifyContent="flex-end">
-          <Button type="submit" variant="contained" disabled={updateMutation.isPending || (!createMode && !companyId) || !values.name.trim() || !values.code.trim()}>
-            {updateMutation.isPending ? <CircularProgress size={18} color="inherit" /> : t.save}
+          <Button type="submit" variant="contained" disabled={updateMutation.isPending || (!createMode && !companyId)} startIcon={updateMutation.isPending ? <CircularProgress size={16} color="inherit" /> : undefined}>
+            {t.save}
           </Button>
         </Stack>
       </Stack>

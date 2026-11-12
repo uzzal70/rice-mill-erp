@@ -2,10 +2,13 @@
 
 import { FormEvent, useEffect, useState } from 'react';
 import {
-  Alert, Box, Button, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle,
-  Paper, Stack, Table, TableBody, TableCell, TableHead, TableRow, TextField, Typography,
+  Alert, Box, Button, Chip, CircularProgress,
+  Paper, Stack, Table, TableBody, TableCell, TableHead, TableRow, Typography,
 } from '@mui/material';
 import { apiRequest, queryString } from '@/lib/api';
+import { extractApiError, useToast } from '@/components/ui/toast-provider';
+import { focusFieldByName, validateFormFields } from '@/lib/form-validation';
+import { AppTextField, FormDialog, FormGrid } from '@/components/form';
 
 type QualitySample = {
   id: string;
@@ -100,12 +103,16 @@ export function QualityControlPage({ companyId, factoryId, language, onSaved, on
   onError: (message: string) => void;
 }) {
   const t = labels[language];
+  const bn = language === 'bn';
+  const toast = useToast();
   const [samples, setSamples] = useState<QualitySample[]>([]);
   const [busy, setBusy] = useState(false);
+  const [actionBusyId, setActionBusyId] = useState('');
   const [selected, setSelected] = useState<QualitySample | null>(null);
   const [values, setValues] = useState<Record<string, string>>({});
   const [comments, setComments] = useState('');
   const [formError, setFormError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
 
   async function loadSamples() {
@@ -117,7 +124,7 @@ export function QualityControlPage({ companyId, factoryId, language, onSaved, on
     try {
       setSamples(await apiRequest<QualitySample[]>(`/quality/samples?${queryString({ companyId, factoryId, page: 1, pageSize: 100 })}`));
     } catch (reason) {
-      onError(reason instanceof Error ? reason.message : t.loadFailed);
+      onError(extractApiError(reason, t.loadFailed));
     } finally {
       setBusy(false);
     }
@@ -130,40 +137,73 @@ export function QualityControlPage({ companyId, factoryId, language, onSaved, on
     setValues({});
     setComments('');
     setFormError('');
+    setFieldErrors({});
   }
 
   async function submitResults(event: FormEvent) {
     event.preventDefault();
     if (!selected) return;
-    const measurements = Object.fromEntries(Object.entries(values).filter(([, value]) => value !== '').map(([key, value]) => [key, Number(value)]));
+    const validation = validateFormFields(
+      parameters.map(([key, en, bnLabel]) => ({
+        name: key,
+        label: bn ? bnLabel : en,
+        value: values[key] ?? '',
+        type: 'nonNegativeNumber' as const,
+        min: 0,
+        max: 100,
+      })),
+      language,
+    );
+    if (!validation.valid) {
+      setFieldErrors(validation.errors);
+      setFormError(validation.summary);
+      toast.warning(validation.summary);
+      focusFieldByName(validation.firstField);
+      return;
+    }
+
+    const measurements = Object.fromEntries(
+      Object.entries(values)
+        .filter(([, value]) => value.trim() !== '')
+        .map(([key, value]) => [key, Number(value)]),
+    );
     if (Object.keys(measurements).length === 0) {
-      setFormError(language === 'bn' ? 'অন্তত একটি পরীক্ষার মান লিখুন।' : 'Enter at least one laboratory measurement.');
+      const msg = bn ? 'অনুগ্রহ করে অন্তত একটি পরীক্ষার মান (যেমন: আর্দ্রতা %) লিখুন।' : 'Please enter at least one laboratory measurement (e.g. Moisture %) first.';
+      setFormError(msg);
+      toast.warning(msg);
+      focusFieldByName('moisturePct');
       return;
     }
     setSaving(true);
     setFormError('');
+    setFieldErrors({});
     try {
       await apiRequest(`/quality/samples/${selected.id}/results`, {
         method: 'POST',
-        body: JSON.stringify({ companyId, factoryId, ...measurements, comments }),
+        body: JSON.stringify({ companyId, factoryId, ...measurements, comments: comments.trim() }),
       });
       setSelected(null);
       onSaved(t.resultSaved);
       await loadSamples();
     } catch (reason) {
-      setFormError(reason instanceof Error ? reason.message : t.loadFailed);
+      const msg = extractApiError(reason, t.loadFailed);
+      setFormError(msg);
+      toast.error(msg);
     } finally {
       setSaving(false);
     }
   }
 
   async function decide(sample: QualitySample, decision: 'ACCEPT' | 'REJECT') {
+    setActionBusyId(sample.id);
     try {
       await apiRequest(`/quality/samples/${sample.id}/approve`, { method: 'POST', body: JSON.stringify({ companyId, factoryId, decision }) });
       onSaved(t.decisionSaved);
       await loadSamples();
     } catch (reason) {
-      onError(reason instanceof Error ? reason.message : t.loadFailed);
+      onError(extractApiError(reason, t.loadFailed));
+    } finally {
+      setActionBusyId('');
     }
   }
 
@@ -198,28 +238,50 @@ export function QualityControlPage({ companyId, factoryId, language, onSaved, on
               <TableCell sx={{ maxWidth: 160 }}><Typography variant="body2" noWrap title={sample.gateEntry.item?.name ?? '—'}>{sample.gateEntry.item?.name ?? '—'}</Typography></TableCell>
               <TableCell sx={{ whiteSpace: 'nowrap' }}>{sample.sampleType}</TableCell>
               <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}><Chip size="small" color={sample.status === 'APPROVED' ? 'success' : sample.status === 'REJECTED' ? 'error' : sample.status === 'TESTED' ? 'warning' : 'default'} label={sample.status} /></TableCell>
-              <TableCell sx={{ minWidth: 180 }}><Stack spacing={.3}>{parameters.filter(([key]) => sample.measurements[key] !== undefined).map(([key, en, bn]) => <Typography key={key} fontSize={10} noWrap>{language === 'bn' ? bn : en}: <strong>{sample.measurements[key]}%</strong></Typography>)}</Stack></TableCell>
+              <TableCell sx={{ minWidth: 180 }}><Stack spacing={.3}>{parameters.filter(([key]) => sample.measurements[key] !== undefined).map(([key, en, bnLabel]) => <Typography key={key} fontSize={10} noWrap>{bn ? bnLabel : en}: <strong>{sample.measurements[key]}%</strong></Typography>)}</Stack></TableCell>
               <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}><Stack direction="row" spacing={.5} justifyContent="flex-end">
                 {sample.status === 'SAMPLE' && <Button size="small" variant="contained" onClick={() => openResults(sample)}>{t.enterResults}</Button>}
                 {sample.status === 'TESTED' && <>
-                  <Button size="small" color="success" variant="contained" onClick={() => decide(sample, 'ACCEPT')}>{t.accept}</Button>
-                  <Button size="small" color="error" variant="outlined" onClick={() => decide(sample, 'REJECT')}>{t.reject}</Button>
+                  <Button size="small" color="success" variant="contained" disabled={actionBusyId === sample.id} onClick={() => decide(sample, 'ACCEPT')}>{t.accept}</Button>
+                  <Button size="small" color="error" variant="outlined" disabled={actionBusyId === sample.id} onClick={() => decide(sample, 'REJECT')}>{t.reject}</Button>
                 </>}
               </Stack></TableCell>
             </TableRow>)}</TableBody>
           </Table></Box>}
     </Paper>
 
-    <Dialog open={Boolean(selected)} onClose={() => setSelected(null)} fullWidth maxWidth="sm">
-      <DialogTitle>{t.recordResults}{selected ? ` · ${selected.sampleNumber}` : ''}</DialogTitle>
-      <Box component="form" onSubmit={submitResults}>
-        <DialogContent><Stack spacing={2}>
-          {formError && <Alert severity="error">{formError}</Alert>}
-          {parameters.map(([key, english, bangla]) => <TextField key={key} type="number" label={language === 'bn' ? bangla : english} value={values[key] ?? ''} onChange={event => setValues(current => ({ ...current, [key]: event.target.value }))} inputProps={{ min: 0, max: 100, step: 0.01 }} />)}
-          <TextField label={t.comments} value={comments} onChange={event => setComments(event.target.value)} multiline minRows={2} />
-        </Stack></DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2 }}><Button onClick={() => setSelected(null)}>{t.cancel}</Button><Button type="submit" variant="contained" disabled={saving}>{saving ? <CircularProgress size={18} /> : t.saveResults}</Button></DialogActions>
-      </Box>
-    </Dialog>
+    <FormDialog
+      open={Boolean(selected)}
+      onClose={() => setSelected(null)}
+      onSubmit={submitResults}
+      title={`${t.recordResults}${selected ? ` · ${selected.sampleNumber}` : ''}`}
+      subtitle={bn ? 'অন্তত একটি মানদণ্ডের ফলাফল (%) প্রদান করুন' : 'Enter at least one laboratory test parameter (%)'}
+      error={formError}
+      onClearError={() => setFormError('')}
+      loading={saving}
+      submitLabel={t.saveResults}
+      cancelLabel={t.cancel}
+      maxWidth="md"
+    >
+      <FormGrid columns={3}>
+        {parameters.map(([key, english, bangla]) => (
+          <AppTextField
+            key={key}
+            fieldName={key}
+            type="number"
+            unit="%"
+            label={bn ? bangla : english}
+            value={values[key] ?? ''}
+            errorText={fieldErrors[key]}
+            inputProps={{ min: 0, max: 100, step: 0.01 }}
+            onValueChange={v => {
+              setValues(current => ({ ...current, [key]: v }));
+              setFieldErrors(p => ({ ...p, [key]: '' }));
+            }}
+          />
+        ))}
+      </FormGrid>
+      <AppTextField fieldName="comments" label={t.comments} value={comments} onValueChange={setComments} multiline minRows={2} />
+    </FormDialog>
   </Stack>;
 }

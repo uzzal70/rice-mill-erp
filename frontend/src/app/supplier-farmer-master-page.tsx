@@ -3,11 +3,14 @@
 import { FormEvent, useEffect, useState } from 'react';
 import {
   Alert, Box, Button, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle,
-  FormControl, InputLabel, MenuItem, Paper, Select, Stack, Table, TableBody, TableCell, TableHead,
-  TableRow, TextField, Typography,
+  Paper, Stack, Table, TableBody, TableCell, TableHead,
+  TableRow, Typography,
 } from '@mui/material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiRequest, queryString } from '@/lib/api';
+import { extractApiError, useToast } from '@/components/ui/toast-provider';
+import { focusFieldByName, validateFormFields } from '@/lib/form-validation';
+import { AppSelect, AppTextField, FormDialog, FormGrid } from '@/components/form';
 
 type PartnerType = 'SUPPLIER' | 'FARMER' | 'CUSTOMER';
 type Partner = {
@@ -308,6 +311,7 @@ export function SupplierFarmerMasterPage({
   onSaved: (message: string) => void;
 }) {
   const t = labels[language];
+  const toast = useToast();
   const queryClient = useQueryClient();
   const [type, setType] = useState<PartnerType>('SUPPLIER');
   const [search, setSearch] = useState('');
@@ -317,9 +321,11 @@ export function SupplierFarmerMasterPage({
   const [editing, setEditing] = useState<Partner | null>(null);
   const [profile, setProfile] = useState<ProfileForm>(blankProfile);
   const [profileError, setProfileError] = useState('');
+  const [profileFieldErrors, setProfileFieldErrors] = useState<Record<string, string>>({});
   const [financialPartner, setFinancialPartner] = useState<Partner | null>(null);
   const [financial, setFinancial] = useState<FinancialForm>(blankFinancial);
   const [financialError, setFinancialError] = useState('');
+  const [financialFieldErrors, setFinancialFieldErrors] = useState<Record<string, string>>({});
   const [ledgerPartner, setLedgerPartner] = useState<Partner | null>(null);
   const [ledgerPage, setLedgerPage] = useState(1);
 
@@ -390,7 +396,11 @@ export function SupplierFarmerMasterPage({
       setProfile(blankProfile);
       onSaved(t.profileSaved);
     },
-    onError: reason => setProfileError(errorText(reason, t.failed)),
+    onError: reason => {
+      const msg = extractApiError(reason, t.failed);
+      setProfileError(msg);
+      toast.error(msg);
+    },
   });
   const updateMutation = useMutation({
     mutationFn: () => {
@@ -416,9 +426,14 @@ export function SupplierFarmerMasterPage({
       await invalidate();
       setProfileOpen(false);
       setEditing(null);
+      setProfileFieldErrors({});
       onSaved(t.profileSaved);
     },
-    onError: reason => setProfileError(errorText(reason, t.failed)),
+    onError: reason => {
+      const msg = extractApiError(reason, t.failed);
+      setProfileError(msg);
+      toast.error(msg);
+    },
   });
   const financialMutation = useMutation({
     mutationFn: () => {
@@ -440,32 +455,71 @@ export function SupplierFarmerMasterPage({
       await invalidate();
       setFinancialPartner(null);
       setFinancialError('');
+      setFinancialFieldErrors({});
       onSaved(t.financialSaved);
     },
-    onError: reason => setFinancialError(errorText(reason, t.financialForbidden)),
+    onError: reason => {
+      const msg = extractApiError(reason, t.financialForbidden);
+      setFinancialError(msg);
+      toast.error(msg);
+    },
   });
 
   function startCreate() {
     setEditing(null);
     setProfile(blankProfile);
     setProfileError('');
+    setProfileFieldErrors({});
     setProfileOpen(true);
   }
   function startEdit(partner: Partner) {
     setEditing(partner);
     setProfile(profileFrom(partner));
     setProfileError('');
+    setProfileFieldErrors({});
     setProfileOpen(true);
   }
   function submitProfile(event: FormEvent) {
     event.preventDefault();
+    const validation = validateFormFields(
+      [
+        { name: 'name', label: t.name, value: profile.name, required: true },
+        { name: 'code', label: t.code, value: profile.code, required: true },
+        { name: 'email', label: t.email, value: profile.email, type: 'email' },
+      ],
+      language,
+    );
+    if (!validation.valid) {
+      setProfileFieldErrors(validation.errors);
+      setProfileError(validation.summary);
+      toast.warning(validation.summary);
+      focusFieldByName(validation.firstField);
+      return;
+    }
     setProfileError('');
+    setProfileFieldErrors({});
     if (editing) updateMutation.mutate();
     else createMutation.mutate();
   }
   function submitFinancial(event: FormEvent) {
     event.preventDefault();
+    const validation = validateFormFields(
+      [
+        { name: 'creditLimit', label: t.creditLimit, value: financial.creditLimit, type: 'nonNegativeNumber' },
+        { name: 'paymentTermsDays', label: t.paymentTerms, value: financial.paymentTermsDays, type: 'integer', min: 0 },
+        { name: 'openingBalance', label: t.openingBalance, value: financial.openingBalance, type: 'number' },
+      ],
+      language,
+    );
+    if (!validation.valid) {
+      setFinancialFieldErrors(validation.errors);
+      setFinancialError(validation.summary);
+      toast.warning(validation.summary);
+      focusFieldByName(validation.firstField);
+      return;
+    }
     setFinancialError('');
+    setFinancialFieldErrors({});
     financialMutation.mutate();
   }
 
@@ -477,23 +531,35 @@ export function SupplierFarmerMasterPage({
       <Button variant="contained" onClick={startCreate}>{t.add}</Button>
     </Box>
     <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
-      <FormControl size="small" sx={{ minWidth: 150 }}>
-        <InputLabel>{language === 'bn' ? 'ধরন' : 'Partner type'}</InputLabel>
-        <Select label={language === 'bn' ? 'ধরন' : 'Partner type'} value={type} onChange={event => { setType(event.target.value as PartnerType); setPage(1); }}>
-          <MenuItem value="SUPPLIER">{t.supplier}</MenuItem>
-          <MenuItem value="FARMER">{t.farmer}</MenuItem>
-          <MenuItem value="CUSTOMER">{t.customer}</MenuItem>
-        </Select>
-      </FormControl>
-      <TextField size="small" fullWidth value={search} placeholder={language === 'bn' ? 'নাম, কোড বা মোবাইল খুঁজুন' : 'Search name, code, or mobile'} onChange={event => { setSearch(event.target.value); setPage(1); }} />
-      <FormControl size="small" sx={{ minWidth: 150 }}>
-        <InputLabel>{t.status}</InputLabel>
-        <Select label={t.status} value={activeFilter} onChange={event => { setActiveFilter(event.target.value as typeof activeFilter); setPage(1); }}>
-          <MenuItem value="all">{t.all}</MenuItem><MenuItem value="true">{t.active}</MenuItem><MenuItem value="false">{t.inactive}</MenuItem>
-        </Select>
-      </FormControl>
+      <Box sx={{ minWidth: 170 }}>
+        <AppSelect
+          name="partnerTypeFilter"
+          label={language === 'bn' ? 'ধরন' : 'Partner type'}
+          value={type}
+          onChange={v => { setType(v as PartnerType); setPage(1); }}
+          options={[
+            { value: 'SUPPLIER', label: t.supplier },
+            { value: 'FARMER', label: t.farmer },
+            { value: 'CUSTOMER', label: t.customer },
+          ]}
+        />
+      </Box>
+      <AppTextField fieldName="search" value={search} placeholder={language === 'bn' ? 'নাম, কোড বা মোবাইল খুঁজুন' : 'Search name, code, or mobile'} onValueChange={v => { setSearch(v); setPage(1); }} />
+      <Box sx={{ minWidth: 160 }}>
+        <AppSelect
+          name="statusFilter"
+          label={t.status}
+          value={activeFilter}
+          onChange={v => { setActiveFilter(v as typeof activeFilter); setPage(1); }}
+          options={[
+            { value: 'all', label: t.all },
+            { value: 'true', label: t.active },
+            { value: 'false', label: t.inactive },
+          ]}
+        />
+      </Box>
     </Stack>
-    {partnersQuery.error && <Alert severity="error">{errorText(partnersQuery.error, t.failed)}</Alert>}
+    {partnersQuery.error && <Alert severity="error">{extractApiError(partnersQuery.error, t.failed)}</Alert>}
     <Paper variant="outlined" sx={{ overflowX: 'auto' }}>
       {partnersQuery.isLoading
         ? <Stack direction="row" spacing={1} alignItems="center" p={3}><CircularProgress size={18} /><Typography>{t.loading}</Typography></Stack>
@@ -519,7 +585,7 @@ export function SupplierFarmerMasterPage({
               <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}><Chip size="small" color={partner.active ? 'success' : 'default'} label={partner.active ? t.active : t.inactive} /></TableCell>
               <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}><Stack direction="row" spacing={0.5} justifyContent="flex-end">
                 <Button size="small" onClick={() => startEdit(partner)}>{language === 'bn' ? 'সম্পাদনা' : 'Edit'}</Button>
-                <Button size="small" onClick={() => { setFinancial(blankFinancial); setFinancialPartner(partner); setFinancialError(''); }}>{t.financial}</Button>
+                <Button size="small" onClick={() => { setFinancial(blankFinancial); setFinancialPartner(partner); setFinancialError(''); setFinancialFieldErrors({}); }}>{t.financial}</Button>
                 <Button size="small" onClick={() => { setLedgerPage(1); setLedgerPartner(partner); }}>{partner.type === 'CUSTOMER' ? t.customerLedger : t.ledger}</Button>
               </Stack></TableCell>
             </TableRow>)}
@@ -533,52 +599,68 @@ export function SupplierFarmerMasterPage({
       <Button size="small" disabled={partners.length < 50 || partnersQuery.isFetching} onClick={() => setPage(current => current + 1)}>{t.next}</Button>
     </Stack>
 
-    <Dialog open={profileOpen} onClose={() => setProfileOpen(false)} fullWidth maxWidth="md">
-      <DialogTitle>{editing ? t.edit : `${t.add} · ${type === 'SUPPLIER' ? t.supplier : type === 'FARMER' ? t.farmer : t.customer}`}</DialogTitle>
-      <Box component="form" onSubmit={submitProfile}>
-        <DialogContent><Stack spacing={2}>
-          {profileError && <Alert severity="error">{profileError}</Alert>}
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
-            <TextField required fullWidth label={t.name} value={profile.name} onChange={event => setProfile(current => ({ ...current, name: event.target.value }))} />
-            <TextField required fullWidth label={t.code} value={profile.code} onChange={event => setProfile(current => ({ ...current, code: event.target.value }))} />
-          </Stack>
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
-            <TextField fullWidth label={t.businessName} value={profile.businessName} onChange={event => setProfile(current => ({ ...current, businessName: event.target.value }))} />
-            <TextField fullWidth label={t.phone} value={profile.phone} onChange={event => setProfile(current => ({ ...current, phone: event.target.value }))} />
-            <TextField fullWidth type="email" label={t.email} value={profile.email} onChange={event => setProfile(current => ({ ...current, email: event.target.value }))} />
-          </Stack>
-          <TextField fullWidth multiline minRows={2} label={t.address} value={profile.address} onChange={event => setProfile(current => ({ ...current, address: event.target.value }))} />
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
-            <TextField fullWidth label={t.nid} value={profile.nid} onChange={event => setProfile(current => ({ ...current, nid: event.target.value }))} />
-            <TextField fullWidth label={t.tin} value={profile.tin} onChange={event => setProfile(current => ({ ...current, tin: event.target.value }))} />
-            <TextField fullWidth label={t.bin} value={profile.bin} onChange={event => setProfile(current => ({ ...current, bin: event.target.value }))} />
-          </Stack>
-          {editing && <FormControl size="small"><InputLabel>{t.status}</InputLabel><Select label={t.status} value={profile.active ? 'true' : 'false'} onChange={event => setProfile(current => ({ ...current, active: event.target.value === 'true' }))}>
-            <MenuItem value="true">{t.active}</MenuItem><MenuItem value="false">{t.inactive}</MenuItem>
-          </Select></FormControl>}
-        </Stack></DialogContent>
-        <DialogActions><Button onClick={() => setProfileOpen(false)}>{t.cancel}</Button><Button type="submit" variant="contained" disabled={createMutation.isPending || updateMutation.isPending}>{t.save}</Button></DialogActions>
-      </Box>
-    </Dialog>
+    <FormDialog
+      open={profileOpen}
+      onClose={() => setProfileOpen(false)}
+      onSubmit={submitProfile}
+      title={editing ? t.edit : `${t.add} · ${type === 'SUPPLIER' ? t.supplier : type === 'FARMER' ? t.farmer : t.customer}`}
+      error={profileError}
+      onClearError={() => setProfileError('')}
+      loading={createMutation.isPending || updateMutation.isPending}
+      submitLabel={t.save}
+      cancelLabel={t.cancel}
+      maxWidth="md"
+    >
+      <FormGrid columns={2}>
+        <AppTextField fieldName="name" required label={t.name} value={profile.name} errorText={profileFieldErrors.name} onValueChange={v => { setProfile(c => ({ ...c, name: v })); setProfileFieldErrors(p => ({ ...p, name: '' })); }} />
+        <AppTextField fieldName="code" required label={t.code} value={profile.code} errorText={profileFieldErrors.code} onValueChange={v => { setProfile(c => ({ ...c, code: v })); setProfileFieldErrors(p => ({ ...p, code: '' })); }} />
+        <AppTextField fieldName="businessName" label={t.businessName} value={profile.businessName} onValueChange={v => setProfile(c => ({ ...c, businessName: v }))} />
+        <AppTextField fieldName="phone" label={t.phone} placeholder="01XXXXXXXXX" value={profile.phone} onValueChange={v => setProfile(c => ({ ...c, phone: v }))} />
+        <AppTextField fieldName="email" type="email" label={t.email} value={profile.email} errorText={profileFieldErrors.email} onValueChange={v => { setProfile(c => ({ ...c, email: v })); setProfileFieldErrors(p => ({ ...p, email: '' })); }} />
+        <AppTextField fieldName="nid" label={t.nid} value={profile.nid} onValueChange={v => setProfile(c => ({ ...c, nid: v }))} />
+        <AppTextField fieldName="tin" label={t.tin} value={profile.tin} onValueChange={v => setProfile(c => ({ ...c, tin: v }))} />
+        <AppTextField fieldName="bin" label={t.bin} value={profile.bin} onValueChange={v => setProfile(c => ({ ...c, bin: v }))} />
+        {editing && (
+          <AppSelect
+            fieldName="active"
+            label={t.status}
+            value={profile.active ? 'true' : 'false'}
+            onChange={v => setProfile(c => ({ ...c, active: v === 'true' }))}
+            options={[{ value: 'true', label: t.active }, { value: 'false', label: t.inactive }]}
+          />
+        )}
+        <Box sx={{ gridColumn: { sm: '1 / -1' } }}>
+          <AppTextField fieldName="address" multiline minRows={2} label={t.address} value={profile.address} onValueChange={v => setProfile(c => ({ ...c, address: v }))} />
+        </Box>
+      </FormGrid>
+    </FormDialog>
 
-    <Dialog open={Boolean(financialPartner)} onClose={() => setFinancialPartner(null)} fullWidth maxWidth="sm">
-      <DialogTitle>{t.financial} · {financialPartner?.name}</DialogTitle>
-      <Box component="form" onSubmit={submitFinancial}>
-        <DialogContent><Stack spacing={2}>
-          {financialQuery.error && <Alert severity="error">{errorText(financialQuery.error, t.financialForbidden)}</Alert>}
-          {financialError && <Alert severity="error">{financialError}</Alert>}
-          {financialQuery.isLoading ? <CircularProgress size={20} /> : <>
-            <TextField label={t.bankName} value={financial.bankName} onChange={event => setFinancial(current => ({ ...current, bankName: event.target.value }))} />
-            <TextField label={t.bankAccount} value={financial.bankAccount} onChange={event => setFinancial(current => ({ ...current, bankAccount: event.target.value }))} />
-            <TextField label={t.paymentMethod} value={financial.paymentMethod} onChange={event => setFinancial(current => ({ ...current, paymentMethod: event.target.value }))} />
-            <TextField label={t.creditLimit} value={financial.creditLimit} onChange={event => setFinancial(current => ({ ...current, creditLimit: event.target.value }))} inputProps={{ inputMode: 'decimal' }} />
-            <TextField label={t.paymentTerms} value={financial.paymentTermsDays} onChange={event => setFinancial(current => ({ ...current, paymentTermsDays: event.target.value }))} inputProps={{ inputMode: 'numeric' }} />
-            <TextField label={t.openingBalance} value={financial.openingBalance} onChange={event => setFinancial(current => ({ ...current, openingBalance: event.target.value }))} inputProps={{ inputMode: 'decimal' }} />
-          </>}
-        </Stack></DialogContent>
-        <DialogActions><Button onClick={() => setFinancialPartner(null)}>{t.cancel}</Button><Button type="submit" variant="contained" disabled={financialQuery.isLoading || financialQuery.isError || financialMutation.isPending}>{t.save}</Button></DialogActions>
-      </Box>
-    </Dialog>
+    <FormDialog
+      open={Boolean(financialPartner)}
+      onClose={() => setFinancialPartner(null)}
+      onSubmit={submitFinancial}
+      title={`${t.financial} · ${financialPartner?.name ?? ''}`}
+      error={financialError || (financialQuery.error ? extractApiError(financialQuery.error, t.financialForbidden) : '')}
+      onClearError={() => setFinancialError('')}
+      loading={financialMutation.isPending}
+      submitDisabled={financialQuery.isLoading || financialQuery.isError}
+      submitLabel={t.save}
+      cancelLabel={t.cancel}
+      maxWidth="sm"
+    >
+      {financialQuery.isLoading ? (
+        <Stack direction="row" spacing={1} alignItems="center" py={2}><CircularProgress size={20} /><Typography variant="caption">Loading financial details...</Typography></Stack>
+      ) : (
+        <FormGrid columns={2}>
+          <AppTextField fieldName="bankName" label={t.bankName} value={financial.bankName} onValueChange={v => setFinancial(c => ({ ...c, bankName: v }))} />
+          <AppTextField fieldName="bankAccount" label={t.bankAccount} value={financial.bankAccount} onValueChange={v => setFinancial(c => ({ ...c, bankAccount: v }))} />
+          <AppTextField fieldName="paymentMethod" label={t.paymentMethod} placeholder="Cash / Bank / MFS" value={financial.paymentMethod} onValueChange={v => setFinancial(c => ({ ...c, paymentMethod: v }))} />
+          <AppTextField fieldName="creditLimit" label={t.creditLimit} prefixText="৳" type="number" value={financial.creditLimit} errorText={financialFieldErrors.creditLimit} inputProps={{ step: '0.01', min: 0 }} onValueChange={v => { setFinancial(c => ({ ...c, creditLimit: v })); setFinancialFieldErrors(p => ({ ...p, creditLimit: '' })); }} />
+          <AppTextField fieldName="paymentTermsDays" label={t.paymentTerms} unit="days" type="number" value={financial.paymentTermsDays} errorText={financialFieldErrors.paymentTermsDays} inputProps={{ min: 0, step: 1 }} onValueChange={v => { setFinancial(c => ({ ...c, paymentTermsDays: v })); setFinancialFieldErrors(p => ({ ...p, paymentTermsDays: '' })); }} />
+          <AppTextField fieldName="openingBalance" label={t.openingBalance} prefixText="৳" type="number" value={financial.openingBalance} errorText={financialFieldErrors.openingBalance} inputProps={{ step: '0.01' }} onValueChange={v => { setFinancial(c => ({ ...c, openingBalance: v })); setFinancialFieldErrors(p => ({ ...p, openingBalance: '' })); }} />
+        </FormGrid>
+      )}
+    </FormDialog>
 
     <Dialog open={Boolean(ledgerPartner)} onClose={() => setLedgerPartner(null)} fullWidth maxWidth="lg">
       <DialogTitle>{isCustomer ? t.customerStatement : t.ledger} · {ledgerPartner?.name}</DialogTitle>

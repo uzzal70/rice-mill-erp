@@ -8,11 +8,6 @@ import {
   Card,
   CardContent,
   Chip,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  Divider,
   Paper,
   Stack,
   Tab,
@@ -22,7 +17,6 @@ import {
   TableHead,
   TableRow,
   Tabs,
-  TextField,
   Typography,
 } from '@mui/material';
 import PrecisionManufacturingRoundedIcon from '@mui/icons-material/PrecisionManufacturingRounded';
@@ -34,6 +28,9 @@ import AddCircleOutlineRoundedIcon from '@mui/icons-material/AddCircleOutlineRou
 import RefreshRoundedIcon from '@mui/icons-material/RefreshRounded';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/api';
+import { AppAutocomplete, AppSelect, AppTextField, FormDialog, FormGrid, FormSection } from '@/components/form';
+import { extractApiError, useToast } from '@/components/ui/toast-provider';
+import { FieldRule, focusFieldByName, validateFormFields } from '@/lib/form-validation';
 
 interface MachinesPageProps {
   companyId: string;
@@ -49,6 +46,7 @@ export function MachinesPage({
   onSaved,
 }: MachinesPageProps) {
   const queryClient = useQueryClient();
+  const toast = useToast();
   const isBn = language === 'bn';
 
   const [activeTab, setActiveTab] = useState(0); // 0: Machines, 1: Service Due, 2: Breakdowns
@@ -92,6 +90,7 @@ export function MachinesPage({
 
   const [busy, setBusy] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   // Load Machines
   const machinesQuery = useQuery({
@@ -104,22 +103,63 @@ export function MachinesPage({
 
   const machines = machinesQuery.data || [];
 
+  const openMachineDialog = () => {
+    setErrorMsg(null);
+    setFieldErrors({});
+    setMachineDialogOpen(true);
+  };
+
+  const openLogDialog = () => {
+    setErrorMsg(null);
+    setFieldErrors({});
+    setLogDialogOpen(true);
+  };
+
+  const openTicketDialog = () => {
+    setErrorMsg(null);
+    setFieldErrors({});
+    setTicketDialogOpen(true);
+  };
+
   const handleCreateMachine = async (e: React.FormEvent) => {
     e.preventDefault();
+    const rules: FieldRule[] = [
+      { name: 'machineCode', label: isBn ? 'মেশিন কোড' : 'Machine Code', value: code, required: true },
+      { name: 'machineName', label: isBn ? 'মেশিনের নাম' : 'Machine Name', value: name, required: true },
+      { name: 'machineType', label: isBn ? 'মেশিনের ধরন' : 'Machine Type', value: type, required: true, isSelect: true },
+    ];
+    if (intervalHours.trim()) {
+      rules.push({
+        name: 'intervalHours',
+        label: isBn ? 'সার্ভিস বিরতি ঘণ্টা' : 'Service Interval Hours',
+        value: intervalHours,
+        type: 'positiveNumber',
+      });
+    }
+    const validation = validateFormFields(rules, language);
+    if (!validation.valid) {
+      setFieldErrors(validation.errors);
+      setErrorMsg(validation.summary);
+      toast.warning(validation.summary);
+      focusFieldByName(validation.firstField);
+      return;
+    }
+
     setBusy(true);
     setErrorMsg(null);
+    setFieldErrors({});
     try {
       await apiRequest('/machines', {
         method: 'POST',
         body: JSON.stringify({
           companyId,
           factoryId,
-          code,
-          name,
+          code: code.trim(),
+          name: name.trim(),
           machineType: type,
-          capacity,
-          brand,
-          modelNumber: modelNo,
+          capacity: capacity.trim(),
+          brand: brand.trim(),
+          modelNumber: modelNo.trim(),
           serviceIntervalHours: Number(intervalHours) || undefined,
         }),
       });
@@ -128,8 +168,10 @@ export function MachinesPage({
       onSaved(isBn ? 'নতুন মেশিন সফলভাবে নিবন্ধিত হয়েছে' : 'Machine registered successfully');
       setCode('');
       setName('');
-    } catch (err: any) {
-      setErrorMsg(err.message || 'Failed to create machine');
+    } catch (err: unknown) {
+      const msg = extractApiError(err, 'Failed to create machine');
+      setErrorMsg(msg);
+      toast.error(msg);
     } finally {
       setBusy(false);
     }
@@ -137,8 +179,44 @@ export function MachinesPage({
 
   const handleRecordLog = async (e: React.FormEvent) => {
     e.preventDefault();
+    const rules: FieldRule[] = [
+      { name: 'logMachineId', label: isBn ? 'মেশিন নির্বাচন করুন' : 'Select Machine', value: selectedMachineId, required: true, isSelect: true },
+      { name: 'logDate', label: isBn ? 'তারিখ' : 'Log Date', value: logDate, required: true, type: 'date' },
+      { name: 'startHours', label: isBn ? 'শুরুর ঘণ্টা' : 'Start Hours', value: startHours, required: true, type: 'nonNegativeNumber' },
+      {
+        name: 'endHours',
+        label: isBn ? 'শেষ ঘণ্টা' : 'End Hours',
+        value: endHours,
+        required: true,
+        type: 'nonNegativeNumber',
+        custom: (val) =>
+          Number(val) <= Number(startHours || 0)
+            ? isBn
+              ? 'শেষ ঘণ্টা অবশ্যই শুরুর ঘণ্টার চেয়ে বড় হতে হবে।'
+              : 'End Hours must be greater than Start Hours.'
+            : null,
+      },
+    ];
+    if (energyConsumed.trim()) {
+      rules.push({
+        name: 'energyConsumed',
+        label: isBn ? 'জ্বালানি / শক্তি ব্যবহার' : 'Energy/Fuel Consumed',
+        value: energyConsumed,
+        type: 'nonNegativeNumber',
+      });
+    }
+    const validation = validateFormFields(rules, language);
+    if (!validation.valid) {
+      setFieldErrors(validation.errors);
+      setErrorMsg(validation.summary);
+      toast.warning(validation.summary);
+      focusFieldByName(validation.firstField);
+      return;
+    }
+
     setBusy(true);
     setErrorMsg(null);
+    setFieldErrors({});
     try {
       await apiRequest('/machines/logs', {
         method: 'POST',
@@ -150,14 +228,16 @@ export function MachinesPage({
           startHours: Number(startHours),
           endHours: Number(endHours),
           energyOrFuelConsumed: Number(energyConsumed) || undefined,
-          operatorName: operator,
+          operatorName: operator.trim(),
         }),
       });
       await queryClient.invalidateQueries({ queryKey: ['machines'] });
       setLogDialogOpen(false);
       onSaved(isBn ? 'মেশিন কর্মঘণ্টা সফলভাবে যুক্ত হয়েছে' : 'Machine run hours recorded successfully');
-    } catch (err: any) {
-      setErrorMsg(err.message || 'Failed to record log');
+    } catch (err: unknown) {
+      const msg = extractApiError(err, 'Failed to record log');
+      setErrorMsg(msg);
+      toast.error(msg);
     } finally {
       setBusy(false);
     }
@@ -165,11 +245,33 @@ export function MachinesPage({
 
   const handleCreateTicket = async (e: React.FormEvent) => {
     e.preventDefault();
+    const rules: FieldRule[] = [
+      { name: 'ticketMachineId', label: isBn ? 'মেশিন' : 'Machine', value: selectedMachineId, required: true, isSelect: true },
+      { name: 'ticketType', label: isBn ? 'টিকিটের ধরন' : 'Ticket Type', value: ticketType, required: true, isSelect: true },
+      { name: 'ticketTitle', label: isBn ? 'সমস্যার শিরোনাম' : 'Issue / Service Title', value: ticketTitle, required: true },
+      { name: 'labourCost', label: isBn ? 'লেবার / মজুরি খরচ (৳)' : 'Labour Cost (৳)', value: labourCost || '0', type: 'nonNegativeNumber' },
+    ];
+    if (sparePartName.trim()) {
+      rules.push(
+        { name: 'sparePartQty', label: isBn ? 'যন্ত্রাংশের সংখ্যা' : 'Quantity', value: sparePartQty, required: true, type: 'positiveNumber' },
+        { name: 'sparePartCost', label: isBn ? 'যন্ত্রাংশের একক দর (৳)' : 'Part Unit Cost (৳)', value: sparePartCost, required: true, type: 'nonNegativeNumber' },
+      );
+    }
+    const validation = validateFormFields(rules, language);
+    if (!validation.valid) {
+      setFieldErrors(validation.errors);
+      setErrorMsg(validation.summary);
+      toast.warning(validation.summary);
+      focusFieldByName(validation.firstField);
+      return;
+    }
+
     setBusy(true);
     setErrorMsg(null);
+    setFieldErrors({});
     try {
-      const parts = sparePartName
-        ? [{ partName: sparePartName, quantity: Number(sparePartQty), unitCost: Number(sparePartCost) }]
+      const parts = sparePartName.trim()
+        ? [{ partName: sparePartName.trim(), quantity: Number(sparePartQty), unitCost: Number(sparePartCost) }]
         : [];
       await apiRequest('/machines/maintenance', {
         method: 'POST',
@@ -178,8 +280,8 @@ export function MachinesPage({
           factoryId,
           machineId: selectedMachineId,
           type: ticketType,
-          title: ticketTitle,
-          description: ticketDesc,
+          title: ticketTitle.trim(),
+          description: ticketDesc.trim(),
           startDate: logDate,
           labourCost: Number(labourCost) || 0,
           spareParts: parts,
@@ -188,8 +290,10 @@ export function MachinesPage({
       await queryClient.invalidateQueries({ queryKey: ['machines'] });
       setTicketDialogOpen(false);
       onSaved(isBn ? 'রক্ষণাবেক্ষণ/ব্রেকডাউন টিকিট খোলা হয়েছে' : 'Maintenance/Breakdown ticket opened');
-    } catch (err: any) {
-      setErrorMsg(err.message || 'Failed to create ticket');
+    } catch (err: unknown) {
+      const msg = extractApiError(err, 'Failed to create ticket');
+      setErrorMsg(msg);
+      toast.error(msg);
     } finally {
       setBusy(false);
     }
@@ -227,7 +331,7 @@ export function MachinesPage({
           <Button
             variant="outlined"
             startIcon={<SpeedRoundedIcon />}
-            onClick={() => setLogDialogOpen(true)}
+            onClick={openLogDialog}
           >
             {isBn ? 'কর্মঘণ্টা লগ' : 'Log Run Hours'}
           </Button>
@@ -235,7 +339,7 @@ export function MachinesPage({
             variant="outlined"
             color="warning"
             startIcon={<BuildRoundedIcon />}
-            onClick={() => setTicketDialogOpen(true)}
+            onClick={openTicketDialog}
           >
             {isBn ? 'মেরামত / ব্রেকডাউন' : 'Maintenance / Breakdown'}
           </Button>
@@ -243,7 +347,7 @@ export function MachinesPage({
             variant="contained"
             color="primary"
             startIcon={<AddCircleOutlineRoundedIcon />}
-            onClick={() => setMachineDialogOpen(true)}
+            onClick={openMachineDialog}
           >
             {isBn ? 'নতুন মেশিন যোগ' : 'Add Machine'}
           </Button>
@@ -364,225 +468,312 @@ export function MachinesPage({
       </Paper>
 
       {/* Add Machine Dialog */}
-      <Dialog open={machineDialogOpen} onClose={() => !busy && setMachineDialogOpen(false)} maxWidth="sm" fullWidth>
-        <form onSubmit={handleCreateMachine}>
-          <DialogTitle sx={{ fontWeight: 700 }}>{isBn ? 'নতুন মেশিন ও যন্ত্রাংশ নিবন্ধন' : 'Register Machine & Equipment'}</DialogTitle>
-          <DialogContent dividers>
-            {errorMsg && <Alert severity="error" sx={{ mb: 2 }}>{errorMsg}</Alert>}
-            <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
-              <TextField
-                required
-                size="small"
-                label={isBn ? 'মেশিন কোড' : 'Machine Code'}
-                value={code}
-                onChange={(e) => setCode(e.target.value)}
-                placeholder="e.g. MILL-01"
-              />
-              <TextField
-                required
-                size="small"
-                label={isBn ? 'মেশিনের নাম' : 'Machine Name'}
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-              />
-              <TextField
-                select
-                required
-                size="small"
-                label={isBn ? 'মেশিনের ধরন' : 'Machine Type'}
-                value={type}
-                onChange={(e) => setType(e.target.value)}
-                SelectProps={{ native: true }}
-              >
-                <option value="RICE_MILL">RICE_MILL (রাইস মিল)</option>
-                <option value="BOILER">BOILER (বয়লার)</option>
-                <option value="DRYER">DRYER (ড্রায়ার)</option>
-                <option value="GENERATOR">GENERATOR (জেনারেটর)</option>
-                <option value="CONVEYOR">CONVEYOR (কনভেয়র বেল্ট)</option>
-                <option value="WEIGHBRIDGE">WEIGHBRIDGE (স্কেল)</option>
-                <option value="PACKAGING_MACHINE">PACKAGING_MACHINE (প্যাকিং মেশিন)</option>
-              </TextField>
-              <TextField
-                size="small"
-                label={isBn ? 'সক্ষমতা (Capacity)' : 'Capacity'}
-                value={capacity}
-                onChange={(e) => setCapacity(e.target.value)}
-              />
-              <TextField
-                size="small"
-                label={isBn ? 'ব্র্যান্ড' : 'Brand'}
-                value={brand}
-                onChange={(e) => setBrand(e.target.value)}
-              />
-              <TextField
-                type="number"
-                size="small"
-                label={isBn ? 'সার্ভিস বিরতি ঘণ্টা (Interval)' : 'Service Interval Hours'}
-                value={intervalHours}
-                onChange={(e) => setIntervalHours(e.target.value)}
-              />
-            </Box>
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setMachineDialogOpen(false)} disabled={busy}>{isBn ? 'বাতিল' : 'Cancel'}</Button>
-            <Button type="submit" variant="contained" disabled={busy}>{isBn ? 'সংরক্ষণ' : 'Save'}</Button>
-          </DialogActions>
-        </form>
-      </Dialog>
+      <FormDialog
+        open={machineDialogOpen}
+        onClose={() => !busy && setMachineDialogOpen(false)}
+        onSubmit={handleCreateMachine}
+        title={isBn ? 'নতুন মেশিন ও যন্ত্রাংশ নিবন্ধন' : 'Register Machine & Equipment'}
+        error={errorMsg}
+        onClearError={() => setErrorMsg(null)}
+        loading={busy}
+        submitLabel={isBn ? 'সংরক্ষণ' : 'Save'}
+        cancelLabel={isBn ? 'বাতিল' : 'Cancel'}
+        maxWidth="sm"
+      >
+        <FormGrid columns={{ xs: 1, sm: 2 }}>
+          <AppTextField
+            fieldName="machineCode"
+            required
+            label={isBn ? 'মেশিন কোড' : 'Machine Code'}
+            value={code}
+            errorText={fieldErrors.machineCode}
+            onValueChange={(val) => {
+              setCode(val);
+              setFieldErrors((p) => ({ ...p, machineCode: '' }));
+            }}
+            placeholder="e.g. MILL-01"
+          />
+          <AppTextField
+            fieldName="machineName"
+            required
+            label={isBn ? 'মেশিনের নাম' : 'Machine Name'}
+            value={name}
+            errorText={fieldErrors.machineName}
+            onValueChange={(val) => {
+              setName(val);
+              setFieldErrors((p) => ({ ...p, machineName: '' }));
+            }}
+          />
+          <AppSelect
+            fieldName="machineType"
+            required
+            label={isBn ? 'মেশিনের ধরন' : 'Machine Type'}
+            value={type}
+            errorText={fieldErrors.machineType}
+            options={[
+              { value: 'RICE_MILL', label: 'RICE_MILL (রাইস মিল)' },
+              { value: 'BOILER', label: 'BOILER (বয়লার)' },
+              { value: 'DRYER', label: 'DRYER (ড্রায়ার)' },
+              { value: 'GENERATOR', label: 'GENERATOR (জেনারেটর)' },
+              { value: 'CONVEYOR', label: 'CONVEYOR (কনভেয়র বেল্ট)' },
+              { value: 'WEIGHBRIDGE', label: 'WEIGHBRIDGE (স্কেল)' },
+              { value: 'PACKAGING_MACHINE', label: 'PACKAGING_MACHINE (প্যাকিং মেশিন)' },
+            ]}
+            onChange={(val) => {
+              setType(val);
+              setFieldErrors((p) => ({ ...p, machineType: '' }));
+            }}
+          />
+          <AppTextField
+            fieldName="capacity"
+            label={isBn ? 'সক্ষমতা (Capacity)' : 'Capacity'}
+            value={capacity}
+            onValueChange={(val) => setCapacity(val)}
+          />
+          <AppTextField
+            fieldName="brand"
+            label={isBn ? 'ব্র্যান্ড' : 'Brand'}
+            value={brand}
+            onValueChange={(val) => setBrand(val)}
+          />
+          <AppTextField
+            fieldName="intervalHours"
+            type="number"
+            unit="HRS"
+            label={isBn ? 'সার্ভিস বিরতি ঘণ্টা (Interval)' : 'Service Interval Hours'}
+            value={intervalHours}
+            errorText={fieldErrors.intervalHours}
+            inputProps={{ min: 1 }}
+            onValueChange={(val) => {
+              setIntervalHours(val);
+              setFieldErrors((p) => ({ ...p, intervalHours: '' }));
+            }}
+          />
+        </FormGrid>
+      </FormDialog>
 
       {/* Log Hours Dialog */}
-      <Dialog open={logDialogOpen} onClose={() => !busy && setLogDialogOpen(false)} maxWidth="xs" fullWidth>
-        <form onSubmit={handleRecordLog}>
-          <DialogTitle sx={{ fontWeight: 700 }}>{isBn ? 'মেশিন কর্মঘণ্টা ও শক্তি লগ' : 'Record Run Hours & Fuel/Energy'}</DialogTitle>
-          <DialogContent dividers>
-            <Stack spacing={2}>
-              <TextField
-                select
-                required
-                size="small"
-                label={isBn ? 'মেশিন নির্বাচন করুন' : 'Select Machine'}
-                value={selectedMachineId}
-                onChange={(e) => setSelectedMachineId(e.target.value)}
-                SelectProps={{ native: true }}
-              >
-                <option value="">-- {isBn ? 'নির্বাচন করুন' : 'Select'} --</option>
-                {machines.map((m) => (
-                  <option key={m.id} value={m.id}>{m.code} - {m.name}</option>
-                ))}
-              </TextField>
-              <TextField
-                type="date"
-                required
-                size="small"
-                label={isBn ? 'তারিখ' : 'Log Date'}
-                value={logDate}
-                onChange={(e) => setLogDate(e.target.value)}
-                InputLabelProps={{ shrink: true }}
-              />
-              <Box display="grid" gridTemplateColumns="1fr 1fr" gap={2}>
-                <TextField
-                  type="number"
-                  required
-                  size="small"
-                  label={isBn ? 'শুরুর ঘণ্টা' : 'Start Hours'}
-                  value={startHours}
-                  onChange={(e) => setStartHours(e.target.value)}
-                />
-                <TextField
-                  type="number"
-                  required
-                  size="small"
-                  label={isBn ? 'শেষ ঘণ্টা' : 'End Hours'}
-                  value={endHours}
-                  onChange={(e) => setEndHours(e.target.value)}
-                />
-              </Box>
-              <TextField
-                type="number"
-                size="small"
-                label={isBn ? 'জ্বালানি / শক্তি ব্যবহার' : 'Energy/Fuel Consumed'}
-                value={energyConsumed}
-                onChange={(e) => setEnergyConsumed(e.target.value)}
-              />
-              <TextField
-                size="small"
-                label={isBn ? 'অপারেটরের নাম' : 'Operator Name'}
-                value={operator}
-                onChange={(e) => setOperator(e.target.value)}
-              />
-            </Stack>
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setLogDialogOpen(false)} disabled={busy}>{isBn ? 'বাতিল' : 'Cancel'}</Button>
-            <Button type="submit" variant="contained" disabled={busy}>{isBn ? 'সংরক্ষণ' : 'Record'}</Button>
-          </DialogActions>
-        </form>
-      </Dialog>
+      <FormDialog
+        open={logDialogOpen}
+        onClose={() => !busy && setLogDialogOpen(false)}
+        onSubmit={handleRecordLog}
+        title={isBn ? 'মেশিন কর্মঘণ্টা ও শক্তি লগ' : 'Record Run Hours & Fuel/Energy'}
+        error={errorMsg}
+        onClearError={() => setErrorMsg(null)}
+        loading={busy}
+        submitLabel={isBn ? 'সংরক্ষণ' : 'Record'}
+        cancelLabel={isBn ? 'বাতিল' : 'Cancel'}
+        maxWidth="xs"
+      >
+        <FormGrid columns={1}>
+          <AppAutocomplete
+            fieldName="logMachineId"
+            required
+            label={isBn ? 'মেশিন নির্বাচন করুন' : 'Select Machine'}
+            value={selectedMachineId}
+            errorText={fieldErrors.logMachineId}
+            options={machines.map((m) => ({ value: m.id, label: m.name, badge: m.code }))}
+            emptyMessage={isBn ? 'কোনো মেশিন নেই — আগে মেশিন যোগ করুন' : 'No machines registered — add a machine first'}
+            onChange={(val) => {
+              setSelectedMachineId(val);
+              setFieldErrors((p) => ({ ...p, logMachineId: '' }));
+            }}
+          />
+          <AppTextField
+            fieldName="logDate"
+            type="date"
+            required
+            label={isBn ? 'তারিখ' : 'Log Date'}
+            value={logDate}
+            errorText={fieldErrors.logDate}
+            onValueChange={(val) => {
+              setLogDate(val);
+              setFieldErrors((p) => ({ ...p, logDate: '' }));
+            }}
+            InputLabelProps={{ shrink: true }}
+          />
+          <FormGrid columns={2}>
+            <AppTextField
+              fieldName="startHours"
+              type="number"
+              required
+              unit="HRS"
+              label={isBn ? 'শুরুর ঘণ্টা' : 'Start Hours'}
+              value={startHours}
+              errorText={fieldErrors.startHours}
+              inputProps={{ min: 0, step: '.1' }}
+              onValueChange={(val) => {
+                setStartHours(val);
+                setFieldErrors((p) => ({ ...p, startHours: '', endHours: '' }));
+              }}
+            />
+            <AppTextField
+              fieldName="endHours"
+              type="number"
+              required
+              unit="HRS"
+              label={isBn ? 'শেষ ঘণ্টা' : 'End Hours'}
+              value={endHours}
+              errorText={fieldErrors.endHours}
+              inputProps={{ min: 0, step: '.1' }}
+              onValueChange={(val) => {
+                setEndHours(val);
+                setFieldErrors((p) => ({ ...p, endHours: '' }));
+              }}
+            />
+          </FormGrid>
+          <AppTextField
+            fieldName="energyConsumed"
+            type="number"
+            label={isBn ? 'জ্বালানি / শক্তি ব্যবহার' : 'Energy/Fuel Consumed'}
+            value={energyConsumed}
+            errorText={fieldErrors.energyConsumed}
+            inputProps={{ min: 0, step: '.1' }}
+            onValueChange={(val) => {
+              setEnergyConsumed(val);
+              setFieldErrors((p) => ({ ...p, energyConsumed: '' }));
+            }}
+          />
+          <AppTextField
+            fieldName="operator"
+            label={isBn ? 'অপারেটরের নাম' : 'Operator Name'}
+            value={operator}
+            onValueChange={(val) => setOperator(val)}
+          />
+        </FormGrid>
+      </FormDialog>
 
       {/* Maintenance / Breakdown Dialog */}
-      <Dialog open={ticketDialogOpen} onClose={() => !busy && setTicketDialogOpen(false)} maxWidth="sm" fullWidth>
-        <form onSubmit={handleCreateTicket}>
-          <DialogTitle sx={{ fontWeight: 700 }}>{isBn ? 'মেরামত ও ব্রেকডাউন টিকিট' : 'Maintenance & Breakdown Ticket'}</DialogTitle>
-          <DialogContent dividers>
-            <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
-              <TextField
-                select
-                required
-                size="small"
-                label={isBn ? 'মেশিন' : 'Machine'}
-                value={selectedMachineId}
-                onChange={(e) => setSelectedMachineId(e.target.value)}
-                SelectProps={{ native: true }}
-                sx={{ gridColumn: 'span 2' }}
-              >
-                <option value="">-- {isBn ? 'নির্বাচন করুন' : 'Select'} --</option>
-                {machines.map((m) => (
-                  <option key={m.id} value={m.id}>{m.code} - {m.name}</option>
-                ))}
-              </TextField>
-              <TextField
-                select
-                required
-                size="small"
-                label={isBn ? 'টিকিটের ধরন' : 'Ticket Type'}
-                value={ticketType}
-                onChange={(e) => setTicketType(e.target.value)}
-                SelectProps={{ native: true }}
-              >
-                <option value="PREVENTIVE">PREVENTIVE (নিয়মিত সার্ভিস)</option>
-                <option value="BREAKDOWN">BREAKDOWN (হঠাৎ বিকল)</option>
-                <option value="REPAIR">REPAIR (যন্ত্রাংশ মেরামত)</option>
-                <option value="OVERHAUL">OVERHAUL (সম্পূর্ণ ওভারহলিং)</option>
-              </TextField>
-              <TextField
-                required
-                size="small"
-                label={isBn ? 'সমস্যার শিরোনাম' : 'Issue / Service Title'}
-                value={ticketTitle}
-                onChange={(e) => setTicketTitle(e.target.value)}
-              />
-              <TextField
-                size="small"
-                label={isBn ? 'বিস্তারিত বর্ণনা' : 'Description'}
-                value={ticketDesc}
-                onChange={(e) => setTicketDesc(e.target.value)}
-                sx={{ gridColumn: 'span 2' }}
-              />
-              <TextField
-                type="number"
-                size="small"
-                label={isBn ? 'লেবার / মজুরি খরচ (৳)' : 'Labour Cost (৳)'}
-                value={labourCost}
-                onChange={(e) => setLabourCost(e.target.value)}
-              />
-              <TextField
-                size="small"
-                label={isBn ? 'যন্ত্রাংশের নাম (Spare Part)' : 'Spare Part Name'}
-                value={sparePartName}
-                onChange={(e) => setSparePartName(e.target.value)}
-              />
-              <TextField
-                type="number"
-                size="small"
-                label={isBn ? 'যন্ত্রাংশের সংখ্যা' : 'Quantity'}
-                value={sparePartQty}
-                onChange={(e) => setSparePartQty(e.target.value)}
-              />
-              <TextField
-                type="number"
-                size="small"
-                label={isBn ? 'যন্ত্রাংশের একক দর (৳)' : 'Part Unit Cost (৳)'}
-                value={sparePartCost}
-                onChange={(e) => setSparePartCost(e.target.value)}
-              />
-            </Box>
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setTicketDialogOpen(false)} disabled={busy}>{isBn ? 'বাতিল' : 'Cancel'}</Button>
-            <Button type="submit" variant="contained" color="warning" disabled={busy}>{isBn ? 'টিকিট তৈরি' : 'Create Ticket'}</Button>
-          </DialogActions>
-        </form>
-      </Dialog>
+      <FormDialog
+        open={ticketDialogOpen}
+        onClose={() => !busy && setTicketDialogOpen(false)}
+        onSubmit={handleCreateTicket}
+        title={isBn ? 'মেরামত ও ব্রেকডাউন টিকিট' : 'Maintenance & Breakdown Ticket'}
+        error={errorMsg}
+        onClearError={() => setErrorMsg(null)}
+        loading={busy}
+        submitLabel={isBn ? 'টিকিট তৈরি' : 'Create Ticket'}
+        cancelLabel={isBn ? 'বাতিল' : 'Cancel'}
+        submitColor="warning"
+        maxWidth="sm"
+      >
+        <FormGrid columns={{ xs: 1, sm: 2 }}>
+          <Box sx={{ gridColumn: { sm: 'span 2' } }}>
+            <AppAutocomplete
+              fieldName="ticketMachineId"
+              required
+              label={isBn ? 'মেশিন' : 'Machine'}
+              value={selectedMachineId}
+              errorText={fieldErrors.ticketMachineId}
+              options={machines.map((m) => ({ value: m.id, label: m.name, badge: m.code }))}
+              emptyMessage={isBn ? 'কোনো মেশিন নেই — আগে মেশিন যোগ করুন' : 'No machines registered — add a machine first'}
+              onChange={(val) => {
+                setSelectedMachineId(val);
+                setFieldErrors((p) => ({ ...p, ticketMachineId: '' }));
+              }}
+            />
+          </Box>
+          <AppSelect
+            fieldName="ticketType"
+            required
+            label={isBn ? 'টিকিটের ধরন' : 'Ticket Type'}
+            value={ticketType}
+            errorText={fieldErrors.ticketType}
+            options={[
+              { value: 'PREVENTIVE', label: 'PREVENTIVE (নিয়মিত সার্ভিস)' },
+              { value: 'BREAKDOWN', label: 'BREAKDOWN (হঠাৎ বিকল)' },
+              { value: 'REPAIR', label: 'REPAIR (যন্ত্রাংশ মেরামত)' },
+              { value: 'OVERHAUL', label: 'OVERHAUL (সম্পূর্ণ ওভারহলিং)' },
+            ]}
+            onChange={(val) => {
+              setTicketType(val);
+              setFieldErrors((p) => ({ ...p, ticketType: '' }));
+            }}
+          />
+          <AppTextField
+            fieldName="ticketTitle"
+            required
+            label={isBn ? 'সমস্যার শিরোনাম' : 'Issue / Service Title'}
+            value={ticketTitle}
+            errorText={fieldErrors.ticketTitle}
+            onValueChange={(val) => {
+              setTicketTitle(val);
+              setFieldErrors((p) => ({ ...p, ticketTitle: '' }));
+            }}
+          />
+          <Box sx={{ gridColumn: { sm: 'span 2' } }}>
+            <AppTextField
+              fieldName="ticketDesc"
+              multiline
+              minRows={2}
+              label={isBn ? 'বিস্তারিত বর্ণনা' : 'Description'}
+              value={ticketDesc}
+              onValueChange={(val) => setTicketDesc(val)}
+            />
+          </Box>
+          <AppTextField
+            fieldName="labourCost"
+            type="number"
+            prefixText="৳"
+            label={isBn ? 'লেবার / মজুরি খরচ (৳)' : 'Labour Cost (৳)'}
+            value={labourCost}
+            errorText={fieldErrors.labourCost}
+            inputProps={{ min: 0 }}
+            onValueChange={(val) => {
+              setLabourCost(val);
+              setFieldErrors((p) => ({ ...p, labourCost: '' }));
+            }}
+          />
+          <AppTextField
+            fieldName="sparePartName"
+            label={isBn ? 'যন্ত্রাংশের নাম (Spare Part)' : 'Spare Part Name'}
+            value={sparePartName}
+            onValueChange={(val) => {
+              setSparePartName(val);
+              setFieldErrors((p) => ({ ...p, sparePartQty: '', sparePartCost: '' }));
+            }}
+          />
+          <AppTextField
+            fieldName="sparePartQty"
+            type="number"
+            label={isBn ? 'যন্ত্রাংশের সংখ্যা' : 'Quantity'}
+            value={sparePartQty}
+            errorText={fieldErrors.sparePartQty}
+            prerequisite={{
+              met: Boolean(sparePartName.trim()),
+              message: isBn
+                ? 'সংখ্যা দেওয়ার আগে অনুগ্রহ করে যন্ত্রাংশের নাম লিখুন।'
+                : 'Please enter a Spare Part Name first before specifying part quantity.',
+              focusField: 'sparePartName',
+            }}
+            inputProps={{ min: 1 }}
+            onValueChange={(val) => {
+              setSparePartQty(val);
+              setFieldErrors((p) => ({ ...p, sparePartQty: '' }));
+            }}
+          />
+          <AppTextField
+            fieldName="sparePartCost"
+            type="number"
+            prefixText="৳"
+            label={isBn ? 'যন্ত্রাংশের একক দর (৳)' : 'Part Unit Cost (৳)'}
+            value={sparePartCost}
+            errorText={fieldErrors.sparePartCost}
+            prerequisite={{
+              met: Boolean(sparePartName.trim()),
+              message: isBn
+                ? 'একক দর দেওয়ার আগে অনুগ্রহ করে যন্ত্রাংশের নাম লিখুন।'
+                : 'Please enter a Spare Part Name first before specifying part unit cost.',
+              focusField: 'sparePartName',
+            }}
+            inputProps={{ min: 0 }}
+            onValueChange={(val) => {
+              setSparePartCost(val);
+              setFieldErrors((p) => ({ ...p, sparePartCost: '' }));
+            }}
+          />
+        </FormGrid>
+      </FormDialog>
     </Box>
   );
 }

@@ -9,7 +9,6 @@ import {
   Card,
   CardContent,
   Button,
-  TextField,
   Tabs,
   Tab,
   Alert,
@@ -28,6 +27,7 @@ import ScaleIcon from '@mui/icons-material/Scale';
 import FactoryIcon from '@mui/icons-material/Factory';
 import MonetizationOnIcon from '@mui/icons-material/MonetizationOn';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
+import { AppTextField } from '@/components/form';
 
 export function CalculationEnginePage() {
   const [tabIndex, setTabIndex] = useState(0);
@@ -140,57 +140,69 @@ export function CalculationEnginePage() {
                 </Typography>
                 <Grid container spacing={2}>
                   <Grid item xs={12}>
-                    <TextField
+                    <AppTextField
+                      fieldName="calcInputPaddy"
+                      type="number"
+                      unit="KG"
                       label="Input Paddy (KG)"
-                      fullWidth
-                      size="small"
                       value={inputPaddy}
-                      onChange={(e) => setInputPaddy(e.target.value)}
+                      inputProps={{ min: 0 }}
+                      onValueChange={(val) => setInputPaddy(val)}
                     />
                   </Grid>
                   <Grid item xs={6}>
-                    <TextField
+                    <AppTextField
+                      fieldName="calcHeadRice"
+                      type="number"
+                      unit="KG"
                       label="Head Rice (KG)"
-                      fullWidth
-                      size="small"
                       value={headRice}
-                      onChange={(e) => setHeadRice(e.target.value)}
+                      inputProps={{ min: 0 }}
+                      onValueChange={(val) => setHeadRice(val)}
                     />
                   </Grid>
                   <Grid item xs={6}>
-                    <TextField
+                    <AppTextField
+                      fieldName="calcBrokenRice"
+                      type="number"
+                      unit="KG"
                       label="Broken Rice (KG)"
-                      fullWidth
-                      size="small"
                       value={brokenRice}
-                      onChange={(e) => setBrokenRice(e.target.value)}
+                      inputProps={{ min: 0 }}
+                      onValueChange={(val) => setBrokenRice(val)}
                     />
                   </Grid>
                   <Grid item xs={6}>
-                    <TextField
+                    <AppTextField
+                      fieldName="calcBran"
+                      type="number"
+                      unit="KG"
                       label="Rice Bran (KG)"
-                      fullWidth
-                      size="small"
                       value={bran}
-                      onChange={(e) => setBran(e.target.value)}
+                      inputProps={{ min: 0 }}
+                      onValueChange={(val) => setBran(val)}
                     />
                   </Grid>
                   <Grid item xs={6}>
-                    <TextField
+                    <AppTextField
+                      fieldName="calcHusk"
+                      type="number"
+                      unit="KG"
                       label="Husk (KG)"
-                      fullWidth
-                      size="small"
                       value={husk}
-                      onChange={(e) => setHusk(e.target.value)}
+                      inputProps={{ min: 0 }}
+                      onValueChange={(val) => setHusk(val)}
                     />
                   </Grid>
                   <Grid item xs={12}>
-                    <TextField
+                    <AppTextField
+                      fieldName="calcWaste"
+                      type="number"
+                      unit="KG"
                       label="Waste / Foreign Material (KG)"
-                      fullWidth
-                      size="small"
                       value={waste}
-                      onChange={(e) => setWaste(e.target.value)}
+                      inputProps={{ min: 0 }}
+                      onValueChange={(val) => setWaste(val)}
                     />
                   </Grid>
                 </Grid>
@@ -366,22 +378,22 @@ export function CalculationEnginePage() {
               </Typography>
               <Grid container spacing={2}>
                 <Grid item xs={6}>
-                  <TextField label="Gross Weight (KG)" fullWidth size="small" value={grossWeight} onChange={e => setGrossWeight(e.target.value)} />
+                  <AppTextField fieldName="calcGross" type="number" unit="KG" label="Gross Weight (KG)" value={grossWeight} onValueChange={(val) => setGrossWeight(val)} />
                 </Grid>
                 <Grid item xs={6}>
-                  <TextField label="Tare Weight (KG)" fullWidth size="small" value={tareWeight} onChange={e => setTareWeight(e.target.value)} />
+                  <AppTextField fieldName="calcTare" type="number" unit="KG" label="Tare Weight (KG)" value={tareWeight} onValueChange={(val) => setTareWeight(val)} />
                 </Grid>
                 <Grid item xs={6}>
-                  <TextField label="Bag Count" fullWidth size="small" value={bagCount} onChange={e => setBagCount(e.target.value)} />
+                  <AppTextField fieldName="calcBags" type="number" unit="BAGS" label="Bag Count" value={bagCount} onValueChange={(val) => setBagCount(val)} />
                 </Grid>
                 <Grid item xs={6}>
-                  <TextField label="Bag Tare (KG/bag)" fullWidth size="small" value={bagTare} onChange={e => setBagTare(e.target.value)} />
+                  <AppTextField fieldName="calcBagTare" type="number" unit="KG/BAG" label="Bag Tare (KG/bag)" value={bagTare} onValueChange={(val) => setBagTare(val)} />
                 </Grid>
                 <Grid item xs={6}>
-                  <TextField label="Paddy Rate (৳/KG)" fullWidth size="small" value={ratePerKg} onChange={e => setRatePerKg(e.target.value)} />
+                  <AppTextField fieldName="calcRatePerKg" type="number" prefixText="৳" label="Paddy Rate (৳/KG)" value={ratePerKg} onValueChange={(val) => setRatePerKg(val)} />
                 </Grid>
                 <Grid item xs={6}>
-                  <TextField label="Direct Overheads (৳)" fullWidth size="small" value={transportCost} onChange={e => setTransportCost(e.target.value)} />
+                  <AppTextField fieldName="calcTransport" type="number" prefixText="৳" label="Direct Overheads (৳)" value={transportCost} onValueChange={(val) => setTransportCost(val)} />
                 </Grid>
               </Grid>
             </Paper>
@@ -438,13 +450,13 @@ export function CalculationEnginePage() {
               </Typography>
               <Grid container spacing={2}>
                 <Grid item xs={12}>
-                  <TextField label="Paddy Input Cost (৳)" fullWidth size="small" value={paddyCost} onChange={e => setPaddyCost(e.target.value)} />
+                  <AppTextField fieldName="calcPaddyCost" type="number" prefixText="৳" label="Paddy Input Cost (৳)" value={paddyCost} onValueChange={(val) => setPaddyCost(val)} />
                 </Grid>
                 <Grid item xs={6}>
-                  <TextField label="Milling Overheads (৳)" fullWidth size="small" value={millingOverheads} onChange={e => setMillingOverheads(e.target.value)} />
+                  <AppTextField fieldName="calcOverheads" type="number" prefixText="৳" label="Milling Overheads (৳)" value={millingOverheads} onValueChange={(val) => setMillingOverheads(val)} />
                 </Grid>
                 <Grid item xs={6}>
-                  <TextField label="By-Product Revenue Offset (৳)" fullWidth size="small" value={byProductOffset} onChange={e => setByProductOffset(e.target.value)} />
+                  <AppTextField fieldName="calcByProductOffset" type="number" prefixText="৳" label="By-Product Revenue Offset (৳)" value={byProductOffset} onValueChange={(val) => setByProductOffset(val)} />
                 </Grid>
               </Grid>
             </Paper>

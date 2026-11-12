@@ -11,7 +11,6 @@ import {
   DialogContent,
   DialogTitle,
   Divider,
-  MenuItem,
   Paper,
   Stack,
   Table,
@@ -19,13 +18,15 @@ import {
   TableCell,
   TableHead,
   TableRow,
-  TextField,
   Typography,
 } from '@mui/material';
 import AssignmentReturnRoundedIcon from '@mui/icons-material/AssignmentReturnRounded';
 import PrintRoundedIcon from '@mui/icons-material/PrintRounded';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiRequest, queryString } from '@/lib/api';
+import { AppAutocomplete, AppSelect, AppTextField, FormDialog, FormGrid, FormSection } from '@/components/form';
+import { extractApiError, useToast } from '@/components/ui/toast-provider';
+import { FieldRule, focusFieldByName, validateFormFields } from '@/lib/form-validation';
 
 type Row<T> = { data: T[]; meta?: { total: number } };
 
@@ -146,13 +147,17 @@ interface SalesReturnPageProps {
 
 export function SalesReturnPage({ companyId, factoryId, language, onSaved }: SalesReturnPageProps) {
   const qc = useQueryClient();
+  const toast = useToast();
   const isBn = language === 'bn';
+  const lang = isBn ? 'bn' : 'en';
 
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [typeFilter, setTypeFilter] = useState<string>('ALL');
   const [search, setSearch] = useState('');
   const [busy, setBusy] = useState(false);
+  const [actionBusyId, setActionBusyId] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   // Dialog states
   const [createOpen, setCreateOpen] = useState(false);
@@ -250,6 +255,8 @@ export function SalesReturnPage({ companyId, factoryId, language, onSaved }: Sal
   const handleOrderChange = (orderId: string) => {
     setSelectedOrderId(orderId);
     setSelectedDispatchId('');
+    setFieldErrors({});
+    setError(null);
     const order = availableOrders.find((o) => o.id === orderId);
     if (!order) {
       setFormLines([]);
@@ -280,6 +287,13 @@ export function SalesReturnPage({ companyId, factoryId, language, onSaved }: Sal
   // Handle dispatch selection (refines max allowed weight based on specific challan)
   const handleDispatchChange = (dispatchId: string) => {
     setSelectedDispatchId(dispatchId);
+    setFieldErrors((p) => {
+      const next = { ...p };
+      Object.keys(next).forEach((k) => {
+        if (k.startsWith('line-')) delete next[k];
+      });
+      return next;
+    });
     if (!dispatchId) {
       if (selectedOrderId) handleOrderChange(selectedOrderId);
       return;
@@ -311,6 +325,7 @@ export function SalesReturnPage({ companyId, factoryId, language, onSaved }: Sal
   };
 
   const handleLineKgChange = (index: number, newKg: string) => {
+    setFieldErrors((p) => ({ ...p, [`line-${index}-returnKg`]: '' }));
     setFormLines((prev) => {
       const copy = [...prev];
       const target = copy[index];
@@ -334,27 +349,88 @@ export function SalesReturnPage({ companyId, factoryId, language, onSaved }: Sal
     setReason('');
     setRemarks('');
     setFormLines([]);
+    setFieldErrors({});
     setError(null);
     setCreateOpen(true);
   };
 
   const handleCreateSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!selectedOrderId) {
-      setError(isBn ? 'বিক্রয় আদেশ নির্বাচন করুন।' : 'Please select a sales order.');
+    const rules: FieldRule[] = [
+      { name: 'selectedOrderId', label: isBn ? 'বিক্রয় আদেশ' : 'Sales Order', value: selectedOrderId, required: true, isSelect: true },
+      { name: 'returnNumber', label: isBn ? 'ফেরত নং' : 'Return Number', value: returnNumber, required: true },
+      { name: 'returnDate', label: isBn ? 'ফেরত তারিখ' : 'Return Date', value: returnDate, required: true, type: 'date' },
+      { name: 'reason', label: isBn ? 'ফেরতের কারণ' : 'Reason for Return', value: reason, required: true },
+    ];
+
+    if (selectedOrderId && formLines.length > 0) {
+      const validLines = formLines.filter((l) => Number(l.returnKg) > 0);
+      if (!validLines.length) {
+        rules.push({
+          name: 'line-0-returnKg',
+          label: `${isBn ? 'ফেরত কেজি' : 'Return KG'} (#1)`,
+          value: formLines[0]?.returnKg,
+          custom: () =>
+            isBn
+              ? 'কমপক্ষে একটি পণ্যের ফেরত পরিমাণ ০ কেজির বেশি হতে হবে।'
+              : 'At least one line must have a return quantity greater than 0 KG.',
+        });
+      }
+      formLines.forEach((l, i) => {
+        if (Number(l.returnKg) > 0) {
+          rules.push({
+            name: `line-${i}-restockStackId`,
+            label: `${isBn ? 'ফেরত স্ট্যাক' : 'Restock Stack'} (${l.itemName})`,
+            value: l.restockStackId,
+            required: true,
+            isSelect: true,
+          });
+          if (Number(l.returnKg) > l.maxKg) {
+            rules.push({
+              name: `line-${i}-returnKg`,
+              label: `${isBn ? 'ফেরত কেজি' : 'Return KG'} (${l.itemName})`,
+              value: l.returnKg,
+              custom: () =>
+                isBn
+                  ? `সর্বোচ্চ অনুমোদিত ${l.maxKg} KG এর বেশি ফেরত দেওয়া যাবে না।`
+                  : `Cannot exceed maximum returnable ${l.maxKg} KG.`,
+            });
+          }
+          if (Number(l.unitRate) < 0) {
+            rules.push({
+              name: `line-${i}-unitRate`,
+              label: `${isBn ? 'দর/কেজি' : 'Rate/KG'} (${l.itemName})`,
+              value: l.unitRate,
+              type: 'nonNegativeNumber',
+            });
+          }
+        } else if (Number(l.returnKg) < 0) {
+          rules.push({
+            name: `line-${i}-returnKg`,
+            label: `${isBn ? 'ফেরত কেজি' : 'Return KG'} (${l.itemName})`,
+            value: l.returnKg,
+            type: 'nonNegativeNumber',
+          });
+        }
+      });
+    }
+
+    const validation = validateFormFields(rules, lang);
+    if (!validation.valid) {
+      setFieldErrors(validation.errors);
+      setError(validation.summary);
+      toast.warning(validation.summary);
+      focusFieldByName(validation.firstField);
       return;
     }
+
     const order = availableOrders.find((o) => o.id === selectedOrderId);
     if (!order) return;
-
     const validLines = formLines.filter((l) => Number(l.returnKg) > 0);
-    if (!validLines.length) {
-      setError(isBn ? 'কমপক্ষে একটি পণ্যের ফেরত পরিমাণ দিন।' : 'At least one line must have a return quantity greater than 0.');
-      return;
-    }
 
     setBusy(true);
     setError(null);
+    setFieldErrors({});
     try {
       await apiRequest('/sales-returns', {
         method: 'POST',
@@ -364,12 +440,12 @@ export function SalesReturnPage({ companyId, factoryId, language, onSaved }: Sal
           salesOrderId: selectedOrderId,
           dispatchId: selectedDispatchId || undefined,
           customerId: order.customerId,
-          returnNumber,
+          returnNumber: returnNumber.trim(),
           creditNoteNumber: creditNoteNumber.trim() || undefined,
           type: returnType,
           settlement,
           returnDate: new Date(returnDate).toISOString(),
-          reason: reason.trim() || (isBn ? 'গ্রাহক পণ্য ফেরত' : 'Customer Sales Return'),
+          reason: reason.trim(),
           remarks: remarks.trim() || undefined,
           lines: validLines.map((l) => ({
             salesOrderLineId: l.salesOrderLineId,
@@ -389,7 +465,9 @@ export function SalesReturnPage({ companyId, factoryId, language, onSaved }: Sal
       qc.invalidateQueries({ queryKey: ['customer-ledger'] });
       onSaved(isBn ? 'বিক্রয় ফেরত রেকর্ড সফলভাবে তৈরি হয়েছে।' : 'Sales return record created successfully.');
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to create sales return.');
+      const msg = extractApiError(err, 'Failed to create sales return.');
+      setError(msg);
+      toast.error(msg);
     } finally {
       setBusy(false);
     }
@@ -397,7 +475,7 @@ export function SalesReturnPage({ companyId, factoryId, language, onSaved }: Sal
 
   const handleApprove = async (ret: SalesReturn) => {
     if (!confirm(isBn ? `ফেরত #${ret.returnNumber} অনুমোদন করবেন?` : `Approve return #${ret.returnNumber}?`)) return;
-    setBusy(true);
+    setActionBusyId(ret.id);
     try {
       await apiRequest(`/sales-returns/${ret.id}/approve`, {
         method: 'POST',
@@ -406,9 +484,9 @@ export function SalesReturnPage({ companyId, factoryId, language, onSaved }: Sal
       qc.invalidateQueries({ queryKey: ['sales-returns'] });
       onSaved(isBn ? 'বিক্রয় ফেরত অনুমোদিত হয়েছে।' : 'Sales return approved.');
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : 'Approval failed.');
+      toast.error(extractApiError(err, 'Approval failed.'));
     } finally {
-      setBusy(false);
+      setActionBusyId('');
     }
   };
 
@@ -421,7 +499,7 @@ export function SalesReturnPage({ companyId, factoryId, language, onSaved }: Sal
       )
     )
       return;
-    setBusy(true);
+    setActionBusyId(ret.id);
     try {
       await apiRequest(`/sales-returns/${ret.id}/post`, {
         method: 'POST',
@@ -432,15 +510,15 @@ export function SalesReturnPage({ companyId, factoryId, language, onSaved }: Sal
       qc.invalidateQueries({ queryKey: ['inventory'] });
       onSaved(isBn ? 'বিক্রয় ফেরত পোস্ট হয়েছে এবং মজুদ আপডেট করা হয়েছে।' : 'Sales return posted and inventory restocked.');
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : 'Posting failed.');
+      toast.error(extractApiError(err, 'Posting failed.'));
     } finally {
-      setBusy(false);
+      setActionBusyId('');
     }
   };
 
   const handleCancel = async (ret: SalesReturn) => {
     if (!confirm(isBn ? `ফেরত #${ret.returnNumber} বাতিল করবেন?` : `Cancel return #${ret.returnNumber}?`)) return;
-    setBusy(true);
+    setActionBusyId(ret.id);
     try {
       await apiRequest(`/sales-returns/${ret.id}/cancel`, {
         method: 'POST',
@@ -449,9 +527,9 @@ export function SalesReturnPage({ companyId, factoryId, language, onSaved }: Sal
       qc.invalidateQueries({ queryKey: ['sales-returns'] });
       onSaved(isBn ? 'বিক্রয় ফেরত বাতিল হয়েছে।' : 'Sales return cancelled.');
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : 'Cancellation failed.');
+      toast.error(extractApiError(err, 'Cancellation failed.'));
     } finally {
-      setBusy(false);
+      setActionBusyId('');
     }
   };
 
@@ -516,41 +594,44 @@ export function SalesReturnPage({ companyId, factoryId, language, onSaved }: Sal
       {/* Action and Filter Bar */}
       <Paper sx={{ p: 2, borderRadius: 2 }}>
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} justifyContent="space-between" alignItems="center">
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ width: { xs: '100%', sm: 'auto' } }}>
-            <TextField
-              size="small"
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ width: { xs: '100%', sm: 'auto' }, alignItems: 'center' }}>
+            <AppTextField
+              fieldName="searchReturns"
+              fullWidth={false}
               placeholder={isBn ? 'খুঁজুন (ফেরত নং, ক্রেডিট নোট, ক্রেতা)...' : 'Search returns, credit note, customer...'}
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onValueChange={(val) => setSearch(val)}
               sx={{ minWidth: 240 }}
             />
-            <TextField
-              select
-              size="small"
+            <AppSelect
+              fieldName="statusFilter"
+              fullWidth={false}
               label={isBn ? 'অবস্থা' : 'Status'}
               value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              sx={{ minWidth: 140 }}
-            >
-              <MenuItem value="ALL">{isBn ? 'সকল অবস্থা' : 'All Statuses'}</MenuItem>
-              <MenuItem value="DRAFT">{isBn ? 'খসড়া (Draft)' : 'Draft'}</MenuItem>
-              <MenuItem value="APPROVED">{isBn ? 'অনুমোদিত (Approved)' : 'Approved'}</MenuItem>
-              <MenuItem value="POSTED">{isBn ? 'পোস্টেড (Posted)' : 'Posted'}</MenuItem>
-              <MenuItem value="CANCELLED">{isBn ? 'বাতিল (Cancelled)' : 'Cancelled'}</MenuItem>
-            </TextField>
-            <TextField
-              select
-              size="small"
+              options={[
+                { value: 'ALL', label: isBn ? 'সকল অবস্থা' : 'All Statuses' },
+                { value: 'DRAFT', label: isBn ? 'খসড়া (Draft)' : 'Draft' },
+                { value: 'APPROVED', label: isBn ? 'অনুমোদিত (Approved)' : 'Approved' },
+                { value: 'POSTED', label: isBn ? 'পোস্টেড (Posted)' : 'Posted' },
+                { value: 'CANCELLED', label: isBn ? 'বাতিল (Cancelled)' : 'Cancelled' },
+              ]}
+              onChange={(val) => setStatusFilter(val)}
+              sx={{ minWidth: 165 }}
+            />
+            <AppSelect
+              fieldName="typeFilter"
+              fullWidth={false}
               label={isBn ? 'ফেরতের ধরন' : 'Return Type'}
               value={typeFilter}
-              onChange={(e) => setTypeFilter(e.target.value)}
-              sx={{ minWidth: 140 }}
-            >
-              <MenuItem value="ALL">{isBn ? 'সকল ধরন' : 'All Types'}</MenuItem>
-              <MenuItem value="FULL">{isBn ? 'পূর্ণাঙ্গ ফেরত (Full)' : 'Full Return'}</MenuItem>
-              <MenuItem value="PARTIAL">{isBn ? 'আংশিক ফেরত (Partial)' : 'Partial Return'}</MenuItem>
-              <MenuItem value="DAMAGED">{isBn ? 'ক্ষতিগ্রস্ত ফেরত (Damaged)' : 'Damaged Return'}</MenuItem>
-            </TextField>
+              options={[
+                { value: 'ALL', label: isBn ? 'সকল ধরন' : 'All Types' },
+                { value: 'FULL', label: isBn ? 'পূর্ণাঙ্গ ফেরত (Full)' : 'Full Return' },
+                { value: 'PARTIAL', label: isBn ? 'আংশিক ফেরত (Partial)' : 'Partial Return' },
+                { value: 'DAMAGED', label: isBn ? 'ক্ষতিগ্রস্ত ফেরত (Damaged)' : 'Damaged Return' },
+              ]}
+              onChange={(val) => setTypeFilter(val)}
+              sx={{ minWidth: 175 }}
+            />
           </Stack>
 
           <Button
@@ -661,17 +742,17 @@ export function SalesReturnPage({ companyId, factoryId, language, onSaved }: Sal
                   <TableCell align="right">
                     <Stack direction="row" spacing={1} justifyContent="flex-end">
                       {ret.status === 'DRAFT' && (
-                        <Button size="small" variant="outlined" color="info" onClick={() => handleApprove(ret)} disabled={busy}>
+                        <Button size="small" variant="outlined" color="info" onClick={() => handleApprove(ret)} disabled={actionBusyId === ret.id || busy}>
                           {isBn ? 'অনুমোদন' : 'Approve'}
                         </Button>
                       )}
                       {(ret.status === 'DRAFT' || ret.status === 'APPROVED') && (
-                        <Button size="small" variant="contained" color="success" onClick={() => handlePost(ret)} disabled={busy}>
+                        <Button size="small" variant="contained" color="success" onClick={() => handlePost(ret)} disabled={actionBusyId === ret.id || busy}>
                           {isBn ? 'পোস্ট' : 'Post'}
                         </Button>
                       )}
                       {(ret.status === 'DRAFT' || ret.status === 'APPROVED') && (
-                        <Button size="small" variant="text" color="error" onClick={() => handleCancel(ret)} disabled={busy}>
+                        <Button size="small" variant="text" color="error" onClick={() => handleCancel(ret)} disabled={actionBusyId === ret.id || busy}>
                           {isBn ? 'বাতিল' : 'Cancel'}
                         </Button>
                       )}
@@ -693,132 +774,154 @@ export function SalesReturnPage({ companyId, factoryId, language, onSaved }: Sal
       </Paper>
 
       {/* CREATE RETURN DIALOG */}
-      <Dialog open={createOpen} onClose={() => setCreateOpen(false)} maxWidth="md" fullWidth>
-        <form onSubmit={handleCreateSubmit}>
-          <DialogTitle sx={{ fontWeight: 700 }}>
-            {isBn ? 'নতুন বিক্রয় ফেরত ও ক্রেডিট নোট তৈরি' : 'Create Sales Return & Credit Note'}
-          </DialogTitle>
-          <DialogContent dividers sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
-            {error && <Alert severity="error">{error}</Alert>}
+      <FormDialog
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        onSubmit={handleCreateSubmit}
+        title={isBn ? 'নতুন বিক্রয় ফেরত ও ক্রেডিট নোট তৈরি' : 'Create Sales Return & Credit Note'}
+        error={error}
+        onClearError={() => setError(null)}
+        loading={busy}
+        submitLabel={isBn ? 'সংরক্ষণ করুন (খসড়া)' : 'Save (Draft)'}
+        cancelLabel={isBn ? 'বাতিল' : 'Cancel'}
+        maxWidth="md"
+      >
+        <FormSection title={isBn ? 'আদেশ ও চালানের তথ্য' : 'Order & Challan Reference'}>
+          <FormGrid columns={{ xs: 1, sm: 2 }}>
+            <AppAutocomplete
+              fieldName="selectedOrderId"
+              required
+              label={isBn ? 'বিক্রয় আদেশ নির্বাচন করুন' : 'Select Sales Order'}
+              value={selectedOrderId}
+              errorText={fieldErrors.selectedOrderId}
+              options={availableOrders.map((ord) => ({
+                value: ord.id,
+                label: `${ord.orderNumber} — ${ord.customer?.name || ''}`,
+                badge: ord.status,
+              }))}
+              emptyMessage={isBn ? 'কোনো অনুমোদিত বিক্রয় আদেশ নেই' : 'No approved/posted sales orders available'}
+              onChange={(val) => handleOrderChange(val)}
+            />
 
-            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
-              <TextField
-                select
-                required
-                size="small"
-                label={isBn ? 'বিক্রয় আদেশ নির্বাচন করুন' : 'Select Sales Order'}
-                value={selectedOrderId}
-                onChange={(e) => handleOrderChange(e.target.value)}
-              >
-                {availableOrders.map((ord) => (
-                  <MenuItem key={ord.id} value={ord.id}>
-                    {ord.orderNumber} — {ord.customer?.name} ({ord.status})
-                  </MenuItem>
-                ))}
-              </TextField>
+            <AppAutocomplete
+              fieldName="selectedDispatchId"
+              label={isBn ? 'চালান নির্বাচন করুন (ঐচ্ছিক)' : 'Select Challan (Optional)'}
+              value={selectedDispatchId}
+              prerequisite={{
+                met: Boolean(selectedOrderId),
+                message: isBn
+                  ? 'চালান নির্বাচনের আগে অনুগ্রহ করে বিক্রয় আদেশ নির্বাচন করুন।'
+                  : 'Please select a Sales Order first before linking a specific Challan.',
+                focusField: 'selectedOrderId',
+              }}
+              helperText={isBn ? 'নির্দিষ্ট ডেলিভারি চালানের রেফারেন্স' : 'Link to specific Delivery Challan'}
+              options={availableDispatches.map((dsp) => ({
+                value: dsp.id,
+                label: `${dsp.challanNumber} (Gate: ${dsp.gatePassNumber}, ${dsp.vehicleNumber})`,
+              }))}
+              emptyMessage={isBn ? 'এই আদেশের কোনো পোস্ট করা চালান নেই' : 'No posted challans for this order'}
+              onChange={(val) => handleDispatchChange(val)}
+            />
+          </FormGrid>
+        </FormSection>
 
-              <TextField
-                select
-                size="small"
-                label={isBn ? 'চালান নির্বাচন করুন (ঐচ্ছিক)' : 'Select Challan (Optional)'}
-                value={selectedDispatchId}
-                onChange={(e) => handleDispatchChange(e.target.value)}
-                disabled={!selectedOrderId}
-                helperText={isBn ? 'নির্দিষ্ট ডেলিভারি চালানের রেফারেন্স' : 'Link to specific Delivery Challan'}
-              >
-                <MenuItem value="">{isBn ? '— কোনো নির্দিষ্ট চালান ছাড়া —' : '— None / General Order Return —'}</MenuItem>
-                {availableDispatches.map((dsp) => (
-                  <MenuItem key={dsp.id} value={dsp.id}>
-                    Challan: {dsp.challanNumber} (Gate: {dsp.gatePassNumber}, Truck: {dsp.vehicleNumber})
-                  </MenuItem>
-                ))}
-              </TextField>
-            </Box>
+        <FormSection title={isBn ? 'ফেরত বিবরণ ও নিষ্পত্তি' : 'Return Metadata & Settlement'}>
+          <FormGrid columns={{ xs: 1, sm: 2, md: 4 }}>
+            <AppTextField
+              fieldName="returnNumber"
+              required
+              label={isBn ? 'ফেরত নং' : 'Return Number'}
+              value={returnNumber}
+              errorText={fieldErrors.returnNumber}
+              onValueChange={(val) => {
+                setReturnNumber(val);
+                setFieldErrors((p) => ({ ...p, returnNumber: '' }));
+              }}
+            />
+            <AppTextField
+              fieldName="creditNoteNumber"
+              label={isBn ? 'ক্রেডিট নোট নং' : 'Credit Note Number'}
+              value={creditNoteNumber}
+              onValueChange={(val) => setCreditNoteNumber(val)}
+            />
+            <AppTextField
+              fieldName="returnDate"
+              type="date"
+              required
+              label={isBn ? 'ফেরত তারিখ' : 'Return Date'}
+              value={returnDate}
+              errorText={fieldErrors.returnDate}
+              onValueChange={(val) => {
+                setReturnDate(val);
+                setFieldErrors((p) => ({ ...p, returnDate: '' }));
+              }}
+              InputLabelProps={{ shrink: true }}
+            />
+            <AppSelect
+              fieldName="returnType"
+              label={isBn ? 'ফেরতের ধরন' : 'Return Type'}
+              value={returnType}
+              options={[
+                { value: 'PARTIAL', label: isBn ? 'আংশিক ফেরত (Partial)' : 'Partial Return' },
+                { value: 'FULL', label: isBn ? 'সম্পূর্ণ ফেরত (Full)' : 'Full Return' },
+                { value: 'DAMAGED', label: isBn ? 'ক্ষতিগ্রস্ত ফেরত (Damaged)' : 'Damaged Return' },
+              ]}
+              onChange={(val) => setReturnType(val as 'FULL' | 'PARTIAL' | 'DAMAGED')}
+            />
+          </FormGrid>
 
-            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(4, 1fr)' }, gap: 2 }}>
-              <TextField
+          <FormGrid columns={{ xs: 1, sm: 3 }} sx={{ mt: 2 }}>
+            <AppSelect
+              fieldName="settlement"
+              label={isBn ? 'নিষ্পত্তির মাধ্যম' : 'Settlement Method'}
+              value={settlement}
+              options={[
+                { value: 'CREDIT_NOTE', label: isBn ? 'ক্রেডিট নোট (লেজার সমন্বয়)' : 'Credit Note (Ledger Credit)' },
+                { value: 'REPLACEMENT', label: isBn ? 'পণ্য প্রতিস্থাপন (পুনরায় সরবরাহ)' : 'Replacement (Re-dispatch)' },
+                { value: 'REFUND', label: isBn ? 'অর্থ ফেরত (Cash / Bank Refund)' : 'Direct Refund' },
+              ]}
+              onChange={(val) => setSettlement(val as 'CREDIT_NOTE' | 'REPLACEMENT' | 'REFUND')}
+            />
+            <Box sx={{ gridColumn: { sm: 'span 2' } }}>
+              <AppTextField
+                fieldName="reason"
                 required
-                size="small"
-                label={isBn ? 'ফেরত নং' : 'Return Number'}
-                value={returnNumber}
-                onChange={(e) => setReturnNumber(e.target.value)}
-              />
-              <TextField
-                size="small"
-                label={isBn ? 'ক্রেডিট নোট নং' : 'Credit Note Number'}
-                value={creditNoteNumber}
-                onChange={(e) => setCreditNoteNumber(e.target.value)}
-              />
-              <TextField
-                type="date"
-                required
-                size="small"
-                label={isBn ? 'ফেরত তারিখ' : 'Return Date'}
-                value={returnDate}
-                onChange={(e) => setReturnDate(e.target.value)}
-                InputLabelProps={{ shrink: true }}
-              />
-              <TextField
-                select
-                size="small"
-                label={isBn ? 'ফেরতের ধরন' : 'Return Type'}
-                value={returnType}
-                onChange={(e) => setReturnType(e.target.value as 'FULL' | 'PARTIAL' | 'DAMAGED')}
-              >
-                <MenuItem value="PARTIAL">{isBn ? 'আংশিক ফেরত (Partial)' : 'Partial Return'}</MenuItem>
-                <MenuItem value="FULL">{isBn ? 'সম্পূর্ণ ফেরত (Full)' : 'Full Return'}</MenuItem>
-                <MenuItem value="DAMAGED">{isBn ? 'ক্ষতিগ্রস্ত ফেরত (Damaged)' : 'Damaged Return'}</MenuItem>
-              </TextField>
-            </Box>
-
-            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 2fr' }, gap: 2 }}>
-              <TextField
-                select
-                size="small"
-                label={isBn ? 'নিষ্পত্তির মাধ্যম' : 'Settlement Method'}
-                value={settlement}
-                onChange={(e) => setSettlement(e.target.value as 'CREDIT_NOTE' | 'REPLACEMENT' | 'REFUND')}
-              >
-                <MenuItem value="CREDIT_NOTE">{isBn ? 'ক্রেডিট নোট (লেজার সমন্বয়)' : 'Credit Note (Ledger Credit)'}</MenuItem>
-                <MenuItem value="REPLACEMENT">{isBn ? 'পণ্য প্রতিস্থাপন (পুনরায় সরবরাহ)' : 'Replacement (Re-dispatch)'}</MenuItem>
-                <MenuItem value="REFUND">{isBn ? 'অর্থ ফেরত (Cash / Bank Refund)' : 'Direct Refund'}</MenuItem>
-              </TextField>
-              <TextField
-                required
-                size="small"
                 label={isBn ? 'ফেরতের কারণ' : 'Reason for Return'}
                 placeholder={isBn ? 'যেমন: আর্দ্রতা বেশি / ভাঙা দানা / অতিরিক্ত পাঠানো হয়েছে' : 'e.g., High moisture, broken grains, over shipment'}
                 value={reason}
-                onChange={(e) => setReason(e.target.value)}
+                errorText={fieldErrors.reason}
+                onValueChange={(val) => {
+                  setReason(val);
+                  setFieldErrors((p) => ({ ...p, reason: '' }));
+                }}
               />
             </Box>
+          </FormGrid>
+        </FormSection>
 
-            {/* Item Lines */}
-            <Typography variant="subtitle2" fontWeight={700} sx={{ mt: 1 }}>
-              {isBn ? 'ফেরত পণ্যের তালিকা' : 'Return Items & Stacks'}
-            </Typography>
-
-            {formLines.length === 0 ? (
-              <Typography color="text.secondary" fontSize={13}>
-                {isBn ? 'উপরে বিক্রয় আদেশ নির্বাচন করুন।' : 'Please select a sales order above to view line items.'}
-              </Typography>
-            ) : (
-              <Table size="small">
+        <FormSection title={isBn ? 'ফেরত পণ্যের তালিকা' : 'Return Items & Restock Stacks'}>
+          {formLines.length === 0 ? (
+            <Alert severity="info">
+              {isBn ? 'উপরে বিক্রয় আদেশ নির্বাচন করুন।' : 'Please select a sales order above to load line items.'}
+            </Alert>
+          ) : (
+            <Paper variant="outlined" sx={{ overflow: 'auto', borderRadius: 2 }}>
+              <Table size="small" sx={{ minWidth: 820 }}>
                 <TableHead sx={{ bgcolor: 'action.hover' }}>
                   <TableRow>
-                    <TableCell><strong>{isBn ? 'পণ্য' : 'Item'}</strong></TableCell>
-                    <TableCell><strong>{isBn ? 'অবস্থা' : 'Condition'}</strong></TableCell>
-                    <TableCell><strong>{isBn ? 'ফেরত স্ট্যাক' : 'Restock Stack'}</strong></TableCell>
-                    <TableCell width={90}><strong>{isBn ? 'বস্তা' : 'Bags'}</strong></TableCell>
-                    <TableCell width={120}><strong>{isBn ? 'ফেরত কেজি' : 'Return KG'}</strong></TableCell>
-                    <TableCell width={100}><strong>{isBn ? 'দর/কেজি' : 'Rate/KG'}</strong></TableCell>
-                    <TableCell align="right"><strong>{isBn ? 'মোট' : 'Amount'}</strong></TableCell>
+                    <TableCell sx={{ whiteSpace: 'nowrap' }}><strong>{isBn ? 'পণ্য' : 'Item'}</strong></TableCell>
+                    <TableCell sx={{ minWidth: 130, whiteSpace: 'nowrap' }}><strong>{isBn ? 'অবস্থা' : 'Condition'}</strong></TableCell>
+                    <TableCell sx={{ minWidth: 200, whiteSpace: 'nowrap' }}><strong>{isBn ? 'ফেরত স্ট্যাক' : 'Restock Stack'}</strong></TableCell>
+                    <TableCell sx={{ width: 95, whiteSpace: 'nowrap' }}><strong>{isBn ? 'বস্তা' : 'Bags'}</strong></TableCell>
+                    <TableCell sx={{ width: 135, whiteSpace: 'nowrap' }}><strong>{isBn ? 'ফেরত কেজি' : 'Return KG'}</strong></TableCell>
+                    <TableCell sx={{ width: 120, whiteSpace: 'nowrap' }}><strong>{isBn ? 'দর/কেজি' : 'Rate/KG'}</strong></TableCell>
+                    <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}><strong>{isBn ? 'মোট' : 'Amount'}</strong></TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
                   {formLines.map((line, idx) => (
                     <TableRow key={idx}>
-                      <TableCell>
+                      <TableCell sx={{ whiteSpace: 'nowrap' }}>
                         <Typography variant="body2" fontWeight={600}>
                           {line.itemName}
                         </Typography>
@@ -827,129 +930,126 @@ export function SalesReturnPage({ companyId, factoryId, language, onSaved }: Sal
                         </Typography>
                       </TableCell>
                       <TableCell>
-                        <TextField
-                          select
-                          size="small"
+                        <AppSelect
+                          fieldName={`line-${idx}-condition`}
+                          label={isBn ? 'অবস্থা' : 'Condition'}
                           value={line.condition}
-                          onChange={(e) => {
-                            const val = e.target.value as 'INTACT' | 'DAMAGED';
+                          options={[
+                            { value: 'INTACT', label: isBn ? 'ভালো (Intact)' : 'Intact' },
+                            { value: 'DAMAGED', label: isBn ? 'ক্ষতিগ্রস্ত (Damaged)' : 'Damaged' },
+                          ]}
+                          onChange={(val) => {
+                            const cVal = val as 'INTACT' | 'DAMAGED';
                             setFormLines((prev) => {
                               const c = [...prev];
-                              c[idx]!.condition = val;
+                              c[idx]!.condition = cVal;
                               return c;
                             });
                           }}
-                          sx={{ minWidth: 100 }}
-                        >
-                          <MenuItem value="INTACT">{isBn ? 'ভালো (Intact)' : 'Intact'}</MenuItem>
-                          <MenuItem value="DAMAGED">{isBn ? 'ক্ষতিগ্রস্ত (Damaged)' : 'Damaged'}</MenuItem>
-                        </TextField>
+                        />
                       </TableCell>
                       <TableCell>
-                        <TextField
-                          select
-                          size="small"
+                        <AppAutocomplete
+                          fieldName={`line-${idx}-restockStackId`}
+                          required
+                          label={isBn ? 'স্ট্যাক' : 'Stack'}
                           value={line.restockStackId}
-                          onChange={(e) => {
-                            const val = e.target.value;
+                          errorText={fieldErrors[`line-${idx}-restockStackId`]}
+                          options={availableStacks.map((stk) => ({
+                            value: stk.id,
+                            label: `${stk.code} (${stk.godown?.name || ''})`,
+                          }))}
+                          onChange={(val) => {
                             setFormLines((prev) => {
                               const c = [...prev];
                               c[idx]!.restockStackId = val;
                               return c;
                             });
+                            setFieldErrors((p) => ({ ...p, [`line-${idx}-restockStackId`]: '' }));
                           }}
-                          sx={{ minWidth: 140 }}
-                        >
-                          {availableStacks.map((stk) => (
-                            <MenuItem key={stk.id} value={stk.id}>
-                              {stk.code} ({stk.godown?.name})
-                            </MenuItem>
-                          ))}
-                        </TextField>
+                        />
                       </TableCell>
                       <TableCell>
-                        <TextField
+                        <AppTextField
+                          fieldName={`line-${idx}-bagCount`}
                           type="number"
-                          size="small"
                           value={line.bagCount}
-                          onChange={(e) => {
-                            const val = parseInt(e.target.value, 10) || 0;
+                          inputProps={{ min: 0 }}
+                          onValueChange={(val) => {
+                            const num = parseInt(val, 10) || 0;
                             setFormLines((prev) => {
                               const c = [...prev];
-                              c[idx]!.bagCount = val;
+                              c[idx]!.bagCount = num;
                               return c;
                             });
                           }}
                         />
                       </TableCell>
                       <TableCell>
-                        <TextField
+                        <AppTextField
+                          fieldName={`line-${idx}-returnKg`}
                           type="number"
-                          size="small"
+                          unit="KG"
                           value={line.returnKg}
-                          onChange={(e) => handleLineKgChange(idx, e.target.value)}
+                          errorText={fieldErrors[`line-${idx}-returnKg`]}
+                          inputProps={{ min: 0, max: line.maxKg, step: '.001' }}
+                          onValueChange={(val) => handleLineKgChange(idx, val)}
                         />
                       </TableCell>
                       <TableCell>
-                        <TextField
+                        <AppTextField
+                          fieldName={`line-${idx}-unitRate`}
                           type="number"
-                          size="small"
+                          prefixText="৳"
                           value={line.unitRate}
-                          onChange={(e) => {
-                            const val = e.target.value;
+                          errorText={fieldErrors[`line-${idx}-unitRate`]}
+                          inputProps={{ min: 0, step: '.01' }}
+                          onValueChange={(val) => {
                             setFormLines((prev) => {
                               const c = [...prev];
                               c[idx]!.unitRate = val;
                               c[idx]!.lineAmount = (Number(c[idx]!.returnKg || 0) * Number(val || 0)).toFixed(2);
                               return c;
                             });
+                            setFieldErrors((p) => ({ ...p, [`line-${idx}-unitRate`]: '' }));
                           }}
                         />
                       </TableCell>
-                      <TableCell align="right" sx={{ fontWeight: 600 }}>
+                      <TableCell align="right" sx={{ fontWeight: 600, whiteSpace: 'nowrap' }}>
                         ৳ {Number(line.lineAmount).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                       </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
-            )}
+            </Paper>
+          )}
+        </FormSection>
 
-            {/* Total Footer */}
-            {formLines.length > 0 && (
-              <Paper sx={{ p: 2, bgcolor: 'background.default', borderRadius: 2 }}>
-                <Stack direction="row" justifyContent="space-between" alignItems="center">
-                  <Typography variant="body2" color="text.secondary">
-                    {isBn ? 'মোট ফেরত ওজন:' : 'Total Return Weight:'}{' '}
-                    <strong>{formTotalWeight.toLocaleString('en-US', { minimumFractionDigits: 2 })} KG</strong>
-                  </Typography>
-                  <Typography variant="subtitle1" fontWeight={700} color="primary.main">
-                    {isBn ? 'মোট ক্রেডিট মূল্য:' : 'Total Credit Amount:'}{' '}
-                    ৳ {formTotalAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                  </Typography>
-                </Stack>
-              </Paper>
-            )}
+        {formLines.length > 0 && (
+          <Paper variant="outlined" sx={{ p: 2, bgcolor: 'background.default', borderRadius: 2 }}>
+            <Stack direction="row" justifyContent="space-between" alignItems="center">
+              <Typography variant="body2" color="text.secondary">
+                {isBn ? 'মোট ফেরত ওজন:' : 'Total Return Weight:'}{' '}
+                <strong>{formTotalWeight.toLocaleString('en-US', { minimumFractionDigits: 2 })} KG</strong>
+              </Typography>
+              <Typography variant="subtitle1" fontWeight={700} color="primary.main">
+                {isBn ? 'মোট ক্রেডিট মূল্য:' : 'Total Credit Amount:'}{' '}
+                ৳ {formTotalAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+              </Typography>
+            </Stack>
+          </Paper>
+        )}
 
-            <TextField
-              size="small"
-              multiline
-              rows={2}
-              label={isBn ? 'মন্তব্য (ঐচ্ছিক)' : 'Remarks (Optional)'}
-              value={remarks}
-              onChange={(e) => setRemarks(e.target.value)}
-            />
-          </DialogContent>
-          <DialogActions sx={{ px: 3, py: 2 }}>
-            <Button onClick={() => setCreateOpen(false)} color="inherit">
-              {isBn ? 'বাতিল' : 'Cancel'}
-            </Button>
-            <Button type="submit" variant="contained" color="primary" disabled={busy || !formLines.length}>
-              {isBn ? 'সংরক্ষণ করুন (খসড়া)' : 'Save (Draft)'}
-            </Button>
-          </DialogActions>
-        </form>
-      </Dialog>
+        <AppTextField
+          fieldName="returnRemarks"
+          multiline
+          rows={2}
+          label={isBn ? 'মন্তব্য (ঐচ্ছিক)' : 'Remarks (Optional)'}
+          value={remarks}
+          onValueChange={(val) => setRemarks(val)}
+        />
+      </FormDialog>
 
       {/* PRINTABLE CREDIT NOTE DIALOG */}
       <Dialog open={Boolean(printDoc)} onClose={() => setPrintDoc(null)} maxWidth="md" fullWidth>

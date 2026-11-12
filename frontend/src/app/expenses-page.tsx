@@ -6,13 +6,13 @@ import {
   Box,
   Button,
   Chip,
+  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
   Divider,
   IconButton,
-  MenuItem,
   Paper,
   Stack,
   Table,
@@ -20,7 +20,6 @@ import {
   TableCell,
   TableHead,
   TableRow,
-  TextField,
   Typography,
 } from '@mui/material';
 import ReceiptLongRoundedIcon from '@mui/icons-material/ReceiptLongRounded';
@@ -35,6 +34,9 @@ import EditRoundedIcon from '@mui/icons-material/EditRounded';
 import BlockRoundedIcon from '@mui/icons-material/BlockRounded';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiRequest, queryString } from '@/lib/api';
+import { AppAutocomplete, AppSelect, AppTextField, FormDialog, FormGrid, FormSection } from '@/components/form';
+import { extractApiError, useToast } from '@/components/ui/toast-provider';
+import { FieldRule, focusFieldByName, validateFormFields } from '@/lib/form-validation';
 
 type ExpenseCategory =
   | 'ELECTRICITY'
@@ -168,6 +170,7 @@ export function ExpensesPage({
   onSaved,
 }: ExpensesPageProps) {
   const queryClient = useQueryClient();
+  const toast = useToast();
   const isBn = language === 'bn';
 
   // State Filters
@@ -182,8 +185,11 @@ export function ExpensesPage({
   const [postDialogExpense, setPostDialogExpense] = useState<Expense | null>(null);
   const [rejectDialogExpense, setRejectDialogExpense] = useState<Expense | null>(null);
   const [rejectionReason, setRejectionReason] = useState('');
+  const [cancelDialogExpense, setCancelDialogExpense] = useState<Expense | null>(null);
+  const [cancelReason, setCancelReason] = useState('');
   const [printExpense, setPrintExpense] = useState<Expense | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
 
   // Form Fields
@@ -305,6 +311,7 @@ export function ExpensesPage({
     setTaxAmount('0');
     setRemarks('');
     setLines([{ description: '', quantity: '', unitPrice: '', amount: '' }]);
+    setFieldErrors({});
     setErrorMsg(null);
     setFormOpen(true);
   };
@@ -324,18 +331,21 @@ export function ExpensesPage({
     setBankAccount(exp.bankAccount || '');
     setChequeOrTxnNumber(exp.chequeOrTxnNumber || '');
     setBillReference(exp.billReference || '');
-    setTaxAmount(exp.taxAmount);
+    setTaxAmount(exp.taxAmount ?? '0');
     setRemarks(exp.remarks || '');
     setLines(
-      exp.lines.map((l) => ({
-        id: l.id,
-        description: l.description,
-        quantity: l.quantity || '',
-        unitPrice: l.unitPrice || '',
-        amount: l.amount,
-        accountCode: l.accountCode || '',
-      })),
+      exp.lines.length > 0
+        ? exp.lines.map((l) => ({
+            id: l.id,
+            description: l.description,
+            quantity: l.quantity || '',
+            unitPrice: l.unitPrice || '',
+            amount: l.amount,
+            accountCode: l.accountCode || '',
+          }))
+        : [{ description: '', quantity: '', unitPrice: '', amount: '' }],
     );
+    setFieldErrors({});
     setErrorMsg(null);
     setFormOpen(true);
   };
@@ -345,6 +355,7 @@ export function ExpensesPage({
     field: keyof ExpenseLine,
     value: string,
   ) => {
+    setFieldErrors((p) => ({ ...p, [`line-${index}-${String(field)}`]: '' }));
     setLines((prev) => {
       const next = [...prev];
       const item = { ...next[index], [field]: value };
@@ -378,21 +389,37 @@ export function ExpensesPage({
     e.preventDefault();
     setErrorMsg(null);
 
-    if (!title.trim()) {
-      setErrorMsg(isBn ? 'খরচের শিরোনাম আবশ্যক' : 'Expense title is required');
+    const rules: FieldRule[] = [
+      { name: 'expTitle', label: isBn ? 'খরচের শিরোনাম' : 'Expense Title', value: title, required: true },
+      { name: 'expDate', label: isBn ? 'তারিখ' : 'Date', value: expenseDate, required: true, type: 'date' },
+      { name: 'expCategory', label: isBn ? 'ক্যাটাগরি' : 'Category', value: category, required: true, isSelect: true },
+      { name: 'expType', label: isBn ? 'ব্যয়ের ধরন' : 'Cost Center Type', value: expenseType, required: true, isSelect: true },
+      { name: 'expPaymentMode', label: isBn ? 'পরিশোধ মাধ্যম' : 'Payment Mode', value: paymentMode, required: true, isSelect: true },
+    ];
+    if (taxAmount.trim()) {
+      rules.push({ name: 'expTaxAmount', label: isBn ? 'ভ্যাট / ট্যাক্স' : 'Tax / VAT', value: taxAmount, type: 'nonNegativeNumber' });
+    }
+    lines.forEach((l, i) => {
+      const hasAny = l.description.trim() || Number(l.amount) > 0;
+      if (i === 0 || hasAny) {
+        rules.push(
+          { name: `line-${i}-description`, label: `${isBn ? 'বিবরণ' : 'Description'} (#${i + 1})`, value: l.description, required: true },
+          { name: `line-${i}-amount`, label: `${isBn ? 'মোট টাকা' : 'Amount'} (#${i + 1})`, value: l.amount, required: true, type: 'positiveNumber' },
+        );
+      }
+    });
+
+    const validation = validateFormFields(rules, language);
+    if (!validation.valid) {
+      setFieldErrors(validation.errors);
+      setErrorMsg(validation.summary);
+      toast.warning(validation.summary);
+      focusFieldByName(validation.firstField);
       return;
     }
 
     const validLines = lines.filter((l) => l.description.trim() && Number(l.amount) > 0);
-    if (validLines.length === 0) {
-      setErrorMsg(
-        isBn
-          ? 'কমপক্ষে একটি বৈধ খরচের বিবরণ ও পরিমাণ দিন'
-          : 'Please provide at least one valid line item with description and amount',
-      );
-      return;
-    }
-
+    setFieldErrors({});
     setBusy(true);
     try {
       const payload = {
@@ -450,14 +477,17 @@ export function ExpensesPage({
           ? `ভাউচার ${saved.voucherNumber} সফলভাবে সংরক্ষিত হয়েছে`
           : `Expense voucher ${saved.voucherNumber} saved successfully`,
       );
-    } catch (err: any) {
-      setErrorMsg(err.message || 'Error saving expense');
+    } catch (err: unknown) {
+      const msg = extractApiError(err, 'Error saving expense');
+      setErrorMsg(msg);
+      toast.error(msg);
     } finally {
       setBusy(false);
     }
   };
 
   const handleSubmit = async (exp: Expense) => {
+    setBusy(true);
     try {
       await apiRequest(`/expenses/${exp.id}/submit`, {
         method: 'POST',
@@ -470,12 +500,15 @@ export function ExpensesPage({
           ? `ভাউচার ${exp.voucherNumber} অনুমোদনের জন্য জমা দেওয়া হয়েছে`
           : `Expense ${exp.voucherNumber} submitted for approval`,
       );
-    } catch (err: any) {
-      alert(err.message);
+    } catch (err: unknown) {
+      toast.error(extractApiError(err, 'Failed to submit expense'));
+    } finally {
+      setBusy(false);
     }
   };
 
   const handleApprove = async (exp: Expense) => {
+    setBusy(true);
     try {
       await apiRequest(`/expenses/${exp.id}/approve`, {
         method: 'POST',
@@ -488,71 +521,121 @@ export function ExpensesPage({
           ? `ভাউচার ${exp.voucherNumber} অনুমোদিত হয়েছে`
           : `Expense ${exp.voucherNumber} approved successfully`,
       );
-    } catch (err: any) {
-      alert(err.message);
+    } catch (err: unknown) {
+      toast.error(extractApiError(err, 'Failed to approve expense'));
+    } finally {
+      setBusy(false);
     }
   };
 
-  const handleReject = async () => {
-    if (!rejectDialogExpense || !rejectionReason.trim()) return;
+  const handleReject = async (e?: FormEvent) => {
+    e?.preventDefault();
+    if (!rejectDialogExpense) return;
+    const validation = validateFormFields(
+      [{ name: 'rejectionReason', label: isBn ? 'প্রত্যাখ্যানের কারণ' : 'Rejection Reason', value: rejectionReason, required: true }],
+      language,
+    );
+    if (!validation.valid) {
+      setFieldErrors(validation.errors);
+      setErrorMsg(validation.summary);
+      toast.warning(validation.summary);
+      focusFieldByName(validation.firstField);
+      return;
+    }
+
+    setBusy(true);
+    setErrorMsg(null);
+    setFieldErrors({});
     try {
       await apiRequest(`/expenses/${rejectDialogExpense.id}/reject`, {
         method: 'POST',
         body: JSON.stringify({ companyId, factoryId, reason: rejectionReason.trim() }),
       });
+      const num = rejectDialogExpense.voucherNumber;
       setRejectDialogExpense(null);
       setRejectionReason('');
       queryClient.invalidateQueries({ queryKey: ['expenses'] });
       queryClient.invalidateQueries({ queryKey: ['expenses-summary'] });
       onSaved(
-        isBn
-          ? `ভাউচার ${rejectDialogExpense.voucherNumber} বাতিল করা হয়েছে`
-          : `Expense ${rejectDialogExpense.voucherNumber} rejected`,
+        isBn ? `ভাউচার ${num} বাতিল করা হয়েছে` : `Expense ${num} rejected`,
       );
-    } catch (err: any) {
-      alert(err.message);
+    } catch (err: unknown) {
+      const msg = extractApiError(err, 'Failed to reject expense');
+      setErrorMsg(msg);
+      toast.error(msg);
+    } finally {
+      setBusy(false);
     }
   };
 
   const handleConfirmPost = async () => {
     if (!postDialogExpense) return;
+    setBusy(true);
     try {
       await apiRequest(`/expenses/${postDialogExpense.id}/post`, {
         method: 'POST',
         body: JSON.stringify({ companyId, factoryId }),
       });
+      const num = postDialogExpense.voucherNumber;
       setPostDialogExpense(null);
       queryClient.invalidateQueries({ queryKey: ['expenses'] });
       queryClient.invalidateQueries({ queryKey: ['expenses-summary'] });
       onSaved(
         isBn
-          ? `ভাউচার ${postDialogExpense.voucherNumber} সফলভাবে লেজারে পোস্ট করা হয়েছে`
-          : `Expense ${postDialogExpense.voucherNumber} posted to General Ledger successfully`,
+          ? `ভাউচার ${num} সফলভাবে লেজারে পোস্ট করা হয়েছে`
+          : `Expense ${num} posted to General Ledger successfully`,
       );
-    } catch (err: any) {
-      alert(err.message);
+    } catch (err: unknown) {
+      toast.error(extractApiError(err, 'Failed to post expense'));
+    } finally {
+      setBusy(false);
     }
   };
 
-  const handleCancel = async (exp: Expense) => {
-    const reason = window.prompt(
-      isBn ? 'বাতিলের কারণ লিখুন:' : 'Enter cancellation reason:',
+  const handleCancel = (exp: Expense) => {
+    setCancelDialogExpense(exp);
+    setCancelReason('');
+    setFieldErrors({});
+    setErrorMsg(null);
+  };
+
+  const handleConfirmCancel = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!cancelDialogExpense) return;
+    const validation = validateFormFields(
+      [{ name: 'cancelReason', label: isBn ? 'বাতিলের কারণ' : 'Cancellation Reason', value: cancelReason, required: true }],
+      language,
     );
-    if (reason === null) return;
+    if (!validation.valid) {
+      setFieldErrors(validation.errors);
+      setErrorMsg(validation.summary);
+      toast.warning(validation.summary);
+      focusFieldByName(validation.firstField);
+      return;
+    }
+
+    setBusy(true);
+    setErrorMsg(null);
+    setFieldErrors({});
     try {
-      await apiRequest(`/expenses/${exp.id}/cancel`, {
+      await apiRequest(`/expenses/${cancelDialogExpense.id}/cancel`, {
         method: 'POST',
-        body: JSON.stringify({ companyId, factoryId, reason }),
+        body: JSON.stringify({ companyId, factoryId, reason: cancelReason.trim() }),
       });
+      const num = cancelDialogExpense.voucherNumber;
+      setCancelDialogExpense(null);
+      setCancelReason('');
       queryClient.invalidateQueries({ queryKey: ['expenses'] });
       queryClient.invalidateQueries({ queryKey: ['expenses-summary'] });
       onSaved(
-        isBn
-          ? `ভাউচার ${exp.voucherNumber} বাতিল করা হয়েছে`
-          : `Expense ${exp.voucherNumber} cancelled`,
+        isBn ? `ভাউচার ${num} বাতিল করা হয়েছে` : `Expense ${num} cancelled`,
       );
-    } catch (err: any) {
-      alert(err.message);
+    } catch (err: unknown) {
+      const msg = extractApiError(err, 'Failed to cancel expense');
+      setErrorMsg(msg);
+      toast.error(msg);
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -565,6 +648,7 @@ export function ExpensesPage({
       )
     )
       return;
+    setBusy(true);
     try {
       await apiRequest(`/expenses/${exp.id}?companyId=${companyId}&factoryId=${factoryId}`, {
         method: 'DELETE',
@@ -572,12 +656,12 @@ export function ExpensesPage({
       queryClient.invalidateQueries({ queryKey: ['expenses'] });
       queryClient.invalidateQueries({ queryKey: ['expenses-summary'] });
       onSaved(
-        isBn
-          ? `ভাউচার ${exp.voucherNumber} মুছে ফেলা হয়েছে`
-          : `Expense ${exp.voucherNumber} deleted`,
+        isBn ? `ভাউচার ${exp.voucherNumber} মুছে ফেলা হয়েছে` : `Expense ${exp.voucherNumber} deleted`,
       );
-    } catch (err: any) {
-      alert(err.message);
+    } catch (err: unknown) {
+      toast.error(extractApiError(err, 'Failed to delete expense'));
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -730,62 +814,63 @@ export function ExpensesPage({
           spacing={2}
           alignItems={{ xs: 'stretch', md: 'center' }}
         >
-          <TextField
-            size="small"
+          <AppTextField
+            fieldName="searchExpenses"
             label={isBn ? 'অনুসন্ধান (ভাউচার, শিরোনাম, প্রাপক)' : 'Search voucher, title, payee'}
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onValueChange={(val) => setSearchTerm(val)}
             sx={{ flex: 1 }}
           />
 
-          <TextField
-            select
-            size="small"
+          <AppSelect
+            fieldName="statusFilter"
+            fullWidth={false}
             label={isBn ? 'স্ট্যাটাস' : 'Status'}
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            sx={{ minWidth: 140 }}
-          >
-            <MenuItem value="ALL">{isBn ? 'সকল স্ট্যাটাস' : 'All Status'}</MenuItem>
-            <MenuItem value="DRAFT">DRAFT</MenuItem>
-            <MenuItem value="SUBMITTED">SUBMITTED</MenuItem>
-            <MenuItem value="APPROVED">APPROVED</MenuItem>
-            <MenuItem value="POSTED">POSTED</MenuItem>
-            <MenuItem value="REJECTED">REJECTED</MenuItem>
-            <MenuItem value="CANCELLED">CANCELLED</MenuItem>
-          </TextField>
+            options={[
+              { value: 'ALL', label: isBn ? 'সকল স্ট্যাটাস' : 'All Status' },
+              { value: 'DRAFT', label: 'DRAFT' },
+              { value: 'SUBMITTED', label: 'SUBMITTED' },
+              { value: 'APPROVED', label: 'APPROVED' },
+              { value: 'POSTED', label: 'POSTED' },
+              { value: 'REJECTED', label: 'REJECTED' },
+              { value: 'CANCELLED', label: 'CANCELLED' },
+            ]}
+            onChange={(val) => setStatusFilter(val)}
+            sx={{ minWidth: 155 }}
+          />
 
-          <TextField
-            select
-            size="small"
+          <AppSelect
+            fieldName="categoryFilter"
+            fullWidth={false}
             label={isBn ? 'ক্যাটাগরি' : 'Category'}
             value={categoryFilter}
-            onChange={(e) => setCategoryFilter(e.target.value)}
-            sx={{ minWidth: 160 }}
-          >
-            <MenuItem value="ALL">{isBn ? 'সকল ক্যাটাগরি' : 'All Categories'}</MenuItem>
-            {Object.keys(CATEGORY_LABELS).map((cat) => (
-              <MenuItem key={cat} value={cat}>
-                {CATEGORY_LABELS[cat as ExpenseCategory][isBn ? 'bn' : 'en']}
-              </MenuItem>
-            ))}
-          </TextField>
+            options={[
+              { value: 'ALL', label: isBn ? 'সকল ক্যাটাগরি' : 'All Categories' },
+              ...Object.keys(CATEGORY_LABELS).map((cat) => ({
+                value: cat,
+                label: CATEGORY_LABELS[cat as ExpenseCategory][isBn ? 'bn' : 'en'],
+              })),
+            ]}
+            onChange={(val) => setCategoryFilter(val)}
+            sx={{ minWidth: 185 }}
+          />
 
-          <TextField
-            select
-            size="small"
+          <AppSelect
+            fieldName="typeFilter"
+            fullWidth={false}
             label={isBn ? 'ব্যয়ের ধরন' : 'Cost Center'}
             value={typeFilter}
-            onChange={(e) => setTypeFilter(e.target.value)}
-            sx={{ minWidth: 160 }}
-          >
-            <MenuItem value="ALL">{isBn ? 'সকল ধরন' : 'All Types'}</MenuItem>
-            {Object.keys(TYPE_LABELS).map((t) => (
-              <MenuItem key={t} value={t}>
-                {TYPE_LABELS[t as ExpenseType][isBn ? 'bn' : 'en']}
-              </MenuItem>
-            ))}
-          </TextField>
+            options={[
+              { value: 'ALL', label: isBn ? 'সকল ধরন' : 'All Types' },
+              ...Object.keys(TYPE_LABELS).map((t) => ({
+                value: t,
+                label: TYPE_LABELS[t as ExpenseType][isBn ? 'bn' : 'en'],
+              })),
+            ]}
+            onChange={(val) => setTypeFilter(val)}
+            sx={{ minWidth: 185 }}
+          />
         </Stack>
       </Paper>
 
@@ -987,293 +1072,265 @@ export function ExpensesPage({
       </Paper>
 
       {/* New / Edit Expense Voucher Dialog */}
-      <Dialog
+      <FormDialog
         open={formOpen}
         onClose={() => !busy && setFormOpen(false)}
+        onSubmit={(e) => handleSaveForm(e, false)}
+        title={
+          editingExpense
+            ? isBn
+              ? `ভাউচার সম্পাদনা: ${editingExpense.voucherNumber}`
+              : `Edit Expense Voucher: ${editingExpense.voucherNumber}`
+            : isBn
+            ? 'নতুন খরচ ভাউচার তৈরি করুন'
+            : 'Create New Expense Voucher'
+        }
+        error={errorMsg}
+        onClearError={() => setErrorMsg(null)}
+        loading={busy}
+        submitLabel={isBn ? 'ড্রাফট হিসেবে সংরক্ষণ' : 'Save as Draft'}
+        cancelLabel={isBn ? 'বাতিল' : 'Cancel'}
         maxWidth="md"
-        fullWidth
+        extraActions={
+          <Button
+            variant="contained"
+            disabled={busy}
+            startIcon={busy ? <CircularProgress size={16} color="inherit" /> : undefined}
+            onClick={(e) => handleSaveForm(e, true)}
+          >
+            {isBn ? 'সংরক্ষণ ও অনুমোদন জমা' : 'Save & Submit'}
+          </Button>
+        }
       >
-        <form onSubmit={(e) => handleSaveForm(e, false)}>
-          <DialogTitle sx={{ fontWeight: 700 }}>
-            {editingExpense
-              ? isBn
-                ? `ভাউচার সম্পাদনা: ${editingExpense.voucherNumber}`
-                : `Edit Expense Voucher: ${editingExpense.voucherNumber}`
-              : isBn
-              ? 'নতুন খরচ ভাউচার তৈরি করুন'
-              : 'Create New Expense Voucher'}
-          </DialogTitle>
-          <DialogContent dividers>
-            {errorMsg && (
-              <Alert severity="error" sx={{ mb: 2 }}>
-                {errorMsg}
-              </Alert>
-            )}
-
-            <Box
-              sx={{
-                display: 'grid',
-                gridTemplateColumns: { xs: '1fr', sm: '2fr 1fr' },
-                gap: 2,
-                mb: 2,
+        <FormSection title={isBn ? 'মূল তথ্য ও শ্রেণিবিন্যাস' : 'Voucher Details & Classification'}>
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '2fr 1fr' }, gap: 2 }}>
+            <AppTextField
+              fieldName="expTitle"
+              required
+              label={isBn ? 'খরচের শিরোনাম' : 'Expense Title'}
+              value={title}
+              errorText={fieldErrors.expTitle}
+              onValueChange={(val) => {
+                setTitle(val);
+                setFieldErrors((p) => ({ ...p, expTitle: '' }));
               }}
-            >
-              <TextField
-                required
-                size="small"
-                label={isBn ? 'খরচের শিরোনাম' : 'Expense Title'}
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="e.g. Factory Electricity Bill Oct 2026"
-              />
-              <TextField
-                required
-                type="date"
-                size="small"
-                label={isBn ? 'তারিখ' : 'Date'}
-                value={expenseDate}
-                onChange={(e) => setExpenseDate(e.target.value)}
-                InputLabelProps={{ shrink: true }}
-              />
-            </Box>
-
-            <Box
-              sx={{
-                display: 'grid',
-                gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr 1fr' },
-                gap: 2,
-                mb: 2,
+              placeholder="e.g. Factory Electricity Bill Oct 2026"
+            />
+            <AppTextField
+              fieldName="expDate"
+              required
+              type="date"
+              label={isBn ? 'তারিখ' : 'Date'}
+              value={expenseDate}
+              errorText={fieldErrors.expDate}
+              onValueChange={(val) => {
+                setExpenseDate(val);
+                setFieldErrors((p) => ({ ...p, expDate: '' }));
               }}
-            >
-              <TextField
-                select
-                required
-                size="small"
-                label={isBn ? 'ক্যাটাগরি' : 'Category'}
-                value={category}
-                onChange={(e) => setCategory(e.target.value as ExpenseCategory)}
-              >
-                {Object.keys(CATEGORY_LABELS).map((cat) => (
-                  <MenuItem key={cat} value={cat}>
-                    {CATEGORY_LABELS[cat as ExpenseCategory][isBn ? 'bn' : 'en']}
-                  </MenuItem>
-                ))}
-              </TextField>
+              InputLabelProps={{ shrink: true }}
+            />
+          </Box>
 
-              <TextField
-                select
-                required
-                size="small"
-                label={isBn ? 'ব্যয়ের ধরন (Cost Center)' : 'Cost Center Type'}
-                value={expenseType}
-                onChange={(e) => setExpenseType(e.target.value as ExpenseType)}
-              >
-                {Object.keys(TYPE_LABELS).map((t) => (
-                  <MenuItem key={t} value={t}>
-                    {TYPE_LABELS[t as ExpenseType][isBn ? 'bn' : 'en']}
-                  </MenuItem>
-                ))}
-              </TextField>
-
-              <TextField
-                select
-                required
-                size="small"
-                label={isBn ? 'পরিশোধ মাধ্যম' : 'Payment Mode'}
-                value={paymentMode}
-                onChange={(e) => setPaymentMode(e.target.value as ExpensePaymentMode)}
-              >
-                {Object.keys(PAYMENT_MODE_LABELS).map((pm) => (
-                  <MenuItem key={pm} value={pm}>
-                    {PAYMENT_MODE_LABELS[pm as ExpensePaymentMode][isBn ? 'bn' : 'en']}
-                  </MenuItem>
-                ))}
-              </TextField>
-            </Box>
-
-            <Box
-              sx={{
-                display: 'grid',
-                gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
-                gap: 2,
-                mb: 2,
+          <FormGrid columns={{ xs: 1, sm: 3 }} sx={{ mt: 2 }}>
+            <AppSelect
+              fieldName="expCategory"
+              required
+              label={isBn ? 'ক্যাটাগরি' : 'Category'}
+              value={category}
+              errorText={fieldErrors.expCategory}
+              options={Object.keys(CATEGORY_LABELS).map((cat) => ({
+                value: cat,
+                label: CATEGORY_LABELS[cat as ExpenseCategory][isBn ? 'bn' : 'en'],
+              }))}
+              onChange={(val) => {
+                setCategory(val as ExpenseCategory);
+                setFieldErrors((p) => ({ ...p, expCategory: '' }));
               }}
-            >
-              <TextField
-                size="small"
-                label={isBn ? 'প্রাপকের নাম' : 'Payee Name (Person/Party)'}
-                value={payeeName}
-                onChange={(e) => setPayeeName(e.target.value)}
-              />
+            />
 
-              <TextField
-                select
-                size="small"
-                label={isBn ? 'রেজিস্টার্ড ভেন্ডর / সরবরাহকারী (ঐচ্ছিক)' : 'Registered Vendor (Optional)'}
-                value={payeePartnerId}
-                onChange={(e) => setPayeePartnerId(e.target.value)}
-              >
-                <MenuItem value="">{isBn ? '-- কোনটি নয় --' : '-- None --'}</MenuItem>
-                {(partnersQuery.data || []).map((p: any) => (
-                  <MenuItem key={p.id} value={p.id}>
-                    {p.name} ({p.code})
-                  </MenuItem>
-                ))}
-              </TextField>
-            </Box>
-
-            {/* Optional Allocation Links */}
-            <Box
-              sx={{
-                display: 'grid',
-                gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
-                gap: 2,
-                mb: 2,
+            <AppSelect
+              fieldName="expType"
+              required
+              label={isBn ? 'ব্যয়ের ধরন (Cost Center)' : 'Cost Center Type'}
+              value={expenseType}
+              errorText={fieldErrors.expType}
+              options={Object.keys(TYPE_LABELS).map((t) => ({
+                value: t,
+                label: TYPE_LABELS[t as ExpenseType][isBn ? 'bn' : 'en'],
+              }))}
+              onChange={(val) => {
+                setExpenseType(val as ExpenseType);
+                setFieldErrors((p) => ({ ...p, expType: '' }));
               }}
-            >
-              <TextField
-                select
-                size="small"
-                label={isBn ? 'সংযুক্ত গাড়ি / পরিবহন (ঐচ্ছিক)' : 'Linked Vehicle (Optional)'}
-                value={vehicleId}
-                onChange={(e) => setVehicleId(e.target.value)}
-              >
-                <MenuItem value="">{isBn ? '-- কোনটি নয় --' : '-- None --'}</MenuItem>
-                {(vehiclesQuery.data || []).map((v: any) => (
-                  <MenuItem key={v.id} value={v.id}>
-                    {v.vehicleNumber} ({v.vehicleType})
-                  </MenuItem>
-                ))}
-              </TextField>
+            />
 
-              <TextField
-                select
-                size="small"
-                label={isBn ? 'সংযুক্ত মিলিং লাইন (ঐচ্ছিক)' : 'Linked Milling Line (Optional)'}
-                value={productionLineId}
-                onChange={(e) => setProductionLineId(e.target.value)}
-              >
-                <MenuItem value="">{isBn ? '-- কোনটি নয় --' : '-- None --'}</MenuItem>
-                {(linesQuery.data || []).map((l: any) => (
-                  <MenuItem key={l.id} value={l.id}>
-                    {l.name} ({l.code})
-                  </MenuItem>
-                ))}
-              </TextField>
-            </Box>
+            <AppSelect
+              fieldName="expPaymentMode"
+              required
+              label={isBn ? 'পরিশোধ মাধ্যম' : 'Payment Mode'}
+              value={paymentMode}
+              errorText={fieldErrors.expPaymentMode}
+              options={Object.keys(PAYMENT_MODE_LABELS).map((pm) => ({
+                value: pm,
+                label: PAYMENT_MODE_LABELS[pm as ExpensePaymentMode][isBn ? 'bn' : 'en'],
+              }))}
+              onChange={(val) => {
+                setPaymentMode(val as ExpensePaymentMode);
+                setFieldErrors((p) => ({ ...p, expPaymentMode: '' }));
+              }}
+            />
+          </FormGrid>
+        </FormSection>
 
-            {/* Banking Details (Shown if Bank payment selected) */}
-            {paymentMode === 'BANK' && (
-              <Box
-                sx={{
-                  p: 1.5,
-                  mb: 2,
-                  borderRadius: 2,
-                  bgcolor: 'action.hover',
-                  display: 'grid',
-                  gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr 1fr' },
-                  gap: 1.5,
-                }}
-              >
-                <TextField
-                  size="small"
+        <FormSection title={isBn ? 'প্রাপক ও কস্ট অ্যালোকেশন' : 'Payee & Allocation Links'}>
+          <FormGrid columns={{ xs: 1, sm: 2 }}>
+            <AppTextField
+              fieldName="payeeName"
+              label={isBn ? 'প্রাপকের নাম' : 'Payee Name (Person/Party)'}
+              value={payeeName}
+              onValueChange={(val) => setPayeeName(val)}
+            />
+
+            <AppAutocomplete
+              fieldName="payeePartnerId"
+              label={isBn ? 'রেজিস্টার্ড ভেন্ডর / সরবরাহকারী (ঐচ্ছিক)' : 'Registered Vendor (Optional)'}
+              value={payeePartnerId}
+              loading={partnersQuery.isLoading}
+              options={(partnersQuery.data || []).map((p: any) => ({
+                value: p.id,
+                label: p.name,
+                badge: p.code,
+              }))}
+              emptyMessage={isBn ? 'কোনো ভেন্ডর নেই' : 'No registered vendors'}
+              onChange={(val) => setPayeePartnerId(val)}
+            />
+
+            <AppAutocomplete
+              fieldName="vehicleId"
+              label={isBn ? 'সংযুক্ত গাড়ি / পরিবহন (ঐচ্ছিক)' : 'Linked Vehicle (Optional)'}
+              value={vehicleId}
+              loading={vehiclesQuery.isLoading}
+              options={(vehiclesQuery.data || []).map((v: any) => ({
+                value: v.id,
+                label: `${v.vehicleNumber} (${v.vehicleType})`,
+              }))}
+              emptyMessage={isBn ? 'কোনো গাড়ি নেই' : 'No vehicles registered'}
+              onChange={(val) => setVehicleId(val)}
+            />
+
+            <AppAutocomplete
+              fieldName="productionLineId"
+              label={isBn ? 'সংযুক্ত মিলিং লাইন (ঐচ্ছিক)' : 'Linked Milling Line (Optional)'}
+              value={productionLineId}
+              loading={linesQuery.isLoading}
+              options={(linesQuery.data || []).map((l: any) => ({
+                value: l.id,
+                label: l.name,
+                badge: l.code,
+              }))}
+              emptyMessage={isBn ? 'কোনো মিলিং লাইন নেই' : 'No milling lines'}
+              onChange={(val) => setProductionLineId(val)}
+            />
+          </FormGrid>
+
+          {paymentMode === 'BANK' && (
+            <Paper variant="outlined" sx={{ p: 1.5, mt: 2, bgcolor: 'action.hover', borderRadius: 2 }}>
+              <FormGrid columns={{ xs: 1, sm: 3 }}>
+                <AppTextField
+                  fieldName="bankName"
                   label={isBn ? 'ব্যাংকের নাম' : 'Bank Name'}
                   value={bankName}
-                  onChange={(e) => setBankName(e.target.value)}
+                  onValueChange={(val) => setBankName(val)}
                 />
-                <TextField
-                  size="small"
+                <AppTextField
+                  fieldName="bankAccount"
                   label={isBn ? 'হিসাব নম্বর' : 'Account Number'}
                   value={bankAccount}
-                  onChange={(e) => setBankAccount(e.target.value)}
+                  onValueChange={(val) => setBankAccount(val)}
                 />
-                <TextField
-                  size="small"
+                <AppTextField
+                  fieldName="chequeOrTxnNumber"
                   label={isBn ? 'চেক / ট্রানজেকশন নং' : 'Cheque / Txn Ref'}
                   value={chequeOrTxnNumber}
-                  onChange={(e) => setChequeOrTxnNumber(e.target.value)}
+                  onValueChange={(val) => setChequeOrTxnNumber(val)}
                 />
-              </Box>
-            )}
+              </FormGrid>
+            </Paper>
+          )}
 
-            <Box
-              sx={{
-                display: 'grid',
-                gridTemplateColumns: { xs: '1fr', sm: '1fr 2fr' },
-                gap: 2,
-                mb: 2,
-              }}
-            >
-              <TextField
-                size="small"
-                label={isBn ? 'বিল / ক্যাশমেমো রেফারেন্স' : 'Bill / Invoice Ref #'}
-                value={billReference}
-                onChange={(e) => setBillReference(e.target.value)}
-              />
-              <TextField
-                size="small"
-                label={isBn ? 'মন্তব্য ও নোট' : 'Remarks / Notes'}
-                value={remarks}
-                onChange={(e) => setRemarks(e.target.value)}
-              />
-            </Box>
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 2fr' }, gap: 2, mt: 2 }}>
+            <AppTextField
+              fieldName="billReference"
+              label={isBn ? 'বিল / ক্যাশমেমো রেফারেন্স' : 'Bill / Invoice Ref #'}
+              value={billReference}
+              onValueChange={(val) => setBillReference(val)}
+            />
+            <AppTextField
+              fieldName="expRemarks"
+              label={isBn ? 'মন্তব্য ও নোট' : 'Remarks / Notes'}
+              value={remarks}
+              onValueChange={(val) => setRemarks(val)}
+            />
+          </Box>
+        </FormSection>
 
-            <Divider sx={{ my: 2 }} />
-
-            {/* Line Items Table */}
-            <Typography variant="subtitle2" fontWeight={700} mb={1}>
-              {isBn ? 'খরচের বিবরণ ও আইটেম লাইন' : 'Expense Breakdown Lines'}
-            </Typography>
-
-            <Table size="small">
+        <FormSection title={isBn ? 'খরচের বিবরণ ও আইটেম লাইন' : 'Expense Breakdown Lines'}>
+          <Paper variant="outlined" sx={{ overflowX: 'auto', borderRadius: 2 }}>
+            <Table size="small" sx={{ minWidth: 680 }}>
               <TableHead sx={{ bgcolor: 'action.hover' }}>
                 <TableRow>
-                  <TableCell width="40%">{isBn ? 'বিবরণ' : 'Description'}</TableCell>
-                  <TableCell width="15%">{isBn ? 'পরিমাণ' : 'Qty'}</TableCell>
-                  <TableCell width="15%">{isBn ? 'দর (টাকা)' : 'Rate'}</TableCell>
-                  <TableCell width="20%">{isBn ? 'মোট টাকা' : 'Amount (BDT)'}</TableCell>
-                  <TableCell width="10%" align="center"></TableCell>
+                  <TableCell width="40%" sx={{ whiteSpace: 'nowrap' }}>{isBn ? 'বিবরণ' : 'Description'}</TableCell>
+                  <TableCell width="15%" sx={{ whiteSpace: 'nowrap' }}>{isBn ? 'পরিমাণ' : 'Qty'}</TableCell>
+                  <TableCell width="18%" sx={{ whiteSpace: 'nowrap' }}>{isBn ? 'দর (টাকা)' : 'Rate'}</TableCell>
+                  <TableCell width="20%" sx={{ whiteSpace: 'nowrap' }}>{isBn ? 'মোট টাকা' : 'Amount (BDT)'}</TableCell>
+                  <TableCell width="7%" align="center" />
                 </TableRow>
               </TableHead>
               <TableBody>
                 {lines.map((line, idx) => (
                   <TableRow key={idx}>
                     <TableCell>
-                      <TextField
+                      <AppTextField
+                        fieldName={`line-${idx}-description`}
                         required
-                        size="small"
-                        fullWidth
                         placeholder="e.g. Unit charges, parts, contract labor"
                         value={line.description}
-                        onChange={(e) => handleLineChange(idx, 'description', e.target.value)}
+                        errorText={fieldErrors[`line-${idx}-description`]}
+                        onValueChange={(val) => handleLineChange(idx, 'description', val)}
                       />
                     </TableCell>
                     <TableCell>
-                      <TextField
-                        size="small"
+                      <AppTextField
+                        fieldName={`line-${idx}-quantity`}
                         type="number"
                         placeholder="0"
                         value={line.quantity || ''}
-                        onChange={(e) => handleLineChange(idx, 'quantity', e.target.value)}
+                        inputProps={{ min: 0, step: '.01' }}
+                        onValueChange={(val) => handleLineChange(idx, 'quantity', val)}
                       />
                     </TableCell>
                     <TableCell>
-                      <TextField
-                        size="small"
+                      <AppTextField
+                        fieldName={`line-${idx}-unitPrice`}
                         type="number"
+                        prefixText="৳"
                         placeholder="0.00"
                         value={line.unitPrice || ''}
-                        onChange={(e) => handleLineChange(idx, 'unitPrice', e.target.value)}
+                        inputProps={{ min: 0, step: '.01' }}
+                        onValueChange={(val) => handleLineChange(idx, 'unitPrice', val)}
                       />
                     </TableCell>
                     <TableCell>
-                      <TextField
+                      <AppTextField
+                        fieldName={`line-${idx}-amount`}
                         required
-                        size="small"
                         type="number"
+                        prefixText="৳"
                         placeholder="0.00"
                         value={line.amount}
-                        onChange={(e) => handleLineChange(idx, 'amount', e.target.value)}
+                        errorText={fieldErrors[`line-${idx}-amount`]}
+                        inputProps={{ min: 0, step: '.01' }}
+                        onValueChange={(val) => handleLineChange(idx, 'amount', val)}
                       />
                     </TableCell>
                     <TableCell align="center">
@@ -1290,110 +1347,129 @@ export function ExpensesPage({
                 ))}
               </TableBody>
             </Table>
+          </Paper>
 
+          <Box sx={{ mt: 1.5 }}>
             <Button
               size="small"
+              variant="outlined"
               startIcon={<AddCircleOutlineRoundedIcon />}
               onClick={handleAddLine}
-              sx={{ mt: 1 }}
             >
               {isBn ? '+ আরও লাইন যোগ করুন' : '+ Add Line Item'}
             </Button>
+          </Box>
 
-            {/* Totals Summary */}
-            <Box
-              sx={{
-                mt: 2,
-                p: 2,
-                borderRadius: 2,
-                bgcolor: 'action.hover',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'flex-end',
-                gap: 1,
-              }}
-            >
-              <Typography variant="body2">
-                {isBn ? 'সাবটোটাল:' : 'Subtotal:'}{' '}
-                <strong>৳ {formSubtotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong>
-              </Typography>
-              <Stack direction="row" spacing={1} alignItems="center">
-                <Typography variant="body2">{isBn ? 'ভ্যাট / ট্যাক্স:' : 'Tax / VAT:'}</Typography>
-                <TextField
-                  size="small"
-                  type="number"
-                  value={taxAmount}
-                  onChange={(e) => setTaxAmount(e.target.value)}
-                  sx={{ width: 120 }}
-                />
-              </Stack>
-              <Divider sx={{ width: 220, my: 0.5 }} />
-              <Typography variant="h6" fontWeight={700} color="primary.main">
-                {isBn ? 'সর্বমোট প্রদেয়:' : 'Total Payable:'} ৳{' '}
-                {formTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-              </Typography>
-            </Box>
-          </DialogContent>
-          <DialogActions sx={{ px: 3, py: 2 }}>
-            <Button onClick={() => setFormOpen(false)} disabled={busy}>
-              {isBn ? 'বাতিল' : 'Cancel'}
-            </Button>
-            <Button type="submit" variant="outlined" disabled={busy}>
-              {isBn ? 'ড্রাফট হিসেবে সংরক্ষণ' : 'Save as Draft'}
-            </Button>
-            <Button
-              variant="contained"
-              disabled={busy}
-              onClick={(e) => handleSaveForm(e, true)}
-            >
-              {isBn ? 'সংরক্ষণ ও অনুমোদন জমা' : 'Save & Submit'}
-            </Button>
-          </DialogActions>
-        </form>
-      </Dialog>
+          <Box
+            sx={{
+              mt: 2,
+              p: 2,
+              borderRadius: 2,
+              bgcolor: 'action.hover',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'flex-end',
+              gap: 1,
+            }}
+          >
+            <Typography variant="body2">
+              {isBn ? 'সাবটোটাল:' : 'Subtotal:'}{' '}
+              <strong>৳ {formSubtotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong>
+            </Typography>
+            <Stack direction="row" spacing={1.5} alignItems="center">
+              <Typography variant="body2">{isBn ? 'ভ্যাট / ট্যাক্স:' : 'Tax / VAT:'}</Typography>
+              <AppTextField
+                fieldName="expTaxAmount"
+                fullWidth={false}
+                type="number"
+                prefixText="৳"
+                value={taxAmount}
+                errorText={fieldErrors.expTaxAmount}
+                inputProps={{ min: 0, step: '.01' }}
+                onValueChange={(val) => {
+                  setTaxAmount(val);
+                  setFieldErrors((p) => ({ ...p, expTaxAmount: '' }));
+                }}
+                sx={{ width: 150 }}
+              />
+            </Stack>
+            <Divider sx={{ width: 220, my: 0.5 }} />
+            <Typography variant="h6" fontWeight={700} color="primary.main">
+              {isBn ? 'সর্বমোট প্রদেয়:' : 'Total Payable:'} ৳{' '}
+              {formTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+            </Typography>
+          </Box>
+        </FormSection>
+      </FormDialog>
 
       {/* Reject Voucher Dialog */}
-      <Dialog
+      <FormDialog
         open={Boolean(rejectDialogExpense)}
-        onClose={() => setRejectDialogExpense(null)}
+        onClose={() => !busy && setRejectDialogExpense(null)}
+        onSubmit={handleReject}
+        title={isBn ? 'খরচ ভাউচার প্রত্যাখ্যান' : 'Reject Expense Voucher'}
+        error={errorMsg}
+        onClearError={() => setErrorMsg(null)}
+        loading={busy}
+        submitLabel={isBn ? 'প্রত্যাখ্যান নিশ্চিত করুন' : 'Confirm Rejection'}
+        cancelLabel={isBn ? 'বাতিল' : 'Cancel'}
+        submitColor="error"
         maxWidth="xs"
-        fullWidth
       >
-        <DialogTitle sx={{ fontWeight: 700, color: 'error.main' }}>
-          {isBn ? 'খরচ ভাউচার প্রত্যাখ্যান' : 'Reject Expense Voucher'}
-        </DialogTitle>
-        <DialogContent>
-          <Typography variant="body2" mb={2}>
-            {isBn
-              ? `ভাউচার ${rejectDialogExpense?.voucherNumber} প্রত্যাখ্যানের কারণ উল্লেখ করুন:`
-              : `Specify reason for rejecting ${rejectDialogExpense?.voucherNumber}:`}
-          </Typography>
-          <TextField
-            autoFocus
-            required
-            fullWidth
-            size="small"
-            multiline
-            rows={3}
-            label={isBn ? 'প্রত্যাখ্যানের কারণ' : 'Rejection Reason'}
-            value={rejectionReason}
-            onChange={(e) => setRejectionReason(e.target.value)}
-          />
-        </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button onClick={() => setRejectDialogExpense(null)}>
-            {isBn ? 'বাতিল' : 'Cancel'}
-          </Button>
-          <Button
-            variant="contained"
-            color="error"
-            disabled={!rejectionReason.trim()}
-            onClick={handleReject}
-          >
-            {isBn ? 'প্রত্যাখ্যান নিশ্চিত করুন' : 'Confirm Rejection'}
-          </Button>
-        </DialogActions>
-      </Dialog>
+        <Typography variant="body2">
+          {isBn
+            ? `ভাউচার ${rejectDialogExpense?.voucherNumber} প্রত্যাখ্যানের কারণ উল্লেখ করুন:`
+            : `Specify reason for rejecting ${rejectDialogExpense?.voucherNumber}:`}
+        </Typography>
+        <AppTextField
+          fieldName="rejectionReason"
+          autoFocus
+          required
+          multiline
+          rows={3}
+          label={isBn ? 'প্রত্যাখ্যানের কারণ' : 'Rejection Reason'}
+          value={rejectionReason}
+          errorText={fieldErrors.rejectionReason}
+          onValueChange={(val) => {
+            setRejectionReason(val);
+            setFieldErrors((p) => ({ ...p, rejectionReason: '' }));
+          }}
+        />
+      </FormDialog>
+
+      {/* Cancel Voucher Dialog */}
+      <FormDialog
+        open={Boolean(cancelDialogExpense)}
+        onClose={() => !busy && setCancelDialogExpense(null)}
+        onSubmit={handleConfirmCancel}
+        title={
+          isBn
+            ? `খরচ ভাউচার বাতিল (${cancelDialogExpense?.voucherNumber ?? ''})`
+            : `Cancel Expense (${cancelDialogExpense?.voucherNumber ?? ''})`
+        }
+        error={errorMsg}
+        onClearError={() => setErrorMsg(null)}
+        loading={busy}
+        submitLabel={isBn ? 'বাতিল নিশ্চিত করুন' : 'Confirm Cancellation'}
+        cancelLabel={isBn ? 'বন্ধ করুন' : 'Close'}
+        submitColor="error"
+        maxWidth="xs"
+      >
+        <AppTextField
+          fieldName="cancelReason"
+          autoFocus
+          required
+          multiline
+          rows={3}
+          label={isBn ? 'বাতিলের কারণ' : 'Cancellation Reason'}
+          value={cancelReason}
+          errorText={fieldErrors.cancelReason}
+          onValueChange={(val) => {
+            setCancelReason(val);
+            setFieldErrors((p) => ({ ...p, cancelReason: '' }));
+          }}
+        />
+      </FormDialog>
 
       {/* Post to GL Dialog with Accounting Impact Preview */}
       <Dialog
@@ -1480,10 +1556,16 @@ export function ExpensesPage({
           )}
         </DialogContent>
         <DialogActions sx={{ px: 3, py: 2 }}>
-          <Button onClick={() => setPostDialogExpense(null)}>
+          <Button onClick={() => setPostDialogExpense(null)} disabled={busy}>
             {isBn ? 'বাতিল' : 'Cancel'}
           </Button>
-          <Button variant="contained" color="success" onClick={handleConfirmPost}>
+          <Button
+            variant="contained"
+            color="success"
+            disabled={busy}
+            startIcon={busy ? <CircularProgress size={16} color="inherit" /> : undefined}
+            onClick={handleConfirmPost}
+          >
             {isBn ? 'লেজারে পোস্ট করুন' : 'Post to General Ledger'}
           </Button>
         </DialogActions>

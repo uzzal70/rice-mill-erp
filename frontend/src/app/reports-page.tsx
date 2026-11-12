@@ -9,14 +9,10 @@ import {
   CardContent,
   Chip,
   Divider,
-  FormControl,
   Grid,
   IconButton,
-  InputLabel,
   LinearProgress,
-  MenuItem,
   Paper,
-  Select,
   Stack,
   Table,
   TableBody,
@@ -24,7 +20,6 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  TextField,
   Tooltip,
   Typography,
 } from '@mui/material';
@@ -38,6 +33,8 @@ import TableChartRoundedIcon from '@mui/icons-material/TableChartRounded';
 import ReceiptLongRoundedIcon from '@mui/icons-material/ReceiptLongRounded';
 import { useQuery } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/api';
+import { AppAutocomplete, AppSelect, AppTextField } from '@/components/form';
+import { useToast } from '@/components/ui/toast-provider';
 
 interface ReportsPageProps {
   companyId: string;
@@ -76,6 +73,7 @@ export function ReportsPage({
   onSaved,
 }: ReportsPageProps) {
   const isBn = language === 'bn';
+  const toast = useToast();
 
   // Report Selection
   const [reportType, setReportType] = useState('PROCUREMENT_REGISTER');
@@ -239,197 +237,169 @@ export function ReportsPage({
         <Grid container spacing={2}>
           {/* Report Type */}
           <Grid item xs={12} sm={6} md={3}>
-            <FormControl fullWidth size="small">
-              <InputLabel>{isBn ? 'রিপোর্টের ধরন' : 'Report Type'}</InputLabel>
-              <Select
-                value={reportType}
-                label={isBn ? 'রিপোর্টের ধরন' : 'Report Type'}
-                onChange={e => setReportType(e.target.value)}
-              >
-                <MenuItem value="PROCUREMENT_REGISTER">Procurement Register</MenuItem>
-                <MenuItem value="GATE_REGISTER">Gate & Weighbridge Register</MenuItem>
-                <MenuItem value="PRODUCTION_REGISTER">Milling Production Register</MenuItem>
-                <MenuItem value="SALES_REGISTER">Sales Order Register</MenuItem>
-                <MenuItem value="STOCK_REGISTER">Stock & Inventory Balance</MenuItem>
-                <MenuItem value="EXPENSE_REGISTER">Operating Expense Register</MenuItem>
-                <MenuItem value="FINANCIAL_LEDGER">Financial General Ledger</MenuItem>
-                <MenuItem value="PARTY_STATEMENT">Counterparty Account Statement</MenuItem>
-              </Select>
-            </FormControl>
+            <AppSelect
+              fieldName="reportType"
+              label={isBn ? 'রিপোর্টের ধরন' : 'Report Type'}
+              value={reportType}
+              options={[
+                { value: 'PROCUREMENT_REGISTER', label: 'Procurement Register' },
+                { value: 'GATE_REGISTER', label: 'Gate & Weighbridge Register' },
+                { value: 'PRODUCTION_REGISTER', label: 'Milling Production Register' },
+                { value: 'SALES_REGISTER', label: 'Sales Order Register' },
+                { value: 'STOCK_REGISTER', label: 'Stock & Inventory Balance' },
+                { value: 'EXPENSE_REGISTER', label: 'Operating Expense Register' },
+                { value: 'FINANCIAL_LEDGER', label: 'Financial General Ledger' },
+                { value: 'PARTY_STATEMENT', label: 'Counterparty Account Statement' },
+              ]}
+              onChange={(val) => setReportType(val)}
+            />
           </Grid>
 
           {/* 1. Date Range: Start Date */}
           <Grid item xs={6} sm={3} md={2}>
-            <TextField
-              fullWidth
-              size="small"
+            <AppTextField
+              fieldName="startDate"
               type="date"
               label={isBn ? 'শুরুর তারিখ' : 'Start Date'}
               InputLabelProps={{ shrink: true }}
               value={startDate}
-              onChange={e => setStartDate(e.target.value)}
+              onValueChange={(val) => {
+                setStartDate(val);
+                if (endDate && val && val > endDate) {
+                  toast.warning(isBn ? 'শুরুর তারিখ শেষের তারিখের পরে হতে পারবে না।' : 'Start Date cannot be after End Date.');
+                }
+              }}
             />
           </Grid>
 
           {/* 1. Date Range: End Date */}
           <Grid item xs={6} sm={3} md={2}>
-            <TextField
-              fullWidth
-              size="small"
+            <AppTextField
+              fieldName="endDate"
               type="date"
               label={isBn ? 'শেষের তারিখ' : 'End Date'}
               InputLabelProps={{ shrink: true }}
               value={endDate}
-              onChange={e => setEndDate(e.target.value)}
+              onValueChange={(val) => {
+                setEndDate(val);
+                if (startDate && val && val < startDate) {
+                  toast.warning(isBn ? 'শেষের তারিখ শুরুর তারিখের আগে হতে পারবে না।' : 'End Date cannot be earlier than Start Date.');
+                }
+              }}
             />
           </Grid>
 
           {/* 2. Factory */}
           <Grid item xs={12} sm={6} md={2.5}>
-            <FormControl fullWidth size="small">
-              <InputLabel>{isBn ? 'কারখানা' : 'Factory'}</InputLabel>
-              <Select
-                value={factoryId}
-                label={isBn ? 'কারখানা' : 'Factory'}
-                onChange={e => setFactoryId(e.target.value)}
-              >
-                <MenuItem value="">{isBn ? 'সকল কারখানা' : 'All Factories'}</MenuItem>
-                {(filterOptions?.factories || []).map(f => (
-                  <MenuItem key={f.id} value={f.id}>{f.name}</MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+            <AppSelect
+              fieldName="reportFactoryId"
+              label={isBn ? 'কারখানা' : 'Factory'}
+              value={factoryId}
+              options={[
+                { value: '', label: isBn ? 'সকল কারখানা' : 'All Factories' },
+                ...(filterOptions?.factories || []).map((f) => ({ value: f.id, label: f.name, badge: f.code })),
+              ]}
+              onChange={(val) => {
+                setFactoryId(val);
+                if (val && godownId) {
+                  const g = (filterOptions?.godowns || []).find((item) => item.id === godownId);
+                  if (g && g.factoryId !== val) setGodownId('');
+                }
+              }}
+            />
           </Grid>
 
           {/* 3. Godown */}
           <Grid item xs={12} sm={6} md={2.5}>
-            <FormControl fullWidth size="small">
-              <InputLabel>{isBn ? 'গুদাম / সাইলো' : 'Godown / Silo'}</InputLabel>
-              <Select
-                value={godownId}
-                label={isBn ? 'গুদাম / সাইলো' : 'Godown / Silo'}
-                onChange={e => setGodownId(e.target.value)}
-              >
-                <MenuItem value="">{isBn ? 'সকল গুদাম' : 'All Godowns'}</MenuItem>
-                {(filterOptions?.godowns || []).map(g => (
-                  <MenuItem key={g.id} value={g.id}>{g.name}</MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+            <AppAutocomplete
+              fieldName="reportGodownId"
+              label={isBn ? 'গুদাম / সাইলো' : 'Godown / Silo'}
+              value={godownId}
+              options={(filterOptions?.godowns || [])
+                .filter((g) => !factoryId || g.factoryId === factoryId)
+                .map((g) => ({ value: g.id, label: g.name, badge: g.code }))}
+              emptyMessage={isBn ? 'কোনো গুদাম পাওয়া যায়নি' : 'No godowns match'}
+              onChange={(val) => setGodownId(val)}
+            />
           </Grid>
 
           {/* 4. Supplier */}
           <Grid item xs={12} sm={6} md={3}>
-            <FormControl fullWidth size="small">
-              <InputLabel>{isBn ? 'সরবরাহকারী / কৃষক' : 'Supplier / Farmer'}</InputLabel>
-              <Select
-                value={supplierId}
-                label={isBn ? 'সরবরাহকারী / কৃষক' : 'Supplier / Farmer'}
-                onChange={e => setSupplierId(e.target.value)}
-              >
-                <MenuItem value="">{isBn ? 'সকল সরবরাহকারী' : 'All Suppliers'}</MenuItem>
-                {(filterOptions?.suppliers || []).map(s => (
-                  <MenuItem key={s.id} value={s.id}>{s.name}</MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+            <AppAutocomplete
+              fieldName="reportSupplierId"
+              label={isBn ? 'সরবরাহকারী / কৃষক' : 'Supplier / Farmer'}
+              value={supplierId}
+              options={(filterOptions?.suppliers || []).map((s) => ({ value: s.id, label: s.name }))}
+              emptyMessage={isBn ? 'কোনো সরবরাহকারী নেই' : 'No suppliers found'}
+              onChange={(val) => setSupplierId(val)}
+            />
           </Grid>
 
           {/* 5. Customer */}
           <Grid item xs={12} sm={6} md={3}>
-            <FormControl fullWidth size="small">
-              <InputLabel>{isBn ? 'ক্রেতা' : 'Customer'}</InputLabel>
-              <Select
-                value={customerId}
-                label={isBn ? 'ক্রেতা' : 'Customer'}
-                onChange={e => setCustomerId(e.target.value)}
-              >
-                <MenuItem value="">{isBn ? 'সকল ক্রেতা' : 'All Customers'}</MenuItem>
-                {(filterOptions?.customers || []).map(c => (
-                  <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+            <AppAutocomplete
+              fieldName="reportCustomerId"
+              label={isBn ? 'ক্রেতা' : 'Customer'}
+              value={customerId}
+              options={(filterOptions?.customers || []).map((c) => ({ value: c.id, label: c.name }))}
+              emptyMessage={isBn ? 'কোনো ক্রেতা নেই' : 'No customers found'}
+              onChange={(val) => setCustomerId(val)}
+            />
           </Grid>
 
           {/* 6. Paddy Variety */}
           <Grid item xs={12} sm={6} md={2}>
-            <FormControl fullWidth size="small">
-              <InputLabel>{isBn ? 'ধানের জাত' : 'Paddy Variety'}</InputLabel>
-              <Select
-                value={paddyItemId}
-                label={isBn ? 'ধানের জাত' : 'Paddy Variety'}
-                onChange={e => setPaddyItemId(e.target.value)}
-              >
-                <MenuItem value="">{isBn ? 'সকল ধান' : 'All Paddy'}</MenuItem>
-                {(filterOptions?.paddyItems || []).map(i => (
-                  <MenuItem key={i.id} value={i.id}>{i.name}</MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+            <AppAutocomplete
+              fieldName="reportPaddyItemId"
+              label={isBn ? 'ধানের জাত' : 'Paddy Variety'}
+              value={paddyItemId}
+              options={(filterOptions?.paddyItems || []).map((i) => ({ value: i.id, label: i.name, badge: i.code }))}
+              onChange={(val) => setPaddyItemId(val)}
+            />
           </Grid>
 
           {/* 7. Rice Variety */}
           <Grid item xs={12} sm={6} md={2}>
-            <FormControl fullWidth size="small">
-              <InputLabel>{isBn ? 'চালের ধরন' : 'Rice Product'}</InputLabel>
-              <Select
-                value={riceItemId}
-                label={isBn ? 'চালের ধরন' : 'Rice Product'}
-                onChange={e => setRiceItemId(e.target.value)}
-              >
-                <MenuItem value="">{isBn ? 'সকল চাল' : 'All Rice'}</MenuItem>
-                {(filterOptions?.riceItems || []).map(i => (
-                  <MenuItem key={i.id} value={i.id}>{i.name}</MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+            <AppAutocomplete
+              fieldName="reportRiceItemId"
+              label={isBn ? 'চালের ধরন' : 'Rice Product'}
+              value={riceItemId}
+              options={(filterOptions?.riceItems || []).map((i) => ({ value: i.id, label: i.name, badge: i.code }))}
+              onChange={(val) => setRiceItemId(val)}
+            />
           </Grid>
 
           {/* 8. Product / Byproduct */}
           <Grid item xs={12} sm={6} md={2}>
-            <FormControl fullWidth size="small">
-              <InputLabel>{isBn ? 'উপজাত পণ্য' : 'By-Product'}</InputLabel>
-              <Select
-                value={productItemId}
-                label={isBn ? 'উপজাত পণ্য' : 'By-Product'}
-                onChange={e => setProductItemId(e.target.value)}
-              >
-                <MenuItem value="">{isBn ? 'সকল উপজাত' : 'All By-Products'}</MenuItem>
-                {(filterOptions?.productItems || []).map(i => (
-                  <MenuItem key={i.id} value={i.id}>{i.name}</MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+            <AppAutocomplete
+              fieldName="reportProductItemId"
+              label={isBn ? 'উপজাত পণ্য' : 'By-Product'}
+              value={productItemId}
+              options={(filterOptions?.productItems || []).map((i) => ({ value: i.id, label: i.name, badge: i.code }))}
+              onChange={(val) => setProductItemId(val)}
+            />
           </Grid>
 
           {/* 9. Batch */}
           <Grid item xs={12} sm={6} md={2}>
-            <TextField
-              fullWidth
-              size="small"
+            <AppTextField
+              fieldName="reportBatchNumber"
               label={isBn ? 'ব্যাচ নম্বর' : 'Batch Number'}
               value={batchNumber}
-              onChange={e => setBatchNumber(e.target.value)}
+              onValueChange={(val) => setBatchNumber(val)}
               placeholder="e.g. PB-2026"
             />
           </Grid>
 
           {/* 10. User */}
           <Grid item xs={12} sm={6} md={2}>
-            <FormControl fullWidth size="small">
-              <InputLabel>{isBn ? 'ব্যবহারকারী' : 'Created By'}</InputLabel>
-              <Select
-                value={userId}
-                label={isBn ? 'ব্যবহারকারী' : 'Created By'}
-                onChange={e => setUserId(e.target.value)}
-              >
-                <MenuItem value="">{isBn ? 'সকল ব্যবহারকারী' : 'All Users'}</MenuItem>
-                {(filterOptions?.users || []).map(u => (
-                  <MenuItem key={u.id} value={u.id}>{u.fullName}</MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+            <AppAutocomplete
+              fieldName="reportUserId"
+              label={isBn ? 'ব্যবহারকারী' : 'Created By'}
+              value={userId}
+              options={(filterOptions?.users || []).map((u) => ({ value: u.id, label: u.fullName }))}
+              onChange={(val) => setUserId(val)}
+            />
           </Grid>
         </Grid>
       </Paper>

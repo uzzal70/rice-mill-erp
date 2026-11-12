@@ -6,6 +6,7 @@ import {
   Box,
   Button,
   Chip,
+  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
@@ -18,13 +19,15 @@ import {
   TableCell,
   TableHead,
   TableRow,
-  TextField,
   Typography,
 } from '@mui/material';
 import LocalShippingRoundedIcon from '@mui/icons-material/LocalShippingRounded';
 import PrintRoundedIcon from '@mui/icons-material/PrintRounded';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiRequest, queryString } from '@/lib/api';
+import { AppAutocomplete, AppTextField, FormGrid, FormSection } from '@/components/form';
+import { extractApiError, useToast } from '@/components/ui/toast-provider';
+import { FieldRule, focusFieldByName, validateFormFields } from '@/lib/form-validation';
 
 type Row<T> = { data: T[]; meta?: { total: number } };
 
@@ -152,8 +155,12 @@ export function DispatchPage({
 }) {
   const bn = language === 'bn';
   const qc = useQueryClient();
+  const toast = useToast();
   const [form, setForm] = useState(blankDispatchForm());
   const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [actionBusyId, setActionBusyId] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [challanDoc, setChallanDoc] = useState<Dispatch | null>(null);
   const [gatePassDoc, setGatePassDoc] = useState<Dispatch | null>(null);
 
@@ -179,6 +186,8 @@ export function DispatchPage({
   }, [approvedOrders.data, form.salesOrderId]);
 
   function handleOrderSelect(orderId: string) {
+    setFieldErrors({});
+    setError('');
     const order = (approvedOrders.data?.data ?? []).find((o) => o.id === orderId);
     if (!order) {
       setForm((prev) => ({ ...prev, salesOrderId: '', lines: [] }));
@@ -212,6 +221,11 @@ export function DispatchPage({
   }
 
   function handleWeightChange(index: number, field: 'grossWeightKg' | 'tareWeightKg' | 'netWeightKg', value: string) {
+    setFieldErrors((prev) => ({
+      ...prev,
+      [`line-${index}-${field}`]: '',
+      [`line-${index}-netWeightKg`]: field === 'netWeightKg' || field === 'grossWeightKg' || field === 'tareWeightKg' ? '' : prev[`line-${index}-netWeightKg`],
+    }));
     setForm((prev) => {
       const updatedLines = [...prev.lines];
       const target = { ...updatedLines[index], [field]: value };
@@ -229,7 +243,77 @@ export function DispatchPage({
 
   async function handleCreateDispatch(e: FormEvent) {
     e.preventDefault();
+    const rules: FieldRule[] = [
+      { name: 'salesOrderId', label: text.selectOrder, value: form.salesOrderId, required: true, isSelect: true },
+      { name: 'challanNumber', label: text.challanNo, value: form.challanNumber, required: true },
+      { name: 'gatePassNumber', label: text.gatePassNo, value: form.gatePassNumber, required: true },
+      { name: 'dispatchDate', label: text.date, value: form.dispatchDate, required: true, type: 'date' },
+      { name: 'vehicleNumber', label: text.vehicle, value: form.vehicleNumber, required: true },
+      { name: 'driverName', label: text.driver, value: form.driverName, required: true },
+    ];
+
+    if (form.salesOrderId && form.lines.length > 0) {
+      const hasAnyNet = form.lines.some((l) => Number(l.netWeightKg) > 0);
+      if (!hasAnyNet) {
+        rules.push({
+          name: 'line-0-netWeightKg',
+          label: `${text.net} (#1)`,
+          value: form.lines[0]?.netWeightKg,
+          custom: () =>
+            bn
+              ? 'অন্তত একটি পণ্যের নিট ওজন ০ কেজির বেশি হতে হবে।'
+              : 'At least one item must have a net dispatch weight greater than 0 KG.',
+        });
+      }
+      form.lines.forEach((l, i) => {
+        if (l.grossWeightKg || l.tareWeightKg) {
+          const gross = Number(l.grossWeightKg || 0);
+          const tare = Number(l.tareWeightKg || 0);
+          if (gross > 0 && tare > gross) {
+            rules.push({
+              name: `line-${i}-grossWeightKg`,
+              label: `${text.gross} (${l.itemName})`,
+              value: l.grossWeightKg,
+              custom: () =>
+                bn
+                  ? 'মোট ওজন গাড়ির খালি ওজনের চেয়ে কম হতে পারবে না।'
+                  : 'Gross weight cannot be less than tare weight.',
+            });
+          }
+        }
+        if (Number(l.netWeightKg) < 0) {
+          rules.push({
+            name: `line-${i}-netWeightKg`,
+            label: `${text.net} (${l.itemName})`,
+            value: l.netWeightKg,
+            type: 'nonNegativeNumber',
+          });
+        } else if (Number(l.netWeightKg) > Number(l.remainingKg)) {
+          rules.push({
+            name: `line-${i}-netWeightKg`,
+            label: `${text.net} (${l.itemName})`,
+            value: l.netWeightKg,
+            custom: () =>
+              bn
+                ? `অবশিষ্ট পরিমাণ (${Number(l.remainingKg).toLocaleString()} KG) এর বেশি সরবরাহ করা যাবে না।`
+                : `Cannot exceed remaining order quantity (${Number(l.remainingKg).toLocaleString()} KG).`,
+          });
+        }
+      });
+    }
+
+    const validation = validateFormFields(rules, language);
+    if (!validation.valid) {
+      setFieldErrors(validation.errors);
+      setError(validation.summary);
+      toast.warning(validation.summary);
+      focusFieldByName(validation.firstField);
+      return;
+    }
+
     setError('');
+    setFieldErrors({});
+    setSaving(true);
     try {
       await apiRequest('/dispatch', {
         method: 'POST',
@@ -237,13 +321,13 @@ export function DispatchPage({
           companyId,
           factoryId,
           salesOrderId: form.salesOrderId,
-          challanNumber: form.challanNumber,
-          gatePassNumber: form.gatePassNumber,
+          challanNumber: form.challanNumber.trim(),
+          gatePassNumber: form.gatePassNumber.trim(),
           dispatchDate: form.dispatchDate,
-          vehicleNumber: form.vehicleNumber,
-          driverName: form.driverName,
-          driverMobile: form.driverMobile || undefined,
-          remarks: form.remarks || undefined,
+          vehicleNumber: form.vehicleNumber.trim(),
+          driverName: form.driverName.trim(),
+          driverMobile: form.driverMobile.trim() || undefined,
+          remarks: form.remarks.trim() || undefined,
           lines: form.lines
             .filter((l) => Number(l.netWeightKg) > 0)
             .map((l) => ({
@@ -262,12 +346,17 @@ export function DispatchPage({
       await qc.invalidateQueries({ queryKey: ['dispatches', companyId, factoryId] });
       await qc.invalidateQueries({ queryKey: ['approved-sales-orders', companyId, factoryId] });
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not create dispatch.');
+      const msg = extractApiError(err, 'Could not create dispatch.');
+      setError(msg);
+      toast.error(msg);
+    } finally {
+      setSaving(false);
     }
   }
 
   async function handleAction(row: Dispatch, action: 'approve' | 'post' | 'cancel') {
     setError('');
+    setActionBusyId(row.id);
     try {
       await apiRequest(`/dispatch/${encodeURIComponent(row.id)}/${action}`, {
         method: 'POST',
@@ -290,7 +379,11 @@ export function DispatchPage({
       await qc.invalidateQueries({ queryKey: ['approved-sales-orders', companyId, factoryId] });
       await qc.invalidateQueries({ queryKey: ['sales-orders', companyId, factoryId] });
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Action failed.');
+      const msg = extractApiError(err, 'Action failed.');
+      setError(msg);
+      toast.error(msg);
+    } finally {
+      setActionBusyId('');
     }
   }
 
@@ -356,97 +449,111 @@ export function DispatchPage({
       )}
 
       {/* CREATE DISPATCH FORM */}
-      <Paper component="form" onSubmit={handleCreateDispatch} sx={{ p: 2.5, borderRadius: 2 }}>
+      <Paper component="form" noValidate onSubmit={handleCreateDispatch} className="workspace-card" elevation={0} sx={{ p: 2.5 }}>
         <Typography variant="h6" fontWeight={700} mb={2}>
           {text.newDispatch}
         </Typography>
 
-        <Stack spacing={2}>
-          <Stack direction={{ xs: 'column', md: 'row' }} gap={1.5} flexWrap="wrap">
-            <TextField
-              required
-              select
-              size="small"
-              SelectProps={{ native: true }}
-              label={text.selectOrder}
-              value={form.salesOrderId}
-              onChange={(e) => handleOrderSelect(e.target.value)}
-              sx={{ minWidth: 260 }}
-            >
-              <option value="">{bn ? '-- বিক্রয় আদেশ নির্বাচন --' : '-- Select Order --'}</option>
-              {(approvedOrders.data?.data ?? []).map((o) => (
-                <option key={o.id} value={o.id}>
-                  {o.orderNumber} · {o.customer.name} ({o.channel})
-                </option>
-              ))}
-            </TextField>
+        <Stack spacing={2.5}>
+          <FormSection title={bn ? 'চালান ও পরিবহন তথ্য' : 'Challan & Transport Details'}>
+            <FormGrid columns={{ xs: 1, sm: 2, md: 4 }}>
+              <AppAutocomplete
+                fieldName="salesOrderId"
+                required
+                label={text.selectOrder}
+                value={form.salesOrderId}
+                errorText={fieldErrors.salesOrderId}
+                options={(approvedOrders.data?.data ?? []).map((o) => ({
+                  value: o.id,
+                  label: `${o.orderNumber} · ${o.customer.name}`,
+                  badge: o.channel,
+                }))}
+                emptyMessage={
+                  bn
+                    ? 'কোনো অনুমোদিত বিক্রয় আদেশ নেই — আগে সেলস মডিউল থেকে অর্ডার অনুমোদন করুন'
+                    : 'No approved sales orders available — approve a sales order first'
+                }
+                onChange={(val) => handleOrderSelect(val)}
+              />
 
-            <TextField
-              required
-              size="small"
-              label={text.challanNo}
-              value={form.challanNumber}
-              onChange={(e) => setForm({ ...form, challanNumber: e.target.value })}
-              sx={{ width: 150 }}
-            />
+              <AppTextField
+                fieldName="challanNumber"
+                required
+                label={text.challanNo}
+                value={form.challanNumber}
+                errorText={fieldErrors.challanNumber}
+                onValueChange={(val) => {
+                  setForm({ ...form, challanNumber: val });
+                  setFieldErrors((p) => ({ ...p, challanNumber: '' }));
+                }}
+              />
 
-            <TextField
-              required
-              size="small"
-              label={text.gatePassNo}
-              value={form.gatePassNumber}
-              onChange={(e) => setForm({ ...form, gatePassNumber: e.target.value })}
-              sx={{ width: 150 }}
-            />
+              <AppTextField
+                fieldName="gatePassNumber"
+                required
+                label={text.gatePassNo}
+                value={form.gatePassNumber}
+                errorText={fieldErrors.gatePassNumber}
+                onValueChange={(val) => {
+                  setForm({ ...form, gatePassNumber: val });
+                  setFieldErrors((p) => ({ ...p, gatePassNumber: '' }));
+                }}
+              />
 
-            <TextField
-              required
-              size="small"
-              type="date"
-              InputLabelProps={{ shrink: true }}
-              label={text.date}
-              value={form.dispatchDate}
-              onChange={(e) => setForm({ ...form, dispatchDate: e.target.value })}
-              sx={{ width: 160 }}
-            />
-          </Stack>
+              <AppTextField
+                fieldName="dispatchDate"
+                required
+                type="date"
+                InputLabelProps={{ shrink: true }}
+                label={text.date}
+                value={form.dispatchDate}
+                errorText={fieldErrors.dispatchDate}
+                onValueChange={(val) => {
+                  setForm({ ...form, dispatchDate: val });
+                  setFieldErrors((p) => ({ ...p, dispatchDate: '' }));
+                }}
+              />
 
-          <Stack direction={{ xs: 'column', md: 'row' }} gap={1.5} flexWrap="wrap">
-            <TextField
-              required
-              size="small"
-              label={text.vehicle}
-              placeholder="e.g. DHAKA METRO-TA-11-2233"
-              value={form.vehicleNumber}
-              onChange={(e) => setForm({ ...form, vehicleNumber: e.target.value })}
-              sx={{ minWidth: 220 }}
-            />
+              <AppTextField
+                fieldName="vehicleNumber"
+                required
+                label={text.vehicle}
+                placeholder="e.g. DHAKA METRO-TA-11-2233"
+                value={form.vehicleNumber}
+                errorText={fieldErrors.vehicleNumber}
+                onValueChange={(val) => {
+                  setForm({ ...form, vehicleNumber: val });
+                  setFieldErrors((p) => ({ ...p, vehicleNumber: '' }));
+                }}
+              />
 
-            <TextField
-              required
-              size="small"
-              label={text.driver}
-              value={form.driverName}
-              onChange={(e) => setForm({ ...form, driverName: e.target.value })}
-              sx={{ minWidth: 180 }}
-            />
+              <AppTextField
+                fieldName="driverName"
+                required
+                label={text.driver}
+                value={form.driverName}
+                errorText={fieldErrors.driverName}
+                onValueChange={(val) => {
+                  setForm({ ...form, driverName: val });
+                  setFieldErrors((p) => ({ ...p, driverName: '' }));
+                }}
+              />
 
-            <TextField
-              size="small"
-              label={text.driverMobile}
-              value={form.driverMobile}
-              onChange={(e) => setForm({ ...form, driverMobile: e.target.value })}
-              sx={{ minWidth: 160 }}
-            />
+              <AppTextField
+                fieldName="driverMobile"
+                label={text.driverMobile}
+                value={form.driverMobile}
+                onValueChange={(val) => setForm({ ...form, driverMobile: val })}
+              />
 
-            <TextField
-              size="small"
-              label={text.remarks}
-              value={form.remarks}
-              onChange={(e) => setForm({ ...form, remarks: e.target.value })}
-              sx={{ flex: 1, minWidth: 200 }}
-            />
-          </Stack>
+              <AppTextField
+                fieldName="dispatchRemarks"
+                label={text.remarks}
+                value={form.remarks}
+                onValueChange={(val) => setForm({ ...form, remarks: val })}
+              />
+            </FormGrid>
+          </FormSection>
 
           {selectedOrder && (
             <Alert severity="info">
@@ -459,29 +566,29 @@ export function DispatchPage({
 
           {/* Lines Table */}
           {form.lines.length > 0 && (
-            <Paper variant="outlined" sx={{ overflow: 'auto' }}>
-              <Table size="small">
+            <Paper variant="outlined" sx={{ overflow: 'auto', borderRadius: 2 }}>
+              <Table size="small" sx={{ minWidth: 960 }}>
                 <TableHead>
                   <TableRow>
-                    <TableCell><strong>{text.item}</strong></TableCell>
-                    <TableCell><strong>{text.stack}</strong></TableCell>
-                    <TableCell><strong>{text.ordered}</strong></TableCell>
-                    <TableCell><strong>{text.fulfilled}</strong></TableCell>
-                    <TableCell><strong>{text.remaining}</strong></TableCell>
-                    <TableCell sx={{ width: 110 }}><strong>{text.bags}</strong></TableCell>
-                    <TableCell sx={{ width: 130 }}><strong>{text.gross}</strong></TableCell>
-                    <TableCell sx={{ width: 130 }}><strong>{text.tare}</strong></TableCell>
-                    <TableCell sx={{ width: 140 }}><strong>{text.net}</strong></TableCell>
+                    <TableCell sx={{ whiteSpace: 'nowrap' }}><strong>{text.item}</strong></TableCell>
+                    <TableCell sx={{ whiteSpace: 'nowrap' }}><strong>{text.stack}</strong></TableCell>
+                    <TableCell sx={{ whiteSpace: 'nowrap' }}><strong>{text.ordered}</strong></TableCell>
+                    <TableCell sx={{ whiteSpace: 'nowrap' }}><strong>{text.fulfilled}</strong></TableCell>
+                    <TableCell sx={{ whiteSpace: 'nowrap' }}><strong>{text.remaining}</strong></TableCell>
+                    <TableCell sx={{ width: 120, whiteSpace: 'nowrap' }}><strong>{text.bags}</strong></TableCell>
+                    <TableCell sx={{ width: 145, whiteSpace: 'nowrap' }}><strong>{text.gross}</strong></TableCell>
+                    <TableCell sx={{ width: 145, whiteSpace: 'nowrap' }}><strong>{text.tare}</strong></TableCell>
+                    <TableCell sx={{ width: 155, whiteSpace: 'nowrap' }}><strong>{text.net}</strong></TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
                   {form.lines.map((line, index) => (
                     <TableRow key={line.salesOrderLineId}>
-                      <TableCell>{line.itemName}</TableCell>
-                      <TableCell>{line.stackCode}</TableCell>
-                      <TableCell>{Number(line.orderedKg).toLocaleString()} KG</TableCell>
-                      <TableCell>{Number(line.fulfilledKg).toLocaleString()} KG</TableCell>
-                      <TableCell>
+                      <TableCell sx={{ whiteSpace: 'nowrap', fontWeight: 600 }}>{line.itemName}</TableCell>
+                      <TableCell sx={{ whiteSpace: 'nowrap' }}>{line.stackCode}</TableCell>
+                      <TableCell sx={{ whiteSpace: 'nowrap' }}>{Number(line.orderedKg).toLocaleString()} KG</TableCell>
+                      <TableCell sx={{ whiteSpace: 'nowrap' }}>{Number(line.fulfilledKg).toLocaleString()} KG</TableCell>
+                      <TableCell sx={{ whiteSpace: 'nowrap' }}>
                         <Chip
                           label={`${Number(line.remainingKg).toLocaleString()} KG`}
                           size="small"
@@ -489,14 +596,14 @@ export function DispatchPage({
                         />
                       </TableCell>
                       <TableCell>
-                        <TextField
-                          size="small"
+                        <AppTextField
+                          fieldName={`line-${index}-bagCount`}
                           type="number"
                           value={line.bagCount}
-                          onChange={(e) =>
+                          onValueChange={(val) =>
                             setForm((prev) => {
                               const updated = [...prev.lines];
-                              updated[index] = { ...updated[index], bagCount: e.target.value };
+                              updated[index] = { ...updated[index], bagCount: val };
                               return { ...prev, lines: updated };
                             })
                           }
@@ -504,31 +611,36 @@ export function DispatchPage({
                         />
                       </TableCell>
                       <TableCell>
-                        <TextField
-                          size="small"
+                        <AppTextField
+                          fieldName={`line-${index}-grossWeightKg`}
                           type="number"
+                          unit="KG"
                           value={line.grossWeightKg}
-                          onChange={(e) => handleWeightChange(index, 'grossWeightKg', e.target.value)}
-                          inputProps={{ step: '.001' }}
+                          errorText={fieldErrors[`line-${index}-grossWeightKg`]}
+                          onValueChange={(val) => handleWeightChange(index, 'grossWeightKg', val)}
+                          inputProps={{ min: 0, step: '.001' }}
                         />
                       </TableCell>
                       <TableCell>
-                        <TextField
-                          size="small"
+                        <AppTextField
+                          fieldName={`line-${index}-tareWeightKg`}
                           type="number"
+                          unit="KG"
                           value={line.tareWeightKg}
-                          onChange={(e) => handleWeightChange(index, 'tareWeightKg', e.target.value)}
-                          inputProps={{ step: '.001' }}
+                          onValueChange={(val) => handleWeightChange(index, 'tareWeightKg', val)}
+                          inputProps={{ min: 0, step: '.001' }}
                         />
                       </TableCell>
                       <TableCell>
-                        <TextField
+                        <AppTextField
+                          fieldName={`line-${index}-netWeightKg`}
                           required
-                          size="small"
                           type="number"
+                          unit="KG"
                           value={line.netWeightKg}
-                          onChange={(e) => handleWeightChange(index, 'netWeightKg', e.target.value)}
-                          inputProps={{ step: '.001', max: line.remainingKg }}
+                          errorText={fieldErrors[`line-${index}-netWeightKg`]}
+                          onValueChange={(val) => handleWeightChange(index, 'netWeightKg', val)}
+                          inputProps={{ min: 0, step: '.001', max: line.remainingKg }}
                         />
                       </TableCell>
                     </TableRow>
@@ -538,7 +650,7 @@ export function DispatchPage({
             </Paper>
           )}
 
-          <Stack direction="row" justifyContent="space-between" alignItems="center">
+          <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={1.5}>
             <Typography variant="subtitle1" fontWeight={700}>
               {text.totalBags}:{' '}
               {form.lines.reduce((sum, l) => sum + Number(l.bagCount || 0), 0)} |{' '}
@@ -553,7 +665,8 @@ export function DispatchPage({
               type="submit"
               variant="contained"
               size="medium"
-              disabled={!form.salesOrderId || form.lines.length === 0}
+              disabled={saving}
+              startIcon={saving ? <CircularProgress size={16} color="inherit" /> : undefined}
               sx={{ px: 3, fontWeight: 700 }}
             >
               {text.create}
@@ -646,6 +759,7 @@ export function DispatchPage({
                       <Button
                         size="small"
                         variant="contained"
+                        disabled={actionBusyId === d.id}
                         onClick={() => handleAction(d, 'approve')}
                       >
                         {text.approve}
@@ -657,6 +771,7 @@ export function DispatchPage({
                         size="small"
                         variant="contained"
                         color="success"
+                        disabled={actionBusyId === d.id}
                         onClick={() => handleAction(d, 'post')}
                       >
                         {text.post}
@@ -667,6 +782,7 @@ export function DispatchPage({
                       <Button
                         size="small"
                         color="error"
+                        disabled={actionBusyId === d.id}
                         onClick={() => handleAction(d, 'cancel')}
                       >
                         {text.cancel}

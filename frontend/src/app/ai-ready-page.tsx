@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import React, { useState } from 'react';
 import {
   Alert,
   Box,
@@ -13,14 +13,10 @@ import {
   DialogContent,
   DialogTitle,
   Divider,
-  FormControl,
   Grid,
   IconButton,
-  InputLabel,
   LinearProgress,
-  MenuItem,
   Paper,
-  Select,
   Stack,
   Tab,
   Table,
@@ -30,7 +26,6 @@ import {
   TableHead,
   TableRow,
   Tabs,
-  TextField,
   Typography,
 } from '@mui/material';
 import PsychologyRoundedIcon from '@mui/icons-material/PsychologyRounded';
@@ -45,6 +40,9 @@ import AddCircleOutlineRoundedIcon from '@mui/icons-material/AddCircleOutlineRou
 import CodeRoundedIcon from '@mui/icons-material/CodeRounded';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/api';
+import { AppSelect, AppTextField, FormDialog, FormGrid } from '@/components/form';
+import { extractApiError, useToast } from '@/components/ui/toast-provider';
+import { focusFieldByName, validateFormFields } from '@/lib/form-validation';
 
 interface AiReadyPageProps {
   companyId: string;
@@ -86,11 +84,14 @@ interface RegisteredModelItem {
 export function AiReadyPage({ companyId, language, onSaved }: AiReadyPageProps) {
   const isBn = language === 'bn';
   const queryClient = useQueryClient();
+  const toast = useToast();
 
   const [activeTab, setActiveTab] = useState(0); // 0: Domains & Feature Pipelines, 1: Model Registry, 2: Inference Sandbox
   const [registerOpen, setRegisterOpen] = useState(false);
   const [inspectOpen, setInspectOpen] = useState(false);
   const [inspectResult, setInspectResult] = useState<any>(null);
+  const [regError, setRegError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   // Model Form State
   const [mDomain, setMDomain] = useState('DEMAND_FORECASTING');
@@ -133,6 +134,7 @@ export function AiReadyPage({ companyId, language, onSaved }: AiReadyPageProps) 
       onSaved(isBn ? 'ফিচার ডেটাসেট সফলভাবে এক্সট্র্যাক্ট করা হয়েছে।' : 'Feature dataset extracted.');
       queryClient.invalidateQueries({ queryKey: ['ai-domain-overview'] });
     },
+    onError: (err: unknown) => toast.error(extractApiError(err, 'Dataset extraction failed.')),
   });
 
   // Register Model Mutation
@@ -143,21 +145,58 @@ export function AiReadyPage({ companyId, language, onSaved }: AiReadyPageProps) 
         body: JSON.stringify({
           companyId,
           domain: mDomain,
-          modelName: mName,
-          version: mVersion,
+          modelName: mName.trim(),
+          version: mVersion.trim(),
           framework: mFramework,
-          endpointUrl: mEndpoint || undefined,
-          artifactUri: mArtifact || undefined,
+          endpointUrl: mEndpoint.trim() || undefined,
+          artifactUri: mArtifact.trim() || undefined,
           isActive: mIsActive,
         }),
       }),
     onSuccess: () => {
+      setRegError(null);
+      setFieldErrors({});
+      setMName('');
       onSaved(isBn ? 'মডেল সফলভাবে রেজিস্টার করা হয়েছে।' : 'Model registered successfully.');
       setRegisterOpen(false);
       refetchModels();
       queryClient.invalidateQueries({ queryKey: ['ai-domain-overview'] });
     },
+    onError: (err: unknown) => {
+      const msg = extractApiError(err, 'Failed to register model.');
+      setRegError(msg);
+      toast.error(msg);
+    },
   });
+
+  const handleOpenRegister = () => {
+    setRegError(null);
+    setFieldErrors({});
+    setRegisterOpen(true);
+  };
+
+  const handleRegisterModel = (e?: React.FormEvent) => {
+    e?.preventDefault();
+    const validation = validateFormFields(
+      [
+        { name: 'mDomain', label: isBn ? 'ডোমেইন' : 'Domain', value: mDomain, required: true, isSelect: true },
+        { name: 'mName', label: isBn ? 'মডেলের নাম' : 'Model Name', value: mName, required: true },
+        { name: 'mVersion', label: isBn ? 'সংস্করণ' : 'Version', value: mVersion, required: true },
+        { name: 'mFramework', label: isBn ? 'ফ্রেমওয়ার্ক' : 'Framework', value: mFramework, required: true, isSelect: true },
+      ],
+      language,
+    );
+    if (!validation.valid) {
+      setFieldErrors(validation.errors);
+      setRegError(validation.summary);
+      toast.warning(validation.summary);
+      focusFieldByName(validation.firstField);
+      return;
+    }
+    setRegError(null);
+    setFieldErrors({});
+    registerMutation.mutate();
+  };
 
   // Predict Mutation
   const predictMutation = useMutation({
@@ -165,7 +204,7 @@ export function AiReadyPage({ companyId, language, onSaved }: AiReadyPageProps) 
       let parsed = {};
       try {
         parsed = JSON.parse(sbPayload);
-      } catch (e) {
+      } catch {
         throw new Error(isBn ? 'ইনপুট JSON সঠিক নয়।' : 'Invalid JSON input.');
       }
       return apiRequest('/ai-ready/predict', {
@@ -180,8 +219,10 @@ export function AiReadyPage({ companyId, language, onSaved }: AiReadyPageProps) 
     onSuccess: (res: any) => {
       setSbResult(res);
     },
-    onError: (err: any) => {
-      setSbResult({ error: err.message });
+    onError: (err: unknown) => {
+      const msg = extractApiError(err, 'Inference execution failed.');
+      setSbResult({ error: msg });
+      toast.error(msg);
     },
   });
 
@@ -205,7 +246,7 @@ export function AiReadyPage({ companyId, language, onSaved }: AiReadyPageProps) 
           <Button
             variant="contained"
             startIcon={<AddCircleOutlineRoundedIcon />}
-            onClick={() => setRegisterOpen(true)}
+            onClick={handleOpenRegister}
           >
             {isBn ? 'মডেল রেজিস্টার করুন' : 'Register ML Model'}
           </Button>
@@ -380,32 +421,31 @@ export function AiReadyPage({ companyId, language, onSaved }: AiReadyPageProps) 
               </Typography>
 
               <Stack spacing={2.5}>
-                <FormControl fullWidth size="small">
-                  <InputLabel>{isBn ? 'টার্গেট ডোমেইন' : 'Target Domain'}</InputLabel>
-                  <Select
-                    value={sbDomain}
-                    label={isBn ? 'টার্গেট ডোমেইন' : 'Target Domain'}
-                    onChange={e => setSbDomain(e.target.value)}
-                  >
-                    <MenuItem value="DEMAND_FORECASTING">Demand Forecasting</MenuItem>
-                    <MenuItem value="RICE_PRICE_PREDICTION">Rice Price Prediction</MenuItem>
-                    <MenuItem value="PADDY_PRICE_PREDICTION">Paddy Price Prediction</MenuItem>
-                    <MenuItem value="PRODUCTION_FORECAST">Production Forecast</MenuItem>
-                    <MenuItem value="PROFIT_FORECAST">Profit Forecast</MenuItem>
-                    <MenuItem value="SUPPLIER_QUALITY_SCORE">Supplier Quality Score</MenuItem>
-                    <MenuItem value="CUSTOMER_RISK_SCORE">Customer Risk Score</MenuItem>
-                    <MenuItem value="ANOMALY_DETECTION">Anomaly Detection</MenuItem>
-                    <MenuItem value="STOCK_PREDICTION">Stock Prediction</MenuItem>
-                  </Select>
-                </FormControl>
+                <AppSelect
+                  fieldName="sbDomain"
+                  label={isBn ? 'টার্গেট ডোমেইন' : 'Target Domain'}
+                  value={sbDomain}
+                  options={[
+                    { value: 'DEMAND_FORECASTING', label: 'Demand Forecasting' },
+                    { value: 'RICE_PRICE_PREDICTION', label: 'Rice Price Prediction' },
+                    { value: 'PADDY_PRICE_PREDICTION', label: 'Paddy Price Prediction' },
+                    { value: 'PRODUCTION_FORECAST', label: 'Production Forecast' },
+                    { value: 'PROFIT_FORECAST', label: 'Profit Forecast' },
+                    { value: 'SUPPLIER_QUALITY_SCORE', label: 'Supplier Quality Score' },
+                    { value: 'CUSTOMER_RISK_SCORE', label: 'Customer Risk Score' },
+                    { value: 'ANOMALY_DETECTION', label: 'Anomaly Detection' },
+                    { value: 'STOCK_PREDICTION', label: 'Stock Prediction' },
+                  ]}
+                  onChange={(val) => setSbDomain(val)}
+                />
 
-                <TextField
-                  fullWidth
+                <AppTextField
+                  fieldName="sbPayload"
                   multiline
                   rows={8}
                   label={isBn ? 'ইনপুট ফিচার JSON' : 'Input Features JSON'}
                   value={sbPayload}
-                  onChange={e => setSbPayload(e.target.value)}
+                  onValueChange={(val) => setSbPayload(val)}
                   sx={{ fontFamily: 'monospace' }}
                 />
 
@@ -458,86 +498,104 @@ export function AiReadyPage({ companyId, language, onSaved }: AiReadyPageProps) 
       )}
 
       {/* Model Register Dialog */}
-      <Dialog open={registerOpen} onClose={() => setRegisterOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle sx={{ fontWeight: 700 }}>
-          {isBn ? 'নতুন এআই/এমএল মডেল রেজিস্টার করুন' : 'Register New AI/ML Model'}
-        </DialogTitle>
-        <DialogContent dividers>
-          <Stack spacing={2.5} sx={{ mt: 1 }}>
-            <FormControl fullWidth size="small">
-              <InputLabel>{isBn ? 'ডোমেইন' : 'Domain'}</InputLabel>
-              <Select value={mDomain} label={isBn ? 'ডোমেইন' : 'Domain'} onChange={e => setMDomain(e.target.value)}>
-                <MenuItem value="DEMAND_FORECASTING">Demand Forecasting</MenuItem>
-                <MenuItem value="RICE_PRICE_PREDICTION">Rice Price Prediction</MenuItem>
-                <MenuItem value="PADDY_PRICE_PREDICTION">Paddy Price Prediction</MenuItem>
-                <MenuItem value="PRODUCTION_FORECAST">Production Forecast</MenuItem>
-                <MenuItem value="PROFIT_FORECAST">Profit Forecast</MenuItem>
-                <MenuItem value="SUPPLIER_QUALITY_SCORE">Supplier Quality Score</MenuItem>
-                <MenuItem value="CUSTOMER_RISK_SCORE">Customer Risk Score</MenuItem>
-                <MenuItem value="ANOMALY_DETECTION">Anomaly Detection</MenuItem>
-                <MenuItem value="STOCK_PREDICTION">Stock Prediction</MenuItem>
-              </Select>
-            </FormControl>
+      <FormDialog
+        open={registerOpen}
+        onClose={() => !registerMutation.isPending && setRegisterOpen(false)}
+        onSubmit={handleRegisterModel}
+        title={isBn ? 'নতুন এআই/এমএল মডেল রেজিস্টার করুন' : 'Register New AI/ML Model'}
+        error={regError}
+        onClearError={() => setRegError(null)}
+        loading={registerMutation.isPending}
+        submitLabel={isBn ? 'রেজিস্টার করুন' : 'Register Model'}
+        cancelLabel={isBn ? 'বাতিল' : 'Cancel'}
+        maxWidth="sm"
+      >
+        <FormGrid columns={1}>
+          <AppSelect
+            fieldName="mDomain"
+            required
+            label={isBn ? 'ডোমেইন' : 'Domain'}
+            value={mDomain}
+            errorText={fieldErrors.mDomain}
+            options={[
+              { value: 'DEMAND_FORECASTING', label: 'Demand Forecasting' },
+              { value: 'RICE_PRICE_PREDICTION', label: 'Rice Price Prediction' },
+              { value: 'PADDY_PRICE_PREDICTION', label: 'Paddy Price Prediction' },
+              { value: 'PRODUCTION_FORECAST', label: 'Production Forecast' },
+              { value: 'PROFIT_FORECAST', label: 'Profit Forecast' },
+              { value: 'SUPPLIER_QUALITY_SCORE', label: 'Supplier Quality Score' },
+              { value: 'CUSTOMER_RISK_SCORE', label: 'Customer Risk Score' },
+              { value: 'ANOMALY_DETECTION', label: 'Anomaly Detection' },
+              { value: 'STOCK_PREDICTION', label: 'Stock Prediction' },
+            ]}
+            onChange={(val) => {
+              setMDomain(val);
+              setFieldErrors((p) => ({ ...p, mDomain: '' }));
+            }}
+          />
 
-            <TextField
-              fullWidth
-              size="small"
-              label={isBn ? 'মডেলের নাম' : 'Model Name'}
-              value={mName}
-              onChange={e => setMName(e.target.value)}
-              placeholder="e.g. Miniket-Demand-XGBoost"
+          <AppTextField
+            fieldName="mName"
+            required
+            label={isBn ? 'মডেলের নাম' : 'Model Name'}
+            value={mName}
+            errorText={fieldErrors.mName}
+            onValueChange={(val) => {
+              setMName(val);
+              setFieldErrors((p) => ({ ...p, mName: '' }));
+            }}
+            placeholder="e.g. Miniket-Demand-XGBoost"
+          />
+
+          <FormGrid columns={{ xs: 1, sm: 2 }}>
+            <AppTextField
+              fieldName="mVersion"
+              required
+              label={isBn ? 'সংস্করণ' : 'Version'}
+              value={mVersion}
+              errorText={fieldErrors.mVersion}
+              onValueChange={(val) => {
+                setMVersion(val);
+                setFieldErrors((p) => ({ ...p, mVersion: '' }));
+              }}
             />
-
-            <Stack direction="row" spacing={2}>
-              <TextField
-                fullWidth
-                size="small"
-                label={isBn ? 'সংস্করণ' : 'Version'}
-                value={mVersion}
-                onChange={e => setMVersion(e.target.value)}
-              />
-              <FormControl fullWidth size="small">
-                <InputLabel>{isBn ? 'ফ্রেমওয়ার্ক' : 'Framework'}</InputLabel>
-                <Select value={mFramework} label={isBn ? 'ফ্রেমওয়ার্ক' : 'Framework'} onChange={e => setMFramework(e.target.value)}>
-                  <MenuItem value="ONNX">ONNX</MenuItem>
-                  <MenuItem value="PYTORCH">PyTorch</MenuItem>
-                  <MenuItem value="TENSORFLOW">TensorFlow</MenuItem>
-                  <MenuItem value="SCIKIT_LEARN">Scikit-Learn</MenuItem>
-                  <MenuItem value="EXTERNAL_API">External Microservice API</MenuItem>
-                </Select>
-              </FormControl>
-            </Stack>
-
-            <TextField
-              fullWidth
-              size="small"
-              label={isBn ? 'ইনফারেন্স এন্ডপয়েন্ট ইউআরএল (ঐচ্ছিক)' : 'Inference Endpoint URL (Optional)'}
-              value={mEndpoint}
-              onChange={e => setMEndpoint(e.target.value)}
-              placeholder="https://ai-inference.internal/v1/predict"
+            <AppSelect
+              fieldName="mFramework"
+              required
+              label={isBn ? 'ফ্রেমওয়ার্ক' : 'Framework'}
+              value={mFramework}
+              errorText={fieldErrors.mFramework}
+              options={[
+                { value: 'ONNX', label: 'ONNX' },
+                { value: 'PYTORCH', label: 'PyTorch' },
+                { value: 'TENSORFLOW', label: 'TensorFlow' },
+                { value: 'SCIKIT_LEARN', label: 'Scikit-Learn' },
+                { value: 'EXTERNAL_API', label: 'External Microservice API' },
+              ]}
+              onChange={(val) => {
+                setMFramework(val);
+                setFieldErrors((p) => ({ ...p, mFramework: '' }));
+              }}
             />
+          </FormGrid>
 
-            <TextField
-              fullWidth
-              size="small"
-              label={isBn ? 'আর্টিফ্যাক্ট ইউআরআই (ঐচ্ছিক)' : 'Artifact URI (Optional)'}
-              value={mArtifact}
-              onChange={e => setMArtifact(e.target.value)}
-              placeholder="s3://mill-models/demand_xgb_v1.onnx"
-            />
-          </Stack>
-        </DialogContent>
-        <DialogActions sx={{ p: 2 }}>
-          <Button onClick={() => setRegisterOpen(false)}>{isBn ? 'বাতিল' : 'Cancel'}</Button>
-          <Button
-            variant="contained"
-            onClick={() => registerMutation.mutate()}
-            disabled={!mName || registerMutation.isPending}
-          >
-            {isBn ? 'রেজিস্টার করুন' : 'Register Model'}
-          </Button>
-        </DialogActions>
-      </Dialog>
+          <AppTextField
+            fieldName="mEndpoint"
+            label={isBn ? 'ইনফারেন্স এন্ডপয়েন্ট ইউআরএল (ঐচ্ছিক)' : 'Inference Endpoint URL (Optional)'}
+            value={mEndpoint}
+            onValueChange={(val) => setMEndpoint(val)}
+            placeholder="https://ai-inference.internal/v1/predict"
+          />
+
+          <AppTextField
+            fieldName="mArtifact"
+            label={isBn ? 'আর্টিফ্যাক্ট ইউআরআই (ঐচ্ছিক)' : 'Artifact URI (Optional)'}
+            value={mArtifact}
+            onValueChange={(val) => setMArtifact(val)}
+            placeholder="s3://mill-models/demand_xgb_v1.onnx"
+          />
+        </FormGrid>
+      </FormDialog>
 
       {/* Dataset Inspection Dialog */}
       <Dialog open={inspectOpen} onClose={() => setInspectOpen(false)} maxWidth="md" fullWidth>

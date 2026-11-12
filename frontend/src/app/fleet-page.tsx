@@ -8,10 +8,6 @@ import {
   Card,
   CardContent,
   Chip,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
   Divider,
   Paper,
   Stack,
@@ -22,7 +18,6 @@ import {
   TableHead,
   TableRow,
   Tabs,
-  TextField,
   Typography,
 } from '@mui/material';
 import LocalShippingRoundedIcon from '@mui/icons-material/LocalShippingRounded';
@@ -35,6 +30,9 @@ import AddCircleOutlineRoundedIcon from '@mui/icons-material/AddCircleOutlineRou
 import RefreshRoundedIcon from '@mui/icons-material/RefreshRounded';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/api';
+import { AppAutocomplete, AppTextField, FormDialog, FormGrid, FormSection } from '@/components/form';
+import { extractApiError, useToast } from '@/components/ui/toast-provider';
+import { FieldRule, focusFieldByName, validateFormFields } from '@/lib/form-validation';
 
 interface FleetPageProps {
   companyId: string;
@@ -50,9 +48,13 @@ export function FleetPage({
   onSaved,
 }: FleetPageProps) {
   const queryClient = useQueryClient();
+  const toast = useToast();
   const isBn = language === 'bn';
 
   const [activeTab, setActiveTab] = useState(0); // 0: Trips, 1: Fuel Logs, 2: Vehicles, 3: Maintenance
+  const [busy, setBusy] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   // Dialogs
   const [vehicleDialogOpen, setVehicleDialogOpen] = useState(false);
@@ -146,16 +148,59 @@ export function FleetPage({
     refetchMaintenances();
   };
 
-  const handleCreateVehicle = async () => {
+  const openVehicleDialog = () => {
+    setErrorMsg(null);
+    setFieldErrors({});
+    setVehicleDialogOpen(true);
+  };
+
+  const openTripDialog = () => {
+    setErrorMsg(null);
+    setFieldErrors({});
+    setTripDialogOpen(true);
+  };
+
+  const openFuelDialog = () => {
+    setErrorMsg(null);
+    setFieldErrors({});
+    setFuelDialogOpen(true);
+  };
+
+  const openMaintenanceDialog = () => {
+    setErrorMsg(null);
+    setFieldErrors({});
+    setMaintenanceDialogOpen(true);
+  };
+
+  const handleCreateVehicle = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    const validation = validateFormFields(
+      [
+        { name: 'vNumber', label: isBn ? 'গাড়ি নম্বর' : 'Vehicle Number', value: vNumber, required: true },
+        { name: 'vType', label: isBn ? 'যানবাহনের ধরন' : 'Vehicle Type', value: vType, required: true },
+      ],
+      language,
+    );
+    if (!validation.valid) {
+      setFieldErrors(validation.errors);
+      setErrorMsg(validation.summary);
+      toast.warning(validation.summary);
+      focusFieldByName(validation.firstField);
+      return;
+    }
+
+    setBusy(true);
+    setErrorMsg(null);
+    setFieldErrors({});
     try {
       await apiRequest(`/fleet/vehicles?companyId=${companyId}`, {
         method: 'POST',
         body: JSON.stringify({
-          vehicleNumber: vNumber,
-          vehicleType: vType,
-          ownerName: vOwner || undefined,
-          driverName: vDriver || undefined,
-          driverMobile: vMobile || undefined,
+          vehicleNumber: vNumber.trim(),
+          vehicleType: vType.trim(),
+          ownerName: vOwner.trim() || undefined,
+          driverName: vDriver.trim() || undefined,
+          driverMobile: vMobile.trim() || undefined,
           fitnessExpiry: vFitnessExpiry || undefined,
           insuranceExpiry: vInsuranceExpiry || undefined,
           taxTokenExpiry: vTaxTokenExpiry || undefined,
@@ -165,27 +210,71 @@ export function FleetPage({
       setVehicleDialogOpen(false);
       setVNumber('');
       handleRefresh();
-    } catch (err: any) {
-      alert(err.message || 'Error creating vehicle');
+    } catch (err: unknown) {
+      const msg = extractApiError(err, 'Error creating vehicle');
+      setErrorMsg(msg);
+      toast.error(msg);
+    } finally {
+      setBusy(false);
     }
   };
 
-  const handleCreateTrip = async () => {
+  const handleCreateTrip = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    const rules: FieldRule[] = [
+      { name: 'tVehicleId', label: isBn ? 'যানবাহন নির্বাচন' : 'Select Vehicle', value: tVehicleId, required: true, isSelect: true },
+      { name: 'tTripNumber', label: isBn ? 'ট্রিপ নম্বর' : 'Trip Number', value: tTripNumber, required: true },
+      { name: 'tDriverName', label: isBn ? 'চালকের নাম' : 'Driver Name', value: tDriverName, required: true },
+      { name: 'tTripDate', label: isBn ? 'ট্রিপের তারিখ' : 'Trip Date', value: tTripDate, required: true, type: 'date' },
+      { name: 'tOrigin', label: isBn ? 'যাত্রার উৎস' : 'Origin', value: tOrigin, required: true },
+      { name: 'tDestination', label: isBn ? 'গন্তব্য' : 'Destination', value: tDestination, required: true },
+      { name: 'tStartOdo', label: isBn ? 'শুরুর ওডোমিটার' : 'Start Odometer', value: tStartOdo, required: true, type: 'nonNegativeNumber' },
+      {
+        name: 'tEndOdo',
+        label: isBn ? 'শেষ ওডোমিটার' : 'End Odometer',
+        value: tEndOdo,
+        required: true,
+        type: 'nonNegativeNumber',
+        custom: (val) =>
+          Number(val) <= Number(tStartOdo || 0)
+            ? isBn
+              ? 'শেষ ওডোমিটার অবশ্যই শুরুর ওডোমিটারের চেয়ে বড় হতে হবে।'
+              : 'End odometer must be greater than start odometer.'
+            : null,
+      },
+    ];
+    if (tCargoWeight.trim()) rules.push({ name: 'tCargoWeight', label: isBn ? 'ওজন' : 'Cargo Weight', value: tCargoWeight, type: 'nonNegativeNumber' });
+    if (tFuelCost.trim()) rules.push({ name: 'tFuelCost', label: isBn ? 'জ্বালানি খরচ' : 'Fuel Cost', value: tFuelCost, type: 'nonNegativeNumber' });
+    if (tTollCost.trim()) rules.push({ name: 'tTollCost', label: isBn ? 'টোল খরচ' : 'Toll Cost', value: tTollCost, type: 'nonNegativeNumber' });
+    if (tFreightAmount.trim()) rules.push({ name: 'tFreightAmount', label: isBn ? 'ফ্রেইট আয়' : 'Freight Revenue', value: tFreightAmount, type: 'nonNegativeNumber' });
+
+    const validation = validateFormFields(rules, language);
+    if (!validation.valid) {
+      setFieldErrors(validation.errors);
+      setErrorMsg(validation.summary);
+      toast.warning(validation.summary);
+      focusFieldByName(validation.firstField);
+      return;
+    }
+
+    setBusy(true);
+    setErrorMsg(null);
+    setFieldErrors({});
     try {
       await apiRequest(`/fleet/trips?companyId=${companyId}`, {
         method: 'POST',
         body: JSON.stringify({
           vehicleId: tVehicleId,
           factoryId: factoryId || undefined,
-          tripNumber: tTripNumber,
-          driverName: tDriverName,
-          driverPhone: tDriverPhone || undefined,
+          tripNumber: tTripNumber.trim(),
+          driverName: tDriverName.trim(),
+          driverPhone: tDriverPhone.trim() || undefined,
           tripDate: tTripDate,
-          origin: tOrigin,
-          destination: tDestination,
+          origin: tOrigin.trim(),
+          destination: tDestination.trim(),
           startOdometer: Number(tStartOdo),
           endOdometer: Number(tEndOdo),
-          cargoDescription: tCargoDesc || undefined,
+          cargoDescription: tCargoDesc.trim() || undefined,
           cargoWeightKg: tCargoWeight ? Number(tCargoWeight) : undefined,
           freightAmount: tFreightAmount ? Number(tFreightAmount) : 0,
           fuelCost: tFuelCost ? Number(tFuelCost) : 0,
@@ -196,12 +285,37 @@ export function FleetPage({
       setTripDialogOpen(false);
       setTTripNumber(`TRIP-${Date.now().toString().slice(-6)}`);
       handleRefresh();
-    } catch (err: any) {
-      alert(err.message || 'Error recording trip');
+    } catch (err: unknown) {
+      const msg = extractApiError(err, 'Error recording trip');
+      setErrorMsg(msg);
+      toast.error(msg);
+    } finally {
+      setBusy(false);
     }
   };
 
-  const handleCreateFuelLog = async () => {
+  const handleCreateFuelLog = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    const rules: FieldRule[] = [
+      { name: 'fLogDate', label: isBn ? 'তারিখ' : 'Date', value: fLogDate, required: true, type: 'date' },
+      { name: 'fFuelType', label: isBn ? 'জ্বালানির ধরন' : 'Fuel Type', value: fFuelType, required: true },
+      { name: 'fQuantity', label: isBn ? 'পরিমাণ (লিটার)' : 'Quantity (Liters)', value: fQuantity, required: true, type: 'positiveNumber' },
+      { name: 'fRate', label: isBn ? 'প্রতি লিটার দর' : 'Rate Per Liter', value: fRate, required: true, type: 'positiveNumber' },
+    ];
+    if (fOdometer.trim()) rules.push({ name: 'fOdometer', label: isBn ? 'ওডোমিটার রিডিং' : 'Odometer', value: fOdometer, type: 'nonNegativeNumber' });
+
+    const validation = validateFormFields(rules, language);
+    if (!validation.valid) {
+      setFieldErrors(validation.errors);
+      setErrorMsg(validation.summary);
+      toast.warning(validation.summary);
+      focusFieldByName(validation.firstField);
+      return;
+    }
+
+    setBusy(true);
+    setErrorMsg(null);
+    setFieldErrors({});
     try {
       await apiRequest(`/fleet/fuel-logs?companyId=${companyId}`, {
         method: 'POST',
@@ -209,43 +323,73 @@ export function FleetPage({
           vehicleId: fVehicleId || undefined,
           factoryId: factoryId || undefined,
           logDate: fLogDate,
-          fuelType: fFuelType,
+          fuelType: fFuelType.trim(),
           quantityLiters: Number(fQuantity),
           ratePerLiter: Number(fRate),
           odometerReading: fOdometer ? Number(fOdometer) : undefined,
-          fillingStation: fStation || undefined,
-          invoiceOrSlipNumber: fSlipNumber || undefined,
-          driverOrOperator: fDriver || undefined,
+          fillingStation: fStation.trim() || undefined,
+          invoiceOrSlipNumber: fSlipNumber.trim() || undefined,
+          driverOrOperator: fDriver.trim() || undefined,
         }),
       });
       onSaved(isBn ? 'জ্বালানি লগ সফলভাবে সংরক্ষণ করা হয়েছে।' : 'Fuel entry saved successfully.');
       setFuelDialogOpen(false);
       handleRefresh();
-    } catch (err: any) {
-      alert(err.message || 'Error saving fuel log');
+    } catch (err: unknown) {
+      const msg = extractApiError(err, 'Error saving fuel log');
+      setErrorMsg(msg);
+      toast.error(msg);
+    } finally {
+      setBusy(false);
     }
   };
 
-  const handleCreateMaintenance = async () => {
+  const handleCreateMaintenance = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    const rules: FieldRule[] = [
+      { name: 'mVehicleId', label: isBn ? 'যানবাহন নির্বাচন' : 'Vehicle', value: mVehicleId, required: true, isSelect: true },
+      { name: 'mType', label: isBn ? 'সার্ভিস ধরন' : 'Maintenance Type', value: mType, required: true },
+      { name: 'mDate', label: isBn ? 'সার্ভিসের তারিখ' : 'Service Date', value: mDate, required: true, type: 'date' },
+      { name: 'mCost', label: isBn ? 'মোট খরচ' : 'Cost (BDT)', value: mCost, required: true, type: 'positiveNumber' },
+    ];
+    if (mOdometer.trim()) rules.push({ name: 'mOdometer', label: isBn ? 'ওডোমিটার' : 'Odometer', value: mOdometer, type: 'nonNegativeNumber' });
+    if (mNextDueKm.trim()) rules.push({ name: 'mNextDueKm', label: isBn ? 'পরবর্তী সার্ভিস' : 'Next Service Due', value: mNextDueKm, type: 'nonNegativeNumber' });
+
+    const validation = validateFormFields(rules, language);
+    if (!validation.valid) {
+      setFieldErrors(validation.errors);
+      setErrorMsg(validation.summary);
+      toast.warning(validation.summary);
+      focusFieldByName(validation.firstField);
+      return;
+    }
+
+    setBusy(true);
+    setErrorMsg(null);
+    setFieldErrors({});
     try {
       await apiRequest(`/fleet/maintenance?companyId=${companyId}`, {
         method: 'POST',
         body: JSON.stringify({
           vehicleId: mVehicleId,
-          maintenanceType: mType,
+          maintenanceType: mType.trim(),
           serviceDate: mDate,
           odometerReading: mOdometer ? Number(mOdometer) : undefined,
           cost: Number(mCost),
-          serviceCenter: mCenter || undefined,
-          description: mDesc || undefined,
+          serviceCenter: mCenter.trim() || undefined,
+          description: mDesc.trim() || undefined,
           nextServiceDueKm: mNextDueKm ? Number(mNextDueKm) : undefined,
         }),
       });
       onSaved(isBn ? 'সার্ভিসিং রেকর্ড সফলভাবে সংরক্ষিত হয়েছে।' : 'Maintenance entry saved successfully.');
       setMaintenanceDialogOpen(false);
       handleRefresh();
-    } catch (err: any) {
-      alert(err.message || 'Error saving maintenance');
+    } catch (err: unknown) {
+      const msg = extractApiError(err, 'Error saving maintenance');
+      setErrorMsg(msg);
+      toast.error(msg);
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -278,7 +422,7 @@ export function FleetPage({
             variant="contained"
             color="primary"
             startIcon={<AddCircleOutlineRoundedIcon />}
-            onClick={() => setTripDialogOpen(true)}
+            onClick={openTripDialog}
           >
             {isBn ? 'নতুন ট্রিপ লগ' : 'Record Trip'}
           </Button>
@@ -286,7 +430,7 @@ export function FleetPage({
             variant="contained"
             color="secondary"
             startIcon={<LocalGasStationRoundedIcon />}
-            onClick={() => setFuelDialogOpen(true)}
+            onClick={openFuelDialog}
           >
             {isBn ? 'জ্বালানি ভাউচার' : 'Fuel Voucher'}
           </Button>
@@ -497,7 +641,7 @@ export function FleetPage({
             <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
               {isBn ? 'যানবাহন মাস্টার তালিকা ও কাগজপত্র' : 'Company Fleet & Vehicle Directory'}
             </Typography>
-            <Button size="small" variant="contained" onClick={() => setVehicleDialogOpen(true)}>
+            <Button size="small" variant="contained" onClick={openVehicleDialog}>
               {isBn ? '+ নতুন গাড়ি যোগ' : '+ Add Vehicle'}
             </Button>
           </Stack>
@@ -549,7 +693,7 @@ export function FleetPage({
             <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
               {isBn ? 'যানবাহন মেরামত ও পর্যায়ক্রমিক সার্ভিসিং লগ' : 'Vehicle Maintenance & Workshop Repairs'}
             </Typography>
-            <Button size="small" variant="contained" onClick={() => setMaintenanceDialogOpen(true)}>
+            <Button size="small" variant="contained" onClick={openMaintenanceDialog}>
               {isBn ? '+ সার্ভিসিং এন্ট্রি' : '+ Record Maintenance'}
             </Button>
           </Stack>
@@ -593,435 +737,562 @@ export function FleetPage({
       )}
 
       {/* Dialog: Add Vehicle */}
-      <Dialog open={vehicleDialogOpen} onClose={() => setVehicleDialogOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>{isBn ? 'নতুন যানবাহন নিবন্ধন' : 'Register Vehicle'}</DialogTitle>
-        <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 2 }}>
-          <TextField
+      <FormDialog
+        open={vehicleDialogOpen}
+        onClose={() => !busy && setVehicleDialogOpen(false)}
+        onSubmit={handleCreateVehicle}
+        title={isBn ? 'নতুন যানবাহন নিবন্ধন' : 'Register Vehicle'}
+        error={errorMsg}
+        onClearError={() => setErrorMsg(null)}
+        loading={busy}
+        submitLabel={isBn ? 'সংরক্ষণ করুন' : 'Register Vehicle'}
+        cancelLabel={isBn ? 'বাতিল' : 'Cancel'}
+        maxWidth="sm"
+      >
+        <FormGrid columns={{ xs: 1, sm: 2 }}>
+          <AppTextField
+            fieldName="vNumber"
+            required
             label={isBn ? 'গাড়ি নম্বর (উদাঃ DHAKA-METRO-TA-11-2345)' : 'Vehicle Number'}
             value={vNumber}
-            onChange={(e) => setVNumber(e.target.value)}
-            required
-            fullWidth
+            errorText={fieldErrors.vNumber}
+            onValueChange={(val) => {
+              setVNumber(val);
+              setFieldErrors((p) => ({ ...p, vNumber: '' }));
+            }}
           />
-          <TextField
+          <AppTextField
+            fieldName="vType"
+            required
             label={isBn ? 'যানবাহনের ধরন' : 'Vehicle Type'}
             value={vType}
-            onChange={(e) => setVType(e.target.value)}
-            fullWidth
+            errorText={fieldErrors.vType}
+            onValueChange={(val) => {
+              setVType(val);
+              setFieldErrors((p) => ({ ...p, vType: '' }));
+            }}
           />
-          <TextField
+          <AppTextField
+            fieldName="vOwner"
             label={isBn ? 'মালিকের নাম' : 'Owner Name'}
             value={vOwner}
-            onChange={(e) => setVOwner(e.target.value)}
-            fullWidth
+            onValueChange={(val) => setVOwner(val)}
           />
-          <Stack direction="row" gap={2}>
-            <TextField
-              label={isBn ? 'চালকের নাম' : 'Driver Name'}
-              value={vDriver}
-              onChange={(e) => setVDriver(e.target.value)}
-              fullWidth
+          <AppTextField
+            fieldName="vDriver"
+            label={isBn ? 'চালকের নাম' : 'Driver Name'}
+            value={vDriver}
+            onValueChange={(val) => setVDriver(val)}
+          />
+          <AppTextField
+            fieldName="vMobile"
+            label={isBn ? 'মোবাইল নম্বর' : 'Driver Mobile'}
+            value={vMobile}
+            onValueChange={(val) => setVMobile(val)}
+          />
+        </FormGrid>
+
+        <FormSection title={isBn ? 'কাগজপত্রের মেয়াদ' : 'Document Expiry Dates'}>
+          <FormGrid columns={{ xs: 1, sm: 3 }}>
+            <AppTextField
+              fieldName="vFitnessExpiry"
+              label={isBn ? 'ফিটনেস সার্টিফিকেট মেয়াদ' : 'Fitness Expiry Date'}
+              type="date"
+              InputLabelProps={{ shrink: true }}
+              value={vFitnessExpiry}
+              onValueChange={(val) => setVFitnessExpiry(val)}
             />
-            <TextField
-              label={isBn ? 'মোবাইল নম্বর' : 'Driver Mobile'}
-              value={vMobile}
-              onChange={(e) => setVMobile(e.target.value)}
-              fullWidth
+            <AppTextField
+              fieldName="vInsuranceExpiry"
+              label={isBn ? 'বীমা মেয়াদ' : 'Insurance Expiry Date'}
+              type="date"
+              InputLabelProps={{ shrink: true }}
+              value={vInsuranceExpiry}
+              onValueChange={(val) => setVInsuranceExpiry(val)}
             />
-          </Stack>
-          <Divider>{isBn ? 'কাগজপত্রের মেয়াদ' : 'Document Expiry Dates'}</Divider>
-          <TextField
-            label={isBn ? 'ফিটনেস সার্টিফিকেট মেয়াদ' : 'Fitness Expiry Date'}
-            type="date"
-            InputLabelProps={{ shrink: true }}
-            value={vFitnessExpiry}
-            onChange={(e) => setVFitnessExpiry(e.target.value)}
-            fullWidth
-          />
-          <TextField
-            label={isBn ? 'বীমা মেয়াদ' : 'Insurance Expiry Date'}
-            type="date"
-            InputLabelProps={{ shrink: true }}
-            value={vInsuranceExpiry}
-            onChange={(e) => setVInsuranceExpiry(e.target.value)}
-            fullWidth
-          />
-          <TextField
-            label={isBn ? 'ট্যাক্স টোকেন মেয়াদ' : 'Tax Token Expiry Date'}
-            type="date"
-            InputLabelProps={{ shrink: true }}
-            value={vTaxTokenExpiry}
-            onChange={(e) => setVTaxTokenExpiry(e.target.value)}
-            fullWidth
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setVehicleDialogOpen(false)}>{isBn ? 'বাতিল' : 'Cancel'}</Button>
-          <Button variant="contained" onClick={handleCreateVehicle} disabled={!vNumber.trim()}>
-            {isBn ? 'সংরক্ষণ করুন' : 'Register Vehicle'}
-          </Button>
-        </DialogActions>
-      </Dialog>
+            <AppTextField
+              fieldName="vTaxTokenExpiry"
+              label={isBn ? 'ট্যাক্স টোকেন মেয়াদ' : 'Tax Token Expiry Date'}
+              type="date"
+              InputLabelProps={{ shrink: true }}
+              value={vTaxTokenExpiry}
+              onValueChange={(val) => setVTaxTokenExpiry(val)}
+            />
+          </FormGrid>
+        </FormSection>
+      </FormDialog>
 
       {/* Dialog: Record Trip */}
-      <Dialog open={tripDialogOpen} onClose={() => setTripDialogOpen(false)} maxWidth="md" fullWidth>
-        <DialogTitle>{isBn ? 'নতুন ট্রিপ ও মাইলেজ এন্ট্রি' : 'Record Vehicle Trip'}</DialogTitle>
-        <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 2 }}>
-          <Stack direction="row" gap={2}>
-            <TextField
-              select
-              SelectProps={{ native: true }}
+      <FormDialog
+        open={tripDialogOpen}
+        onClose={() => !busy && setTripDialogOpen(false)}
+        onSubmit={handleCreateTrip}
+        title={isBn ? 'নতুন ট্রিপ ও মাইলেজ এন্ট্রি' : 'Record Vehicle Trip'}
+        error={errorMsg}
+        onClearError={() => setErrorMsg(null)}
+        loading={busy}
+        submitLabel={isBn ? 'ট্রিপ সংরক্ষণ করুন' : 'Save Trip'}
+        cancelLabel={isBn ? 'বাতিল' : 'Cancel'}
+        maxWidth="md"
+      >
+        <FormSection title={isBn ? 'যানবাহন ও চালক' : 'Vehicle & Driver'}>
+          <FormGrid columns={{ xs: 1, sm: 2 }}>
+            <AppAutocomplete
+              fieldName="tVehicleId"
+              required
               label={isBn ? 'যানবাহন নির্বাচন' : 'Select Vehicle'}
               value={tVehicleId}
-              onChange={(e) => setTVehicleId(e.target.value)}
+              errorText={fieldErrors.tVehicleId}
+              options={vehicles.map((v) => ({
+                value: v.id,
+                label: v.vehicleNumber,
+                badge: v.vehicleType,
+              }))}
+              emptyMessage={isBn ? 'কোনো গাড়ি নিবন্ধিত নেই — আগে গাড়ি যোগ করুন' : 'No vehicles registered — add a vehicle first'}
+              onChange={(val) => {
+                setTVehicleId(val);
+                setFieldErrors((p) => ({ ...p, tVehicleId: '' }));
+              }}
+            />
+            <AppTextField
+              fieldName="tTripNumber"
               required
-              fullWidth
-            >
-              <option value="">{isBn ? '-- গাড়ি বেছে নিন --' : '-- Choose Vehicle --'}</option>
-              {vehicles.map((v) => (
-                <option key={v.id} value={v.id}>
-                  {v.vehicleNumber} ({v.vehicleType})
-                </option>
-              ))}
-            </TextField>
-            <TextField
               label={isBn ? 'ট্রিপ নম্বর' : 'Trip Number'}
               value={tTripNumber}
-              onChange={(e) => setTTripNumber(e.target.value)}
-              fullWidth
+              errorText={fieldErrors.tTripNumber}
+              onValueChange={(val) => {
+                setTTripNumber(val);
+                setFieldErrors((p) => ({ ...p, tTripNumber: '' }));
+              }}
             />
-          </Stack>
+          </FormGrid>
 
-          <Stack direction="row" gap={2}>
-            <TextField
+          <FormGrid columns={{ xs: 1, sm: 3 }} sx={{ mt: 2 }}>
+            <AppTextField
+              fieldName="tDriverName"
+              required
               label={isBn ? 'চালকের নাম' : 'Driver Name'}
               value={tDriverName}
-              onChange={(e) => setTDriverName(e.target.value)}
-              required
-              fullWidth
+              errorText={fieldErrors.tDriverName}
+              onValueChange={(val) => {
+                setTDriverName(val);
+                setFieldErrors((p) => ({ ...p, tDriverName: '' }));
+              }}
             />
-            <TextField
+            <AppTextField
+              fieldName="tDriverPhone"
               label={isBn ? 'চালক মোবাইল' : 'Driver Mobile'}
               value={tDriverPhone}
-              onChange={(e) => setTDriverPhone(e.target.value)}
-              fullWidth
+              onValueChange={(val) => setTDriverPhone(val)}
             />
-            <TextField
+            <AppTextField
+              fieldName="tTripDate"
+              required
               label={isBn ? 'ট্রিপের তারিখ' : 'Trip Date'}
               type="date"
               InputLabelProps={{ shrink: true }}
               value={tTripDate}
-              onChange={(e) => setTTripDate(e.target.value)}
-              fullWidth
+              errorText={fieldErrors.tTripDate}
+              onValueChange={(val) => {
+                setTTripDate(val);
+                setFieldErrors((p) => ({ ...p, tTripDate: '' }));
+              }}
             />
-          </Stack>
+          </FormGrid>
+        </FormSection>
 
-          <Stack direction="row" gap={2}>
-            <TextField
+        <FormSection title={isBn ? 'রুট ও ওডোমিটার' : 'Route & Odometer'}>
+          <FormGrid columns={{ xs: 1, sm: 2 }}>
+            <AppTextField
+              fieldName="tOrigin"
+              required
               label={isBn ? 'যাত্রার উৎস' : 'Origin'}
               value={tOrigin}
-              onChange={(e) => setTOrigin(e.target.value)}
-              fullWidth
+              errorText={fieldErrors.tOrigin}
+              onValueChange={(val) => {
+                setTOrigin(val);
+                setFieldErrors((p) => ({ ...p, tOrigin: '' }));
+              }}
             />
-            <TextField
+            <AppTextField
+              fieldName="tDestination"
+              required
               label={isBn ? 'গন্তব্য' : 'Destination'}
               value={tDestination}
-              onChange={(e) => setTDestination(e.target.value)}
-              fullWidth
+              errorText={fieldErrors.tDestination}
+              onValueChange={(val) => {
+                setTDestination(val);
+                setFieldErrors((p) => ({ ...p, tDestination: '' }));
+              }}
             />
-          </Stack>
+          </FormGrid>
 
-          <Stack direction="row" gap={2}>
-            <TextField
+          <FormGrid columns={{ xs: 1, sm: 3 }} sx={{ mt: 2 }}>
+            <AppTextField
+              fieldName="tStartOdo"
+              required
               label={isBn ? 'শুরুর ওডোমিটার (কিমি)' : 'Start Odometer (KM)'}
               type="number"
+              unit="KM"
               value={tStartOdo}
-              onChange={(e) => setTStartOdo(e.target.value)}
-              required
-              fullWidth
+              errorText={fieldErrors.tStartOdo}
+              inputProps={{ min: 0 }}
+              onValueChange={(val) => {
+                setTStartOdo(val);
+                setFieldErrors((p) => ({ ...p, tStartOdo: '', tEndOdo: '' }));
+              }}
             />
-            <TextField
+            <AppTextField
+              fieldName="tEndOdo"
+              required
               label={isBn ? 'শেষ ওডোমিটার (কিমি)' : 'End Odometer (KM)'}
               type="number"
+              unit="KM"
               value={tEndOdo}
-              onChange={(e) => setTEndOdo(e.target.value)}
-              required
-              fullWidth
+              errorText={fieldErrors.tEndOdo}
+              inputProps={{ min: 0 }}
+              onValueChange={(val) => {
+                setTEndOdo(val);
+                setFieldErrors((p) => ({ ...p, tEndOdo: '' }));
+              }}
             />
-            <TextField
+            <AppTextField
+              fieldName="tDistancePreview"
               label={isBn ? 'গণনাকৃত দূরত্ব' : 'Calculated Distance'}
               value={`${previewDistance} KM`}
-              disabled
-              fullWidth
+              InputProps={{ readOnly: true }}
+              helperText={isBn ? 'স্বয়ংক্রিয়ভাবে হিসাবকৃত' : 'Auto-calculated'}
             />
-          </Stack>
+          </FormGrid>
+        </FormSection>
 
-          <Stack direction="row" gap={2}>
-            <TextField
+        <FormSection title={isBn ? 'মালপত্র ও খরচ-আয়' : 'Cargo & Trip Financials'}>
+          <FormGrid columns={{ xs: 1, sm: 2 }}>
+            <AppTextField
+              fieldName="tCargoDesc"
               label={isBn ? 'মালপত্রের বিবরণ' : 'Cargo Description'}
               value={tCargoDesc}
-              onChange={(e) => setTCargoDesc(e.target.value)}
-              fullWidth
+              onValueChange={(val) => setTCargoDesc(val)}
             />
-            <TextField
+            <AppTextField
+              fieldName="tCargoWeight"
               label={isBn ? 'ওজন (কেজি)' : 'Cargo Weight (KG)'}
               type="number"
+              unit="KG"
               value={tCargoWeight}
-              onChange={(e) => setTCargoWeight(e.target.value)}
-              fullWidth
+              errorText={fieldErrors.tCargoWeight}
+              inputProps={{ min: 0 }}
+              onValueChange={(val) => {
+                setTCargoWeight(val);
+                setFieldErrors((p) => ({ ...p, tCargoWeight: '' }));
+              }}
             />
-          </Stack>
+          </FormGrid>
 
-          <Stack direction="row" gap={2}>
-            <TextField
+          <FormGrid columns={{ xs: 1, sm: 3 }} sx={{ mt: 2 }}>
+            <AppTextField
+              fieldName="tFuelCost"
               label={isBn ? 'জ্বালানি খরচ (৳)' : 'Fuel Cost (BDT)'}
               type="number"
+              prefixText="৳"
               value={tFuelCost}
-              onChange={(e) => setTFuelCost(e.target.value)}
-              fullWidth
+              errorText={fieldErrors.tFuelCost}
+              inputProps={{ min: 0 }}
+              onValueChange={(val) => {
+                setTFuelCost(val);
+                setFieldErrors((p) => ({ ...p, tFuelCost: '' }));
+              }}
             />
-            <TextField
+            <AppTextField
+              fieldName="tTollCost"
               label={isBn ? 'টোল ও অন্যান্য খরচ (৳)' : 'Toll / Other (BDT)'}
               type="number"
+              prefixText="৳"
               value={tTollCost}
-              onChange={(e) => setTTollCost(e.target.value)}
-              fullWidth
+              errorText={fieldErrors.tTollCost}
+              inputProps={{ min: 0 }}
+              onValueChange={(val) => {
+                setTTollCost(val);
+                setFieldErrors((p) => ({ ...p, tTollCost: '' }));
+              }}
             />
-            <TextField
+            <AppTextField
+              fieldName="tFreightAmount"
               label={isBn ? 'ফ্রেইট আয় (৳)' : 'Freight Revenue (BDT)'}
               type="number"
+              prefixText="৳"
               value={tFreightAmount}
-              onChange={(e) => setTFreightAmount(e.target.value)}
-              fullWidth
+              errorText={fieldErrors.tFreightAmount}
+              inputProps={{ min: 0 }}
+              onValueChange={(val) => {
+                setTFreightAmount(val);
+                setFieldErrors((p) => ({ ...p, tFreightAmount: '' }));
+              }}
             />
-          </Stack>
+          </FormGrid>
+        </FormSection>
 
-          {/* Real-time Calculation Summary Card */}
-          <Paper sx={{ p: 2, backgroundColor: 'action.hover' }}>
-            <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-              {isBn ? 'স্বয়ংক্রিয়ভাবে গণনাকৃত হার:' : 'Auto Calculated Metrics:'}
+        <Paper variant="outlined" sx={{ p: 2, backgroundColor: 'action.hover', borderRadius: 2 }}>
+          <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+            {isBn ? 'স্বয়ংক্রিয়ভাবে গণনাকৃত হার:' : 'Auto Calculated Metrics:'}
+          </Typography>
+          <Stack direction="row" gap={4} flexWrap="wrap">
+            <Typography variant="body2">
+              <strong>{isBn ? 'মোট পরিবহন খরচ:' : 'Total Transport Cost:'}</strong> ৳{previewTotalTransportCost.toLocaleString()}
             </Typography>
-            <Stack direction="row" gap={4}>
-              <Typography variant="body2">
-                <strong>{isBn ? 'মোট পরিবহন খরচ:' : 'Total Transport Cost:'}</strong> ৳{previewTotalTransportCost.toLocaleString()}
-              </Typography>
-              <Typography variant="body2">
-                <strong>{isBn ? 'জ্বালানি খরচ/কিমি:' : 'Fuel Cost/KM:'}</strong> ৳{previewFuelCostPerKm} / KM
-              </Typography>
-              <Typography variant="body2">
-                <strong>{isBn ? 'পরিবহন খরচ/কিমি:' : 'Transport Cost/KM:'}</strong> ৳{previewTransportCostPerKm} / KM
-              </Typography>
-            </Stack>
-          </Paper>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setTripDialogOpen(false)}>{isBn ? 'বাতিল' : 'Cancel'}</Button>
-          <Button
-            variant="contained"
-            onClick={handleCreateTrip}
-            disabled={!tVehicleId || !tDriverName.trim() || previewDistance <= 0}
-          >
-            {isBn ? 'ট্রিপ সংরক্ষণ করুন' : 'Save Trip'}
-          </Button>
-        </DialogActions>
-      </Dialog>
+            <Typography variant="body2">
+              <strong>{isBn ? 'জ্বালানি খরচ/কিমি:' : 'Fuel Cost/KM:'}</strong> ৳{previewFuelCostPerKm} / KM
+            </Typography>
+            <Typography variant="body2">
+              <strong>{isBn ? 'পরিবহন খরচ/কিমি:' : 'Transport Cost/KM:'}</strong> ৳{previewTransportCostPerKm} / KM
+            </Typography>
+          </Stack>
+        </Paper>
+      </FormDialog>
 
       {/* Dialog: Record Fuel Log */}
-      <Dialog open={fuelDialogOpen} onClose={() => setFuelDialogOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>{isBn ? 'জ্বালানি খরচ ভাউচার এন্ট্রি' : 'Fuel Voucher Entry'}</DialogTitle>
-        <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 2 }}>
-          <TextField
-            select
-            SelectProps={{ native: true }}
-            label={isBn ? 'যানবাহন (ঐচ্ছিক)' : 'Vehicle (Optional)'}
-            value={fVehicleId}
-            onChange={(e) => setFVehicleId(e.target.value)}
-            fullWidth
-          >
-            <option value="">{isBn ? '-- সাধারণ / মিল জেনারেটর --' : '-- Mill Generator / Equipment --'}</option>
-            {vehicles.map((v) => (
-              <option key={v.id} value={v.id}>
-                {v.vehicleNumber}
-              </option>
-            ))}
-          </TextField>
-
-          <Stack direction="row" gap={2}>
-            <TextField
-              label={isBn ? 'তারিখ' : 'Date'}
-              type="date"
-              InputLabelProps={{ shrink: true }}
-              value={fLogDate}
-              onChange={(e) => setFLogDate(e.target.value)}
-              fullWidth
+      <FormDialog
+        open={fuelDialogOpen}
+        onClose={() => !busy && setFuelDialogOpen(false)}
+        onSubmit={handleCreateFuelLog}
+        title={isBn ? 'জ্বালানি খরচ ভাউচার এন্ট্রি' : 'Fuel Voucher Entry'}
+        error={errorMsg}
+        onClearError={() => setErrorMsg(null)}
+        loading={busy}
+        submitLabel={isBn ? 'ভাউচার সংরক্ষণ করুন' : 'Save Fuel Log'}
+        cancelLabel={isBn ? 'বাতিল' : 'Cancel'}
+        submitColor="secondary"
+        maxWidth="sm"
+      >
+        <FormGrid columns={{ xs: 1, sm: 2 }}>
+          <Box sx={{ gridColumn: { sm: 'span 2' } }}>
+            <AppAutocomplete
+              fieldName="fVehicleId"
+              label={isBn ? 'যানবাহন (ঐচ্ছিক — খালি রাখলে মিল জেনারেটর)' : 'Vehicle (Optional — blank for Mill Generator)'}
+              value={fVehicleId}
+              options={vehicles.map((v) => ({
+                value: v.id,
+                label: v.vehicleNumber,
+                badge: v.vehicleType,
+              }))}
+              emptyMessage={isBn ? 'কোনো গাড়ি নেই — মিল জেনারেটরের জন্য খালি রাখুন' : 'No vehicles — leave blank for mill generator'}
+              onChange={(val) => setFVehicleId(val)}
             />
-            <TextField
-              label={isBn ? 'জ্বালানির ধরন' : 'Fuel Type'}
-              value={fFuelType}
-              onChange={(e) => setFFuelType(e.target.value)}
-              fullWidth
-            />
-          </Stack>
+          </Box>
 
-          <Stack direction="row" gap={2}>
-            <TextField
-              label={isBn ? 'পরিমাণ (লিটার)' : 'Quantity (Liters)'}
-              type="number"
-              value={fQuantity}
-              onChange={(e) => setFQuantity(e.target.value)}
-              required
-              fullWidth
-            />
-            <TextField
-              label={isBn ? 'প্রতি লিটার দর (৳)' : 'Rate Per Liter (BDT)'}
-              type="number"
-              value={fRate}
-              onChange={(e) => setFRate(e.target.value)}
-              required
-              fullWidth
-            />
-          </Stack>
+          <AppTextField
+            fieldName="fLogDate"
+            required
+            label={isBn ? 'তারিখ' : 'Date'}
+            type="date"
+            InputLabelProps={{ shrink: true }}
+            value={fLogDate}
+            errorText={fieldErrors.fLogDate}
+            onValueChange={(val) => {
+              setFLogDate(val);
+              setFieldErrors((p) => ({ ...p, fLogDate: '' }));
+            }}
+          />
+          <AppTextField
+            fieldName="fFuelType"
+            required
+            label={isBn ? 'জ্বালানির ধরন' : 'Fuel Type'}
+            value={fFuelType}
+            errorText={fieldErrors.fFuelType}
+            onValueChange={(val) => {
+              setFFuelType(val);
+              setFieldErrors((p) => ({ ...p, fFuelType: '' }));
+            }}
+          />
 
-          <Paper sx={{ p: 1.5, backgroundColor: 'action.hover' }}>
-            <Typography variant="body2" sx={{ fontWeight: 600 }}>
-              {isBn ? 'মোট প্রদেয় বিল:' : 'Total Fuel Cost:'} ৳{(Number(fQuantity || 0) * Number(fRate || 0)).toLocaleString()}
-            </Typography>
-          </Paper>
+          <AppTextField
+            fieldName="fQuantity"
+            required
+            label={isBn ? 'পরিমাণ (লিটার)' : 'Quantity (Liters)'}
+            type="number"
+            unit="L"
+            value={fQuantity}
+            errorText={fieldErrors.fQuantity}
+            inputProps={{ min: 0, step: '.1' }}
+            onValueChange={(val) => {
+              setFQuantity(val);
+              setFieldErrors((p) => ({ ...p, fQuantity: '' }));
+            }}
+          />
+          <AppTextField
+            fieldName="fRate"
+            required
+            label={isBn ? 'প্রতি লিটার দর (৳)' : 'Rate Per Liter (BDT)'}
+            type="number"
+            prefixText="৳"
+            value={fRate}
+            errorText={fieldErrors.fRate}
+            inputProps={{ min: 0, step: '.01' }}
+            onValueChange={(val) => {
+              setFRate(val);
+              setFieldErrors((p) => ({ ...p, fRate: '' }));
+            }}
+          />
+        </FormGrid>
 
-          <TextField
+        <Paper variant="outlined" sx={{ p: 1.5, backgroundColor: 'action.hover', borderRadius: 2 }}>
+          <Typography variant="body2" sx={{ fontWeight: 600 }}>
+            {isBn ? 'মোট প্রদেয় বিল:' : 'Total Fuel Cost:'} ৳{(Number(fQuantity || 0) * Number(fRate || 0)).toLocaleString()}
+          </Typography>
+        </Paper>
+
+        <FormGrid columns={{ xs: 1, sm: 2 }}>
+          <AppTextField
+            fieldName="fOdometer"
             label={isBn ? 'বর্তমান ওডোমিটার রিডিং (কিমি)' : 'Current Odometer (KM)'}
             type="number"
+            unit="KM"
             value={fOdometer}
-            onChange={(e) => setFOdometer(e.target.value)}
-            fullWidth
+            errorText={fieldErrors.fOdometer}
+            inputProps={{ min: 0 }}
+            onValueChange={(val) => {
+              setFOdometer(val);
+              setFieldErrors((p) => ({ ...p, fOdometer: '' }));
+            }}
           />
-
-          <Stack direction="row" gap={2}>
-            <TextField
-              label={isBn ? 'ফিলিং স্টেশন / পাম্প' : 'Filling Station'}
-              value={fStation}
-              onChange={(e) => setFStation(e.target.value)}
-              fullWidth
-            />
-            <TextField
-              label={isBn ? 'ইনভয়েস / স্লিপ নম্বর' : 'Invoice / Slip #'}
-              value={fSlipNumber}
-              onChange={(e) => setFSlipNumber(e.target.value)}
-              fullWidth
-            />
-          </Stack>
-
-          <TextField
+          <AppTextField
+            fieldName="fStation"
+            label={isBn ? 'ফিলিং স্টেশন / পাম্প' : 'Filling Station'}
+            value={fStation}
+            onValueChange={(val) => setFStation(val)}
+          />
+          <AppTextField
+            fieldName="fSlipNumber"
+            label={isBn ? 'ইনভয়েস / স্লিপ নম্বর' : 'Invoice / Slip #'}
+            value={fSlipNumber}
+            onValueChange={(val) => setFSlipNumber(val)}
+          />
+          <AppTextField
+            fieldName="fDriver"
             label={isBn ? 'চালক / অপারেটর' : 'Driver / Operator'}
             value={fDriver}
-            onChange={(e) => setFDriver(e.target.value)}
-            fullWidth
+            onValueChange={(val) => setFDriver(val)}
           />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setFuelDialogOpen(false)}>{isBn ? 'বাতিল' : 'Cancel'}</Button>
-          <Button
-            variant="contained"
-            color="secondary"
-            onClick={handleCreateFuelLog}
-            disabled={Number(fQuantity) <= 0 || Number(fRate) <= 0}
-          >
-            {isBn ? 'ভাউচার সংরক্ষণ করুন' : 'Save Fuel Log'}
-          </Button>
-        </DialogActions>
-      </Dialog>
+        </FormGrid>
+      </FormDialog>
 
       {/* Dialog: Record Maintenance */}
-      <Dialog open={maintenanceDialogOpen} onClose={() => setMaintenanceDialogOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>{isBn ? 'সার্ভিসিং ও মেরামত রেকর্ড' : 'Record Vehicle Maintenance'}</DialogTitle>
-        <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 2 }}>
-          <TextField
-            select
-            SelectProps={{ native: true }}
-            label={isBn ? 'যানবাহন নির্বাচন' : 'Vehicle'}
-            value={mVehicleId}
-            onChange={(e) => setMVehicleId(e.target.value)}
-            required
-            fullWidth
-          >
-            <option value="">{isBn ? '-- গাড়ি বেছে নিন --' : '-- Select Vehicle --'}</option>
-            {vehicles.map((v) => (
-              <option key={v.id} value={v.id}>
-                {v.vehicleNumber}
-              </option>
-            ))}
-          </TextField>
-
-          <Stack direction="row" gap={2}>
-            <TextField
-              label={isBn ? 'মেরামত/সার্ভিস ধরন' : 'Maintenance Type'}
-              value={mType}
-              onChange={(e) => setMType(e.target.value)}
-              fullWidth
-            />
-            <TextField
-              label={isBn ? 'সার্ভিসের তারিখ' : 'Service Date'}
-              type="date"
-              InputLabelProps={{ shrink: true }}
-              value={mDate}
-              onChange={(e) => setMDate(e.target.value)}
-              fullWidth
-            />
-          </Stack>
-
-          <Stack direction="row" gap={2}>
-            <TextField
-              label={isBn ? 'মোট খরচ (৳)' : 'Cost (BDT)'}
-              type="number"
-              value={mCost}
-              onChange={(e) => setMCost(e.target.value)}
+      <FormDialog
+        open={maintenanceDialogOpen}
+        onClose={() => !busy && setMaintenanceDialogOpen(false)}
+        onSubmit={handleCreateMaintenance}
+        title={isBn ? 'সার্ভিসিং ও মেরামত রেকর্ড' : 'Record Vehicle Maintenance'}
+        error={errorMsg}
+        onClearError={() => setErrorMsg(null)}
+        loading={busy}
+        submitLabel={isBn ? 'সার্ভিসিং সংরক্ষণ করুন' : 'Save Maintenance'}
+        cancelLabel={isBn ? 'বাতিল' : 'Cancel'}
+        maxWidth="sm"
+      >
+        <FormGrid columns={{ xs: 1, sm: 2 }}>
+          <Box sx={{ gridColumn: { sm: 'span 2' } }}>
+            <AppAutocomplete
+              fieldName="mVehicleId"
               required
-              fullWidth
+              label={isBn ? 'যানবাহন নির্বাচন' : 'Vehicle'}
+              value={mVehicleId}
+              errorText={fieldErrors.mVehicleId}
+              options={vehicles.map((v) => ({
+                value: v.id,
+                label: v.vehicleNumber,
+                badge: v.vehicleType,
+              }))}
+              emptyMessage={isBn ? 'কোনো গাড়ি নিবন্ধিত নেই — আগে গাড়ি যোগ করুন' : 'No vehicles registered — add a vehicle first'}
+              onChange={(val) => {
+                setMVehicleId(val);
+                setFieldErrors((p) => ({ ...p, mVehicleId: '' }));
+              }}
             />
-            <TextField
-              label={isBn ? 'ওডোমিটার (কিমি)' : 'Odometer (KM)'}
-              type="number"
-              value={mOdometer}
-              onChange={(e) => setMOdometer(e.target.value)}
-              fullWidth
-            />
-          </Stack>
+          </Box>
 
-          <TextField
+          <AppTextField
+            fieldName="mType"
+            required
+            label={isBn ? 'মেরামত/সার্ভিস ধরন' : 'Maintenance Type'}
+            value={mType}
+            errorText={fieldErrors.mType}
+            onValueChange={(val) => {
+              setMType(val);
+              setFieldErrors((p) => ({ ...p, mType: '' }));
+            }}
+          />
+          <AppTextField
+            fieldName="mDate"
+            required
+            label={isBn ? 'সার্ভিসের তারিখ' : 'Service Date'}
+            type="date"
+            InputLabelProps={{ shrink: true }}
+            value={mDate}
+            errorText={fieldErrors.mDate}
+            onValueChange={(val) => {
+              setMDate(val);
+              setFieldErrors((p) => ({ ...p, mDate: '' }));
+            }}
+          />
+
+          <AppTextField
+            fieldName="mCost"
+            required
+            label={isBn ? 'মোট খরচ (৳)' : 'Cost (BDT)'}
+            type="number"
+            prefixText="৳"
+            value={mCost}
+            errorText={fieldErrors.mCost}
+            inputProps={{ min: 0 }}
+            onValueChange={(val) => {
+              setMCost(val);
+              setFieldErrors((p) => ({ ...p, mCost: '' }));
+            }}
+          />
+          <AppTextField
+            fieldName="mOdometer"
+            label={isBn ? 'ওডোমিটার (কিমি)' : 'Odometer (KM)'}
+            type="number"
+            unit="KM"
+            value={mOdometer}
+            errorText={fieldErrors.mOdometer}
+            inputProps={{ min: 0 }}
+            onValueChange={(val) => {
+              setMOdometer(val);
+              setFieldErrors((p) => ({ ...p, mOdometer: '' }));
+            }}
+          />
+
+          <AppTextField
+            fieldName="mCenter"
             label={isBn ? 'সার্ভিস সেন্টার / ওয়ার্কশপ' : 'Service Workshop'}
             value={mCenter}
-            onChange={(e) => setMCenter(e.target.value)}
-            fullWidth
+            onValueChange={(val) => setMCenter(val)}
           />
-
-          <TextField
-            label={isBn ? 'কাজের বিবরণ ও স্পেয়ার পার্টস' : 'Description & Spare Parts'}
-            multiline
-            rows={2}
-            value={mDesc}
-            onChange={(e) => setMDesc(e.target.value)}
-            fullWidth
-          />
-
-          <TextField
+          <AppTextField
+            fieldName="mNextDueKm"
             label={isBn ? 'পরবর্তী সার্ভিসের নির্ধারিত মাইলেজ (কিমি)' : 'Next Service Due (KM)'}
             type="number"
+            unit="KM"
             value={mNextDueKm}
-            onChange={(e) => setMNextDueKm(e.target.value)}
-            fullWidth
+            errorText={fieldErrors.mNextDueKm}
+            inputProps={{ min: 0 }}
+            onValueChange={(val) => {
+              setMNextDueKm(val);
+              setFieldErrors((p) => ({ ...p, mNextDueKm: '' }));
+            }}
           />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setMaintenanceDialogOpen(false)}>{isBn ? 'বাতিল' : 'Cancel'}</Button>
-          <Button
-            variant="contained"
-            onClick={handleCreateMaintenance}
-            disabled={!mVehicleId || Number(mCost) <= 0}
-          >
-            {isBn ? 'সার্ভিসিং সংরক্ষণ করুন' : 'Save Maintenance'}
-          </Button>
-        </DialogActions>
-      </Dialog>
+        </FormGrid>
+
+        <AppTextField
+          fieldName="mDesc"
+          label={isBn ? 'কাজের বিবরণ ও স্পেয়ার পার্টস' : 'Description & Spare Parts'}
+          multiline
+          rows={2}
+          value={mDesc}
+          onValueChange={(val) => setMDesc(val)}
+        />
+      </FormDialog>
     </Box>
   );
 }

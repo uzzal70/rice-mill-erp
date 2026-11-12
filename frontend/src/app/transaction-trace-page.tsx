@@ -10,7 +10,6 @@ import {
   CardContent,
   Button,
   Chip,
-  TextField,
   Alert,
   Divider,
   Stack,
@@ -34,6 +33,7 @@ import ArrowDownwardRoundedIcon from '@mui/icons-material/ArrowDownwardRounded';
 import PersonRoundedIcon from '@mui/icons-material/PersonRounded';
 import ReceiptLongRoundedIcon from '@mui/icons-material/ReceiptLongRounded';
 import VerifiedUserRoundedIcon from '@mui/icons-material/VerifiedUserRounded';
+import { AppTextField } from '@/components/form';
 
 interface TraceNode {
   id: string;
@@ -305,12 +305,11 @@ export function TransactionTracePage({ companyId, language }: TransactionTracePa
       <Paper sx={{ p: 2.5, mb: 3, borderRadius: 2 }}>
         <Grid container spacing={2} alignItems="center">
           <Grid item xs={12} md={9}>
-            <TextField
-              fullWidth
-              size="medium"
+            <AppTextField
+              fieldName="traceSearchTerm"
               placeholder={t.searchPlaceholder}
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onValueChange={(val) => setSearchTerm(val)}
               onKeyDown={(e) => e.key === 'Enter' && handleTrace()}
               InputProps={{
                 startAdornment: <SearchRoundedIcon sx={{ mr: 1, color: 'text.secondary' }} />,
@@ -321,11 +320,11 @@ export function TransactionTracePage({ companyId, language }: TransactionTracePa
             <Button
               fullWidth
               variant="contained"
-              size="large"
-              startIcon={loading ? <CircularProgress size={20} color="inherit" /> : <AccountTreeRoundedIcon />}
+              size="medium"
+              startIcon={loading ? <CircularProgress size={18} color="inherit" /> : <AccountTreeRoundedIcon />}
               onClick={() => handleTrace()}
               disabled={loading}
-              sx={{ height: 52 }}
+              sx={{ height: 40 }}
             >
               {t.searchBtn}
             </Button>

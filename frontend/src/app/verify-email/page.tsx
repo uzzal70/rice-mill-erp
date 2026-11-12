@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Alert, Box, Button, CircularProgress, Paper, Stack, Typography } from '@mui/material';
 import { apiRequest } from '@/lib/api';
+import { extractApiError, useToast } from '@/components/ui/toast-provider';
 
 const copy = {
   en: {
@@ -21,6 +22,7 @@ const copy = {
 } as const;
 
 export default function VerifyEmailPage() {
+  const toast = useToast();
   const [token, setToken] = useState('');
   const [language, setLanguage] = useState<'en' | 'bn'>('en');
   const [busy, setBusy] = useState(false);
@@ -34,6 +36,11 @@ export default function VerifyEmailPage() {
   const t = copy[language];
 
   async function verify() {
+    if (!token) {
+      setError(t.invalid);
+      toast.warning(t.invalid);
+      return;
+    }
     setBusy(true);
     setError('');
     try {
@@ -42,8 +49,11 @@ export default function VerifyEmailPage() {
         body: JSON.stringify({ token }),
       }, false);
       setMessage(result.message);
+      toast.success(result.message);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : t.failed);
+      const msg = extractApiError(reason, t.failed);
+      setError(msg);
+      toast.error(msg);
     } finally {
       setBusy(false);
     }

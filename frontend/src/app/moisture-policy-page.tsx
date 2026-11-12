@@ -2,12 +2,14 @@
 
 import { FormEvent, useState } from 'react';
 import {
-  Alert, Box, Button, Checkbox, Chip, Dialog, DialogActions, DialogContent, DialogTitle, FormControl,
-  FormControlLabel, InputLabel, MenuItem, Paper, Select, Stack, Table, TableBody, TableCell, TableHead,
-  TableRow, TextField, Typography,
+  Alert, Box, Button, Checkbox, Chip, FormControlLabel, Paper, Stack,
+  Table, TableBody, TableCell, TableHead, TableRow, Typography,
 } from '@mui/material';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiRequest, queryString } from '@/lib/api';
+import { extractApiError, useToast } from '@/components/ui/toast-provider';
+import { FieldRule, focusFieldByName, validateFormFields } from '@/lib/form-validation';
+import { AppAutocomplete, AppSelect, AppTextField, FormDialog, FormGrid, FormSection } from '@/components/form';
 
 type MoistureSlab = { minExcessPct: string; deductionPct: string };
 type MoisturePolicy = {
@@ -81,10 +83,14 @@ export function MoisturePolicyPage({
   onSaved: (message: string) => void;
 }) {
   const t = labels[language];
+  const bn = language === 'bn';
+  const toast = useToast();
   const queryClient = useQueryClient();
   const [form, setForm] = useState<PolicyForm>(blank);
   const [open, setOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const policiesQuery = useQuery({
     queryKey: ['moisture-policies', companyId, factoryId],
     queryFn: () => apiRequest<MoisturePolicy[]>(`/moisture-policies?${queryString({ companyId, factoryId })}`),
@@ -106,6 +112,7 @@ export function MoisturePolicyPage({
 
   function edit(policy?: MoisturePolicy) {
     setError('');
+    setFieldErrors({});
     setForm(policy ? {
       ...policy,
       factoryId: policy.factoryId ?? '',
@@ -118,11 +125,38 @@ export function MoisturePolicyPage({
 
   async function save(event: FormEvent) {
     event.preventDefault();
+    const rules: FieldRule[] = [
+      { name: 'name', label: t.name, value: form.name, required: true },
+      { name: 'priority', label: t.priority, value: form.priority, required: true, type: 'integer', min: 0 },
+      { name: 'allowedMoisturePct', label: t.allowed, value: form.allowedMoisturePct, required: true, type: 'nonNegativeNumber', min: 0, max: 99.999 },
+      { name: 'tolerancePct', label: t.tolerance, value: form.tolerancePct, required: true, type: 'nonNegativeNumber', min: 0, max: 99.999 },
+      { name: 'rateDeductionPct', label: t.rateDeduction, value: form.rateDeductionPct, required: true, type: 'nonNegativeNumber', min: 0, max: 99.999 },
+    ];
+    if (form.formula === 'SLAB_PERCENTAGE') {
+      form.slabs.forEach((slab, idx) => {
+        rules.push(
+          { name: `slab-${idx}-min`, label: `${t.threshold} #${idx + 1}`, value: slab.minExcessPct, required: true, type: 'nonNegativeNumber', min: 0, max: 100 },
+          { name: `slab-${idx}-ded`, label: `${t.quantityDeduction} #${idx + 1}`, value: slab.deductionPct, required: true, type: 'nonNegativeNumber', min: 0, max: 99.999 },
+        );
+      });
+    }
+    const validation = validateFormFields(rules, language);
+    if (!validation.valid) {
+      setFieldErrors(validation.errors);
+      setError(validation.summary);
+      toast.warning(validation.summary);
+      focusFieldByName(validation.firstField);
+      return;
+    }
+
     setError('');
+    setFieldErrors({});
+    setSaving(true);
     try {
       const { id, ...values } = form;
       const payload = {
         ...values,
+        name: values.name.trim(),
         companyId,
         factoryId: values.factoryId || null,
         paddyItemId: values.paddyItemId || null,
@@ -135,9 +169,13 @@ export function MoisturePolicyPage({
       });
       await queryClient.invalidateQueries({ queryKey: ['moisture-policies', companyId] });
       setOpen(false);
-      onSaved(language === 'bn' ? 'আর্দ্রতা নীতি সংরক্ষিত হয়েছে' : 'Moisture policy saved');
+      onSaved(bn ? 'আর্দ্রতা নীতি সংরক্ষিত হয়েছে' : 'Moisture policy saved');
     } catch (reason) {
-      setError(messageOf(reason, t.saveError));
+      const msg = extractApiError(reason, t.saveError);
+      setError(msg);
+      toast.error(msg);
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -145,7 +183,7 @@ export function MoisturePolicyPage({
   if (policiesQuery.isLoading) return <Typography color="text.secondary">{t.loading}</Typography>;
 
   return <Stack spacing={2}>
-    {policiesQuery.isError && <Alert severity="error">{messageOf(policiesQuery.error, t.permission)}</Alert>}
+    {policiesQuery.isError && <Alert severity="error">{extractApiError(policiesQuery.error, t.permission)}</Alert>}
     <Paper className="workspace-card" elevation={0} sx={{ p: 2 }}>
       <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ xs: 'stretch', sm: 'center' }} gap={2} mb={2}>
         <Box><Typography fontWeight={800}>{t.title}</Typography><Typography color="text.secondary" fontSize={12}>{t.subtitle}</Typography></Box>
@@ -172,48 +210,126 @@ export function MoisturePolicyPage({
               <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{policy.allowedMoisturePct}% ± {policy.tolerancePct}%</TableCell>
               <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>{policy.rateDeductionPct}%</TableCell>
               <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}><Chip size="small" color={policy.active ? 'success' : 'default'} label={policy.active ? t.enabled : t.disabled} /></TableCell>
-              <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}><Button size="small" onClick={() => edit(policy)}>{language === 'bn' ? 'সম্পাদনা' : 'Edit'}</Button></TableCell>
+              <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}><Button size="small" onClick={() => edit(policy)}>{bn ? 'সম্পাদনা' : 'Edit'}</Button></TableCell>
             </TableRow>)}
             {!policies.length && <TableRow><TableCell colSpan={8} align="center" sx={{ py: 3, color: 'text.secondary' }}>{t.noRows}</TableCell></TableRow>}
           </TableBody>
         </Table>
       </Box>
     </Paper>
-    <Dialog open={open} onClose={() => setOpen(false)} fullWidth maxWidth="md">
-      <Box component="form" onSubmit={save}>
-        <DialogTitle>{form.id ? t.edit : t.add}</DialogTitle>
-        <DialogContent>
-          {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-          <Stack spacing={2} sx={{ pt: 1 }}>
-            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-              <TextField required fullWidth label={t.name} value={form.name} onChange={event => setForm({ ...form, name: event.target.value })} />
-              <TextField required type="number" inputProps={{ min: 0, step: 1 }} label={t.priority} value={form.priority} onChange={event => setForm({ ...form, priority: Number(event.target.value) })} />
-            </Stack>
-            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-              <FormControl fullWidth><InputLabel>{t.factory}</InputLabel><Select label={t.factory} value={form.factoryId} onChange={event => setForm({ ...form, factoryId: event.target.value })}><MenuItem value="">{t.allFactories}</MenuItem><MenuItem value={factoryId}>{language === 'bn' ? 'নির্বাচিত কারখানা' : 'Selected factory'}</MenuItem></Select></FormControl>
-              <FormControl fullWidth><InputLabel>{t.paddy}</InputLabel><Select label={t.paddy} value={form.paddyItemId} onChange={event => setForm({ ...form, paddyItemId: event.target.value })}><MenuItem value="">{t.allPaddy}</MenuItem>{paddy.map(row => <MenuItem key={row.id} value={row.id}>{row.name}</MenuItem>)}</Select></FormControl>
-              <FormControl fullWidth><InputLabel>{t.supplier}</InputLabel><Select label={t.supplier} value={form.supplierPartnerId} onChange={event => setForm({ ...form, supplierPartnerId: event.target.value })}><MenuItem value="">{t.allSuppliers}</MenuItem>{suppliers.map(row => <MenuItem key={row.id} value={row.id}>{row.name}</MenuItem>)}</Select></FormControl>
-            </Stack>
-            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-              <TextField required type="number" inputProps={{ min: 0, max: 99.999, step: 0.001 }} label={t.allowed} value={form.allowedMoisturePct} onChange={event => setForm({ ...form, allowedMoisturePct: event.target.value })} />
-              <TextField required type="number" inputProps={{ min: 0, max: 99.999, step: 0.001 }} label={t.tolerance} value={form.tolerancePct} onChange={event => setForm({ ...form, tolerancePct: event.target.value })} />
-              <TextField required type="number" inputProps={{ min: 0, max: 99.999, step: 0.0001 }} label={t.rateDeduction} value={form.rateDeductionPct} onChange={event => setForm({ ...form, rateDeductionPct: event.target.value })} />
-            </Stack>
-            <FormControl fullWidth><InputLabel>{t.formula}</InputLabel><Select label={t.formula} value={form.formula} onChange={event => setForm({ ...form, formula: event.target.value as PolicyForm['formula'] })}><MenuItem value="DRY_MATTER_CORRECTION">{t.dry}</MenuItem><MenuItem value="SLAB_PERCENTAGE">{t.slabFormula}</MenuItem></Select></FormControl>
-            <Typography variant="caption" color="text.secondary">{t.formulaHelp}</Typography>
-            {form.formula === 'SLAB_PERCENTAGE' && <Stack spacing={1}>
-              {form.slabs.map((slab, index) => <Stack key={index} direction={{ xs: 'column', sm: 'row' }} spacing={1}>
-                <TextField required type="number" inputProps={{ min: 0, max: 100, step: 0.001 }} label={t.threshold} value={slab.minExcessPct} onChange={event => setForm({ ...form, slabs: form.slabs.map((row, i) => i === index ? { ...row, minExcessPct: event.target.value } : row) })} />
-                <TextField required type="number" inputProps={{ min: 0, max: 99.999, step: 0.0001 }} label={t.quantityDeduction} value={slab.deductionPct} onChange={event => setForm({ ...form, slabs: form.slabs.map((row, i) => i === index ? { ...row, deductionPct: event.target.value } : row) })} />
-                <Button color="error" disabled={form.slabs.length === 1} onClick={() => setForm({ ...form, slabs: form.slabs.filter((_, i) => i !== index) })}>{t.remove}</Button>
-              </Stack>)}
-              <Button sx={{ alignSelf: 'flex-start' }} onClick={() => setForm({ ...form, slabs: [...form.slabs, { minExcessPct: '', deductionPct: '0' }] })}>{t.addSlab}</Button>
-            </Stack>}
-            <FormControlLabel control={<Checkbox checked={form.active} onChange={event => setForm({ ...form, active: event.target.checked })} />} label={t.active} />
+    <FormDialog
+      open={open}
+      onClose={() => setOpen(false)}
+      onSubmit={save}
+      title={form.id ? t.edit : t.add}
+      error={error}
+      onClearError={() => setError('')}
+      loading={saving}
+      submitLabel={t.save}
+      cancelLabel={t.cancel}
+      maxWidth="md"
+    >
+      <FormGrid columns={2}>
+        <AppTextField fieldName="name" required label={t.name} value={form.name} errorText={fieldErrors.name} onValueChange={v => { setForm({ ...form, name: v }); setFieldErrors(p => ({ ...p, name: '' })); }} />
+        <AppTextField fieldName="priority" required type="number" inputProps={{ min: 0, step: 1 }} label={t.priority} value={form.priority} errorText={fieldErrors.priority} onValueChange={v => { setForm({ ...form, priority: Number(v) }); setFieldErrors(p => ({ ...p, priority: '' })); }} />
+      </FormGrid>
+
+      <FormGrid columns={3}>
+        <AppSelect
+          fieldName="factoryId"
+          label={t.factory}
+          value={form.factoryId ?? ''}
+          emptyOptionLabel={t.allFactories}
+          onChange={v => setForm({ ...form, factoryId: v })}
+          options={[
+            ...(factoryId ? [{ value: factoryId, label: bn ? 'নির্বাচিত কারখানা' : 'Selected factory' }] : []),
+          ]}
+        />
+        <AppAutocomplete
+          fieldName="paddyItemId"
+          label={t.paddy}
+          loading={paddyQuery.isLoading}
+          value={form.paddyItemId ?? ''}
+          placeholder={t.allPaddy}
+          emptyMessage={t.allPaddy}
+          onChange={v => setForm({ ...form, paddyItemId: v })}
+          options={paddy.map(row => ({ value: row.id, label: row.name, badge: row.code }))}
+        />
+        <AppAutocomplete
+          fieldName="supplierPartnerId"
+          label={t.supplier}
+          loading={partnersQuery.isLoading}
+          value={form.supplierPartnerId ?? ''}
+          placeholder={t.allSuppliers}
+          emptyMessage={t.allSuppliers}
+          onChange={v => setForm({ ...form, supplierPartnerId: v })}
+          options={suppliers.map(row => ({ value: row.id, label: row.name, badge: row.type }))}
+        />
+      </FormGrid>
+
+      <FormGrid columns={3}>
+        <AppTextField fieldName="allowedMoisturePct" required type="number" unit="%" inputProps={{ min: 0, max: 99.999, step: 0.001 }} label={t.allowed} value={form.allowedMoisturePct} errorText={fieldErrors.allowedMoisturePct} onValueChange={v => { setForm({ ...form, allowedMoisturePct: v }); setFieldErrors(p => ({ ...p, allowedMoisturePct: '' })); }} />
+        <AppTextField fieldName="tolerancePct" required type="number" unit="%" inputProps={{ min: 0, max: 99.999, step: 0.001 }} label={t.tolerance} value={form.tolerancePct} errorText={fieldErrors.tolerancePct} onValueChange={v => { setForm({ ...form, tolerancePct: v }); setFieldErrors(p => ({ ...p, tolerancePct: '' })); }} />
+        <AppTextField fieldName="rateDeductionPct" required type="number" unit="%" inputProps={{ min: 0, max: 99.999, step: 0.0001 }} label={t.rateDeduction} value={form.rateDeductionPct} errorText={fieldErrors.rateDeductionPct} onValueChange={v => { setForm({ ...form, rateDeductionPct: v }); setFieldErrors(p => ({ ...p, rateDeductionPct: '' })); }} />
+      </FormGrid>
+
+      <AppSelect
+        fieldName="formula"
+        label={t.formula}
+        value={form.formula}
+        helperText={t.formulaHelp}
+        onChange={v => setForm({ ...form, formula: v as PolicyForm['formula'] })}
+        options={[
+          { value: 'DRY_MATTER_CORRECTION', label: t.dry },
+          { value: 'SLAB_PERCENTAGE', label: t.slabFormula },
+        ]}
+      />
+
+      {form.formula === 'SLAB_PERCENTAGE' && (
+        <FormSection title={bn ? 'আর্দ্রতা স্ল্যাব তালিকা' : 'Excess Moisture Deduction Slabs'}>
+          <Stack spacing={1.5}>
+            {form.slabs.map((slab, index) => (
+              <Stack key={index} direction={{ xs: 'column', sm: 'row' }} spacing={1.5} alignItems={{ sm: 'flex-start' }}>
+                <AppTextField
+                  fieldName={`slab-${index}-min`}
+                  required
+                  type="number"
+                  unit="%"
+                  inputProps={{ min: 0, max: 100, step: 0.001 }}
+                  label={t.threshold}
+                  value={slab.minExcessPct}
+                  errorText={fieldErrors[`slab-${index}-min`]}
+                  onValueChange={val => {
+                    setForm({ ...form, slabs: form.slabs.map((row, i) => i === index ? { ...row, minExcessPct: val } : row) });
+                    setFieldErrors(p => ({ ...p, [`slab-${index}-min`]: '' }));
+                  }}
+                />
+                <AppTextField
+                  fieldName={`slab-${index}-ded`}
+                  required
+                  type="number"
+                  unit="%"
+                  inputProps={{ min: 0, max: 99.999, step: 0.0001 }}
+                  label={t.quantityDeduction}
+                  value={slab.deductionPct}
+                  errorText={fieldErrors[`slab-${index}-ded`]}
+                  onValueChange={val => {
+                    setForm({ ...form, slabs: form.slabs.map((row, i) => i === index ? { ...row, deductionPct: val } : row) });
+                    setFieldErrors(p => ({ ...p, [`slab-${index}-ded`]: '' }));
+                  }}
+                />
+                <Button color="error" variant="outlined" sx={{ minWidth: 90, mt: { sm: 0.25 } }} disabled={form.slabs.length === 1} onClick={() => setForm({ ...form, slabs: form.slabs.filter((_, i) => i !== index) })}>
+                  {t.remove}
+                </Button>
+              </Stack>
+            ))}
+            <Button size="small" variant="outlined" sx={{ alignSelf: 'flex-start' }} onClick={() => setForm({ ...form, slabs: [...form.slabs, { minExcessPct: '', deductionPct: '0' }] })}>
+              {t.addSlab}
+            </Button>
           </Stack>
-        </DialogContent>
-        <DialogActions><Button onClick={() => setOpen(false)}>{t.cancel}</Button><Button type="submit" variant="contained">{t.save}</Button></DialogActions>
-      </Box>
-    </Dialog>
+        </FormSection>
+      )}
+      <FormControlLabel control={<Checkbox checked={form.active} onChange={event => setForm({ ...form, active: event.target.checked })} />} label={t.active} />
+    </FormDialog>
   </Stack>;
 }

@@ -11,7 +11,6 @@ import {
   DialogContent,
   DialogTitle,
   Divider,
-  MenuItem,
   Paper,
   Stack,
   Tab,
@@ -21,7 +20,6 @@ import {
   TableHead,
   TableRow,
   Tabs,
-  TextField,
   Typography,
 } from '@mui/material';
 import HandshakeRoundedIcon from '@mui/icons-material/HandshakeRounded';
@@ -30,6 +28,9 @@ import LocalShippingRoundedIcon from '@mui/icons-material/LocalShippingRounded';
 import PrintRoundedIcon from '@mui/icons-material/PrintRounded';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiRequest, queryString } from '@/lib/api';
+import { AppAutocomplete, AppSelect, AppTextField, FormDialog, FormGrid, FormSection } from '@/components/form';
+import { extractApiError, useToast } from '@/components/ui/toast-provider';
+import { FieldRule, focusFieldByName, validateFormFields } from '@/lib/form-validation';
 
 type Row<T> = { data: T[]; meta?: { total: number } };
 
@@ -137,13 +138,16 @@ interface TollMillingPageProps {
 
 export function TollMillingPage({ companyId, factoryId, language, onSaved }: TollMillingPageProps) {
   const qc = useQueryClient();
+  const toast = useToast();
   const isBn = language === 'bn';
+  const lang = isBn ? 'bn' : 'en';
 
   const [activeTab, setActiveTab] = useState<'orders' | 'custody'>('orders');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [search, setSearch] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   // Selected customer for custody tab
   const [selectedCustodyCustomer, setSelectedCustodyCustomer] = useState<string>('');
@@ -270,27 +274,41 @@ export function TollMillingPage({ companyId, factoryId, language, onSaved }: Tol
     setByProductPolicy('RETURN_TO_CUSTOMER');
     setAdditionalCharges('0');
     setOrderRemarks('');
+    setFieldErrors({});
     setError(null);
     setCreateOrderOpen(true);
   };
 
   const handleCreateOrderSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!orderCustomerId) {
-      setError(isBn ? 'গ্রাহক নির্বাচন করুন।' : 'Please select a customer.');
-      return;
+    const rules: FieldRule[] = [
+      { name: 'orderCustomerId', label: isBn ? 'গ্রাহক' : 'Customer', value: orderCustomerId, required: true, isSelect: true },
+      { name: 'orderPaddyItemId', label: isBn ? 'ধানের জাত' : 'Paddy Variety', value: orderPaddyItemId, required: true, isSelect: true },
+      { name: 'orderNumber', label: isBn ? 'আদেশ নং' : 'Order Number', value: orderNumber, required: true },
+      { name: 'receivedAt', label: isBn ? 'গ্রহণ তারিখ' : 'Received Date', value: receivedAt, required: true, type: 'date' },
+      { name: 'receivedQuantityKg', label: isBn ? 'ধান প্রাপ্তির পরিমাণ (কেজি)' : 'Paddy Received (KG)', value: receivedQuantityKg, required: true, type: 'positiveNumber' },
+      { name: 'tollRate', label: isBn ? 'টোল দর' : 'Toll Rate', value: tollRate, required: true, type: 'positiveNumber' },
+    ];
+    if (additionalCharges.trim()) {
+      rules.push({
+        name: 'additionalCharges',
+        label: isBn ? 'অন্যান্য চার্জ' : 'Additional Charges',
+        value: additionalCharges,
+        type: 'nonNegativeNumber',
+      });
     }
-    if (!orderPaddyItemId) {
-      setError(isBn ? 'ধানের জাত নির্বাচন করুন।' : 'Please select a paddy variety.');
-      return;
-    }
-    if (!Number(receivedQuantityKg) || Number(receivedQuantityKg) <= 0) {
-      setError(isBn ? 'সঠিক ধান প্রাপ্তির পরিমাণ (কেজি) দিন।' : 'Please enter a valid received quantity in KG.');
+    const validation = validateFormFields(rules, lang);
+    if (!validation.valid) {
+      setFieldErrors(validation.errors);
+      setError(validation.summary);
+      toast.warning(validation.summary);
+      focusFieldByName(validation.firstField);
       return;
     }
 
     setBusy(true);
     setError(null);
+    setFieldErrors({});
     try {
       await apiRequest('/toll-milling/orders', {
         method: 'POST',
@@ -299,7 +317,7 @@ export function TollMillingPage({ companyId, factoryId, language, onSaved }: Tol
           factoryId,
           customerId: orderCustomerId,
           paddyItemId: orderPaddyItemId,
-          orderNumber,
+          orderNumber: orderNumber.trim(),
           receivedAt: new Date(receivedAt).toISOString(),
           vehicleNumber: vehicleNumber.trim() || undefined,
           driverName: driverName.trim() || undefined,
@@ -309,7 +327,7 @@ export function TollMillingPage({ companyId, factoryId, language, onSaved }: Tol
           tollRate,
           tollRateBasis,
           byProductPolicy,
-          additionalCharges,
+          additionalCharges: additionalCharges || '0',
           remarks: orderRemarks.trim() || undefined,
         }),
       });
@@ -318,7 +336,9 @@ export function TollMillingPage({ companyId, factoryId, language, onSaved }: Tol
       qc.invalidateQueries({ queryKey: ['customer-ledger'] });
       onSaved(isBn ? 'কমার্শিয়াল হাস্কিং আদেশ সফলভাবে গ্রহণ করা হয়েছে।' : 'Toll milling order received successfully.');
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to receive toll order.');
+      const msg = extractApiError(err, 'Failed to receive toll order.');
+      setError(msg);
+      toast.error(msg);
     } finally {
       setBusy(false);
     }
@@ -335,6 +355,7 @@ export function TollMillingPage({ companyId, factoryId, language, onSaved }: Tol
     setRiceBranKg('0');
     setHuskKg('0');
     setBatchRemarks('');
+    setFieldErrors({});
     setError(null);
   };
 
@@ -342,20 +363,38 @@ export function TollMillingPage({ companyId, factoryId, language, onSaved }: Tol
     e.preventDefault();
     if (!batchModalOrder) return;
 
+    const rules: FieldRule[] = [
+      { name: 'batchNumber', label: isBn ? 'ব্যাচ নম্বর' : 'Batch Number', value: batchNumber, required: true },
+      { name: 'inputPaddyKg', label: isBn ? 'ইনপুট ধান (কেজি)' : 'Input Paddy (KG)', value: inputPaddyKg, required: true, type: 'positiveNumber' },
+      { name: 'headRiceKg', label: isBn ? 'মূল চাল' : 'Head Rice (KG)', value: headRiceKg, required: true, type: 'positiveNumber' },
+      { name: 'brokenRiceKg', label: isBn ? 'ভাঙা চাল' : 'Broken Rice (KG)', value: brokenRiceKg || '0', type: 'nonNegativeNumber' },
+      { name: 'riceBranKg', label: isBn ? 'কুঁড়া' : 'Rice Bran (KG)', value: riceBranKg || '0', type: 'nonNegativeNumber' },
+      { name: 'huskKg', label: isBn ? 'তুষ' : 'Husk (KG)', value: huskKg || '0', type: 'nonNegativeNumber' },
+    ];
+    const validation = validateFormFields(rules, lang);
+    if (!validation.valid) {
+      setFieldErrors(validation.errors);
+      setError(validation.summary);
+      toast.warning(validation.summary);
+      focusFieldByName(validation.firstField);
+      return;
+    }
+
     setBusy(true);
     setError(null);
+    setFieldErrors({});
     try {
       await apiRequest(`/toll-milling/orders/${batchModalOrder.id}/batches`, {
         method: 'POST',
         body: JSON.stringify({
           companyId,
           factoryId,
-          batchNumber,
+          batchNumber: batchNumber.trim(),
           inputPaddyKg,
           headRiceKg,
-          brokenRiceKg,
-          riceBranKg,
-          huskKg,
+          brokenRiceKg: brokenRiceKg || '0',
+          riceBranKg: riceBranKg || '0',
+          huskKg: huskKg || '0',
           remarks: batchRemarks.trim() || undefined,
         }),
       });
@@ -365,7 +404,9 @@ export function TollMillingPage({ companyId, factoryId, language, onSaved }: Tol
       qc.invalidateQueries({ queryKey: ['customer-ledger'] });
       onSaved(isBn ? 'মাড়াই ব্যাচ সফলভাবে নথিভুক্ত হয়েছে।' : 'Milling batch recorded successfully.');
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to record batch.');
+      const msg = extractApiError(err, 'Failed to record batch.');
+      setError(msg);
+      toast.error(msg);
     } finally {
       setBusy(false);
     }
@@ -387,6 +428,7 @@ export function TollMillingPage({ companyId, factoryId, language, onSaved }: Tol
     setDelivBrokenKg('0');
     setDelivByProductKg(order.byProductPolicy === 'RETURN_TO_CUSTOMER' ? undelivByProduct.toString() : '0');
     setDelivRemarks('');
+    setFieldErrors({});
     setError(null);
   };
 
@@ -394,24 +436,57 @@ export function TollMillingPage({ companyId, factoryId, language, onSaved }: Tol
     e.preventDefault();
     if (!deliveryModalOrder) return;
 
+    const rules: FieldRule[] = [
+      { name: 'deliveryNumber', label: isBn ? 'চালান নম্বর' : 'Delivery Challan No', value: deliveryNumber, required: true },
+      { name: 'gatePassNumber', label: isBn ? 'গেট পাস নম্বর' : 'Gate Pass No', value: gatePassNumber, required: true },
+      { name: 'delivVehicle', label: isBn ? 'গাড়ির নম্বর' : 'Vehicle Number', value: delivVehicle, required: true },
+      { name: 'delivDriver', label: isBn ? 'ড্রাইভার' : 'Driver Name', value: delivDriver, required: true },
+      { name: 'deliveryDate', label: isBn ? 'তারিখ' : 'Date', value: deliveryDate, required: true, type: 'date' },
+      { name: 'delivRiceKg', label: isBn ? 'চাল (কেজি)' : 'Rice (KG)', value: delivRiceKg, required: true, type: 'nonNegativeNumber' },
+      { name: 'delivBrokenKg', label: isBn ? 'ভাঙা চাল (কেজি)' : 'Broken Rice (KG)', value: delivBrokenKg || '0', type: 'nonNegativeNumber' },
+      { name: 'delivByProductKg', label: isBn ? 'উপজাত (কেজি)' : 'By-Products (KG)', value: delivByProductKg || '0', type: 'nonNegativeNumber' },
+    ];
+    const totalDelivered = Number(delivRiceKg || 0) + Number(delivBrokenKg || 0) + Number(delivByProductKg || 0);
+    if (totalDelivered <= 0) {
+      rules.push({
+        name: 'delivRiceKg',
+        label: isBn ? 'চাল (কেজি)' : 'Rice (KG)',
+        value: delivRiceKg,
+        custom: () =>
+          isBn
+            ? 'ডেলিভারির জন্য অন্তত একটি পণ্যের পরিমাণ ০ এর বেশি হতে হবে।'
+            : 'Total delivered quantity must be greater than 0 KG.',
+      });
+    }
+
+    const validation = validateFormFields(rules, lang);
+    if (!validation.valid) {
+      setFieldErrors(validation.errors);
+      setError(validation.summary);
+      toast.warning(validation.summary);
+      focusFieldByName(validation.firstField);
+      return;
+    }
+
     setBusy(true);
     setError(null);
+    setFieldErrors({});
     try {
       await apiRequest(`/toll-milling/orders/${deliveryModalOrder.id}/deliveries`, {
         method: 'POST',
         body: JSON.stringify({
           companyId,
           factoryId,
-          deliveryNumber,
-          gatePassNumber,
+          deliveryNumber: deliveryNumber.trim(),
+          gatePassNumber: gatePassNumber.trim(),
           deliveryDate: new Date(deliveryDate).toISOString(),
-          vehicleNumber: delivVehicle,
-          driverName: delivDriver,
+          vehicleNumber: delivVehicle.trim(),
+          driverName: delivDriver.trim(),
           driverMobile: delivMobile.trim() || undefined,
           totalBags: Number(delivBags) || 0,
           riceDeliveredKg: delivRiceKg,
-          brokenRiceDeliveredKg: delivBrokenKg,
-          byProductDeliveredKg: delivByProductKg,
+          brokenRiceDeliveredKg: delivBrokenKg || '0',
+          byProductDeliveredKg: delivByProductKg || '0',
           remarks: delivRemarks.trim() || undefined,
         }),
       });
@@ -420,7 +495,9 @@ export function TollMillingPage({ companyId, factoryId, language, onSaved }: Tol
       qc.invalidateQueries({ queryKey: ['toll-custody'] });
       onSaved(isBn ? 'চালান ও গেট পাস সম্পন্ন হয়েছে এবং পণ্য সরবরাহ করা হয়েছে।' : 'Challan & Gate Pass posted and goods dispatched.');
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Delivery failed.');
+      const msg = extractApiError(err, 'Delivery failed.');
+      setError(msg);
+      toast.error(msg);
     } finally {
       setBusy(false);
     }
@@ -486,28 +563,30 @@ export function TollMillingPage({ companyId, factoryId, language, onSaved }: Tol
           {/* Action Bar */}
           <Paper sx={{ p: 2, borderRadius: 2 }}>
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} justifyContent="space-between" alignItems="center">
-              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ width: { xs: '100%', sm: 'auto' } }}>
-                <TextField
-                  size="small"
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ width: { xs: '100%', sm: 'auto' }, alignItems: 'center' }}>
+                <AppTextField
+                  fieldName="searchToll"
+                  fullWidth={false}
                   placeholder={isBn ? 'খুঁজুন (আদেশ নং, চালান, গাড়ি, গ্রাহক)...' : 'Search order, challan, truck, customer...'}
                   value={search}
-                  onChange={(e) => setSearch(e.target.value)}
+                  onValueChange={(val) => setSearch(val)}
                   sx={{ minWidth: 260 }}
                 />
-                <TextField
-                  select
-                  size="small"
+                <AppSelect
+                  fieldName="statusFilter"
+                  fullWidth={false}
                   label={isBn ? 'অবস্থা' : 'Status'}
                   value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                  sx={{ minWidth: 150 }}
-                >
-                  <MenuItem value="ALL">{isBn ? 'সকল অবস্থা' : 'All Statuses'}</MenuItem>
-                  <MenuItem value="RECEIVED">{isBn ? 'ধান গৃহীত (Received)' : 'Received'}</MenuItem>
-                  <MenuItem value="IN_PROCESS">{isBn ? 'মাড়াই চলমান (In Process)' : 'In Process'}</MenuItem>
-                  <MenuItem value="COMPLETED">{isBn ? 'সম্পন্ন (Completed)' : 'Completed'}</MenuItem>
-                  <MenuItem value="CANCELLED">{isBn ? 'বাতিল (Cancelled)' : 'Cancelled'}</MenuItem>
-                </TextField>
+                  options={[
+                    { value: 'ALL', label: isBn ? 'সকল অবস্থা' : 'All Statuses' },
+                    { value: 'RECEIVED', label: isBn ? 'ধান গৃহীত (Received)' : 'Received' },
+                    { value: 'IN_PROCESS', label: isBn ? 'মাড়াই চলমান (In Process)' : 'In Process' },
+                    { value: 'COMPLETED', label: isBn ? 'সম্পন্ন (Completed)' : 'Completed' },
+                    { value: 'CANCELLED', label: isBn ? 'বাতিল (Cancelled)' : 'Cancelled' },
+                  ]}
+                  onChange={(val) => setStatusFilter(val)}
+                  sx={{ minWidth: 185 }}
+                />
               </Stack>
 
               <Button
@@ -646,21 +725,20 @@ export function TollMillingPage({ companyId, factoryId, language, onSaved }: Tol
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
           <Paper sx={{ p: 2, borderRadius: 2 }}>
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="center">
-              <TextField
-                select
-                size="small"
-                label={isBn ? 'গ্রাহক নির্বাচন করুন' : 'Select Customer'}
-                value={selectedCustodyCustomer}
-                onChange={(e) => setSelectedCustodyCustomer(e.target.value)}
-                sx={{ minWidth: 300 }}
-              >
-                <MenuItem value="">{isBn ? '— গ্রাহক নির্বাচন করুন —' : '— Select Customer —'}</MenuItem>
-                {customers.map((c) => (
-                  <MenuItem key={c.id} value={c.id}>
-                    {c.name} {c.businessName ? `(${c.businessName})` : ''} - {c.code}
-                  </MenuItem>
-                ))}
-              </TextField>
+              <Box sx={{ minWidth: { xs: '100%', sm: 320 } }}>
+                <AppAutocomplete
+                  fieldName="selectedCustodyCustomer"
+                  label={isBn ? 'গ্রাহক নির্বাচন করুন' : 'Select Customer'}
+                  value={selectedCustodyCustomer}
+                  options={customers.map((c) => ({
+                    value: c.id,
+                    label: c.businessName ? `${c.name} (${c.businessName})` : c.name,
+                    badge: c.code,
+                  }))}
+                  emptyMessage={isBn ? 'কোনো গ্রাহক পাওয়া যায়নি' : 'No customers found'}
+                  onChange={(val) => setSelectedCustodyCustomer(val)}
+                />
+              </Box>
               <Typography variant="body2" color="text.secondary">
                 {isBn
                   ? 'গ্রাহক নির্বাচন করে তার নিজস্ব ধান, চাল ও উপজাতের আলাদা হেফাজত মজুদ পর্যালোচনা করুন।'
@@ -756,391 +834,474 @@ export function TollMillingPage({ companyId, factoryId, language, onSaved }: Tol
       )}
 
       {/* CREATE ORDER DIALOG */}
-      <Dialog open={createOrderOpen} onClose={() => setCreateOrderOpen(false)} maxWidth="md" fullWidth>
-        <form onSubmit={handleCreateOrderSubmit}>
-          <DialogTitle sx={{ fontWeight: 700 }}>
-            {isBn ? 'নতুন কমার্শিয়াল হাস্কিং আদেশ গ্রহণ' : 'Receive New Toll Milling Order'}
-          </DialogTitle>
-          <DialogContent dividers sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
-            {error && <Alert severity="error">{error}</Alert>}
-
-            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
-              <TextField
-                select
-                required
-                size="small"
-                label={isBn ? 'গ্রাহক' : 'Customer'}
-                value={orderCustomerId}
-                onChange={(e) => setOrderCustomerId(e.target.value)}
-              >
-                {customers.map((c) => (
-                  <MenuItem key={c.id} value={c.id}>
-                    {c.name} {c.businessName ? `(${c.businessName})` : ''} - {c.code}
-                  </MenuItem>
-                ))}
-              </TextField>
-
-              <TextField
-                select
-                required
-                size="small"
-                label={isBn ? 'ধানের জাত' : 'Paddy Variety'}
-                value={orderPaddyItemId}
-                onChange={(e) => setOrderPaddyItemId(e.target.value)}
-              >
-                {paddyItems.map((p) => (
-                  <MenuItem key={p.id} value={p.id}>
-                    {p.name} ({p.code})
-                  </MenuItem>
-                ))}
-              </TextField>
-            </Box>
-
-            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(4, 1fr)' }, gap: 2 }}>
-              <TextField
-                required
-                size="small"
-                label={isBn ? 'আদেশ নং' : 'Order Number'}
-                value={orderNumber}
-                onChange={(e) => setOrderNumber(e.target.value)}
-              />
-              <TextField
-                type="date"
-                required
-                size="small"
-                label={isBn ? 'গ্রহণ তারিখ' : 'Received Date'}
-                value={receivedAt}
-                onChange={(e) => setReceivedAt(e.target.value)}
-                InputLabelProps={{ shrink: true }}
-              />
-              <TextField
-                size="small"
-                label={isBn ? 'গাড়ির নম্বর' : 'Vehicle Number'}
-                value={vehicleNumber}
-                onChange={(e) => setVehicleNumber(e.target.value)}
-              />
-              <TextField
-                size="small"
-                label={isBn ? 'গ্রাহক চালান নং' : 'Customer Challan No'}
-                value={challanNumber}
-                onChange={(e) => setChallanNumber(e.target.value)}
-              />
-            </Box>
-
-            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, 1fr)' }, gap: 2 }}>
-              <TextField
-                type="number"
-                size="small"
-                label={isBn ? 'বস্তা সংখ্যা' : 'Received Bag Count'}
-                value={receivedBagCount}
-                onChange={(e) => setReceivedBagCount(parseInt(e.target.value, 10) || 0)}
-              />
-              <TextField
-                type="number"
-                required
-                size="small"
-                label={isBn ? 'ধান প্রাপ্তির পরিমাণ (কেজি)' : 'Paddy Received (KG)'}
-                value={receivedQuantityKg}
-                onChange={(e) => setReceivedQuantityKg(e.target.value)}
-                helperText={isBn ? 'ওয়েব্রিজ নিট ওজন (গ্রস - টেয়ার)' : 'Weighbridge Net Weight'}
-              />
-              <TextField
-                size="small"
-                label={isBn ? 'ড্রাইভারের নাম' : 'Driver Name'}
-                value={driverName}
-                onChange={(e) => setDriverName(e.target.value)}
-              />
-            </Box>
-
-            <Divider />
-
-            <Typography variant="subtitle2" fontWeight={700}>
-              {isBn ? 'সার্ভিস চার্জ ও পলিসি' : 'Service Charges & By-Product Policy'}
-            </Typography>
-
-            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(4, 1fr)' }, gap: 2 }}>
-              <TextField
-                type="number"
-                required
-                size="small"
-                label={isBn ? 'টোল দর' : 'Toll Rate'}
-                value={tollRate}
-                onChange={(e) => setTollRate(e.target.value)}
-              />
-              <TextField
-                select
-                size="small"
-                label={isBn ? 'দর হিসাবের ভিত্তি' : 'Rate Basis'}
-                value={tollRateBasis}
-                onChange={(e) => setTollRateBasis(e.target.value as 'PER_KG' | 'PER_MON' | 'PER_BAG')}
-              >
-                <MenuItem value="PER_KG">{isBn ? 'প্রতি কেজি (Per KG)' : 'Per KG'}</MenuItem>
-                <MenuItem value="PER_MON">{isBn ? 'প্রতি মণ / ৪০ কেজি (Per Mon)' : 'Per Mon (40 KG)'}</MenuItem>
-                <MenuItem value="PER_BAG">{isBn ? 'প্রতি বস্তা (Per Bag)' : 'Per Bag'}</MenuItem>
-              </TextField>
-              <TextField
-                select
-                size="small"
-                label={isBn ? 'উপজাত পণ্য পলিসি' : 'By-Product Policy'}
-                value={byProductPolicy}
-                onChange={(e) => setByProductPolicy(e.target.value as 'RETURN_TO_CUSTOMER' | 'MILL_RETENTION')}
-              >
-                <MenuItem value="RETURN_TO_CUSTOMER">{isBn ? 'গ্রাহক ফেরত পাবে' : 'Return to Customer'}</MenuItem>
-                <MenuItem value="MILL_RETENTION">{isBn ? 'মিল রেখে দেবে' : 'Mill Retention'}</MenuItem>
-              </TextField>
-              <TextField
-                type="number"
-                size="small"
-                label={isBn ? 'অন্যান্য চার্জ (৳)' : 'Additional Charges (৳)'}
-                value={additionalCharges}
-                onChange={(e) => setAdditionalCharges(e.target.value)}
-                helperText={isBn ? 'শুকানো / সিদ্ধ / লোডিং চার্জ' : 'Drying / Parboiling / Handling'}
-              />
-            </Box>
-
-            <TextField
-              size="small"
-              multiline
-              rows={2}
-              label={isBn ? 'মন্তব্য (ঐচ্ছিক)' : 'Remarks'}
-              value={orderRemarks}
-              onChange={(e) => setOrderRemarks(e.target.value)}
+      <FormDialog
+        open={createOrderOpen}
+        onClose={() => setCreateOrderOpen(false)}
+        onSubmit={handleCreateOrderSubmit}
+        title={isBn ? 'নতুন কমার্শিয়াল হাস্কিং আদেশ গ্রহণ' : 'Receive New Toll Milling Order'}
+        error={error}
+        onClearError={() => setError(null)}
+        loading={busy}
+        submitLabel={isBn ? 'আদেশ গ্রহণ করুন' : 'Receive Order'}
+        cancelLabel={isBn ? 'বাতিল' : 'Cancel'}
+        maxWidth="md"
+      >
+        <FormSection title={isBn ? 'গ্রাহক ও ধানের তথ্য' : 'Customer & Paddy Intake'}>
+          <FormGrid columns={{ xs: 1, sm: 2 }}>
+            <AppAutocomplete
+              fieldName="orderCustomerId"
+              required
+              label={isBn ? 'গ্রাহক' : 'Customer'}
+              value={orderCustomerId}
+              errorText={fieldErrors.orderCustomerId}
+              options={customers.map((c) => ({
+                value: c.id,
+                label: c.businessName ? `${c.name} (${c.businessName})` : c.name,
+                badge: c.code,
+              }))}
+              emptyMessage={isBn ? 'কোনো গ্রাহক পাওয়া যায়নি' : 'No customers found'}
+              onChange={(val) => {
+                setOrderCustomerId(val);
+                setFieldErrors((p) => ({ ...p, orderCustomerId: '' }));
+              }}
             />
-          </DialogContent>
-          <DialogActions sx={{ px: 3, py: 2 }}>
-            <Button onClick={() => setCreateOrderOpen(false)} color="inherit">
-              {isBn ? 'বাতিল' : 'Cancel'}
-            </Button>
-            <Button type="submit" variant="contained" color="primary" disabled={busy}>
-              {isBn ? 'আদেশ গ্রহণ করুন' : 'Receive Order'}
-            </Button>
-          </DialogActions>
-        </form>
-      </Dialog>
+
+            <AppAutocomplete
+              fieldName="orderPaddyItemId"
+              required
+              label={isBn ? 'ধানের জাত' : 'Paddy Variety'}
+              value={orderPaddyItemId}
+              errorText={fieldErrors.orderPaddyItemId}
+              options={paddyItems.map((p) => ({ value: p.id, label: p.name, badge: p.code }))}
+              emptyMessage={isBn ? 'কোনো ধানের আইটেম নেই' : 'No paddy items available'}
+              onChange={(val) => {
+                setOrderPaddyItemId(val);
+                setFieldErrors((p) => ({ ...p, orderPaddyItemId: '' }));
+              }}
+            />
+          </FormGrid>
+
+          <FormGrid columns={{ xs: 1, sm: 2, md: 4 }} sx={{ mt: 2 }}>
+            <AppTextField
+              fieldName="orderNumber"
+              required
+              label={isBn ? 'আদেশ নং' : 'Order Number'}
+              value={orderNumber}
+              errorText={fieldErrors.orderNumber}
+              onValueChange={(val) => {
+                setOrderNumber(val);
+                setFieldErrors((p) => ({ ...p, orderNumber: '' }));
+              }}
+            />
+            <AppTextField
+              fieldName="receivedAt"
+              type="date"
+              required
+              label={isBn ? 'গ্রহণ তারিখ' : 'Received Date'}
+              value={receivedAt}
+              errorText={fieldErrors.receivedAt}
+              onValueChange={(val) => {
+                setReceivedAt(val);
+                setFieldErrors((p) => ({ ...p, receivedAt: '' }));
+              }}
+              InputLabelProps={{ shrink: true }}
+            />
+            <AppTextField
+              fieldName="vehicleNumber"
+              label={isBn ? 'গাড়ির নম্বর' : 'Vehicle Number'}
+              value={vehicleNumber}
+              onValueChange={(val) => setVehicleNumber(val)}
+            />
+            <AppTextField
+              fieldName="challanNumber"
+              label={isBn ? 'গ্রাহক চালান নং' : 'Customer Challan No'}
+              value={challanNumber}
+              onValueChange={(val) => setChallanNumber(val)}
+            />
+          </FormGrid>
+
+          <FormGrid columns={{ xs: 1, sm: 3 }} sx={{ mt: 2 }}>
+            <AppTextField
+              fieldName="receivedBagCount"
+              type="number"
+              unit="BAGS"
+              label={isBn ? 'বস্তা সংখ্যা' : 'Received Bag Count'}
+              value={receivedBagCount}
+              inputProps={{ min: 0 }}
+              onValueChange={(val) => setReceivedBagCount(parseInt(val, 10) || 0)}
+            />
+            <AppTextField
+              fieldName="receivedQuantityKg"
+              type="number"
+              required
+              unit="KG"
+              label={isBn ? 'ধান প্রাপ্তির পরিমাণ (কেজি)' : 'Paddy Received (KG)'}
+              value={receivedQuantityKg}
+              errorText={fieldErrors.receivedQuantityKg}
+              inputProps={{ min: 0, step: '.001' }}
+              onValueChange={(val) => {
+                setReceivedQuantityKg(val);
+                setFieldErrors((p) => ({ ...p, receivedQuantityKg: '' }));
+              }}
+              helperText={isBn ? 'ওয়েব্রিজ নিট ওজন (গ্রস - টেয়ার)' : 'Weighbridge Net Weight'}
+            />
+            <AppTextField
+              fieldName="driverName"
+              label={isBn ? 'ড্রাইভারের নাম' : 'Driver Name'}
+              value={driverName}
+              onValueChange={(val) => setDriverName(val)}
+            />
+          </FormGrid>
+        </FormSection>
+
+        <FormSection title={isBn ? 'সার্ভিস চার্জ ও পলিসি' : 'Service Charges & By-Product Policy'}>
+          <FormGrid columns={{ xs: 1, sm: 2, md: 4 }}>
+            <AppTextField
+              fieldName="tollRate"
+              type="number"
+              required
+              prefixText="৳"
+              label={isBn ? 'টোল দর' : 'Toll Rate'}
+              value={tollRate}
+              errorText={fieldErrors.tollRate}
+              inputProps={{ min: 0, step: '.01' }}
+              onValueChange={(val) => {
+                setTollRate(val);
+                setFieldErrors((p) => ({ ...p, tollRate: '' }));
+              }}
+            />
+            <AppSelect
+              fieldName="tollRateBasis"
+              label={isBn ? 'দর হিসাবের ভিত্তি' : 'Rate Basis'}
+              value={tollRateBasis}
+              options={[
+                { value: 'PER_KG', label: isBn ? 'প্রতি কেজি (Per KG)' : 'Per KG' },
+                { value: 'PER_MON', label: isBn ? 'প্রতি মণ / ৪০ কেজি (Per Mon)' : 'Per Mon (40 KG)' },
+                { value: 'PER_BAG', label: isBn ? 'প্রতি বস্তা (Per Bag)' : 'Per Bag' },
+              ]}
+              onChange={(val) => setTollRateBasis(val as 'PER_KG' | 'PER_MON' | 'PER_BAG')}
+            />
+            <AppSelect
+              fieldName="byProductPolicy"
+              label={isBn ? 'উপজাত পণ্য পলিসি' : 'By-Product Policy'}
+              value={byProductPolicy}
+              options={[
+                { value: 'RETURN_TO_CUSTOMER', label: isBn ? 'গ্রাহক ফেরত পাবে' : 'Return to Customer' },
+                { value: 'MILL_RETENTION', label: isBn ? 'মিল রেখে দেবে' : 'Mill Retention' },
+              ]}
+              onChange={(val) => setByProductPolicy(val as 'RETURN_TO_CUSTOMER' | 'MILL_RETENTION')}
+            />
+            <AppTextField
+              fieldName="additionalCharges"
+              type="number"
+              prefixText="৳"
+              label={isBn ? 'অন্যান্য চার্জ (৳)' : 'Additional Charges (৳)'}
+              value={additionalCharges}
+              errorText={fieldErrors.additionalCharges}
+              inputProps={{ min: 0, step: '.01' }}
+              onValueChange={(val) => {
+                setAdditionalCharges(val);
+                setFieldErrors((p) => ({ ...p, additionalCharges: '' }));
+              }}
+              helperText={isBn ? 'শুকানো / সিদ্ধ / লোডিং চার্জ' : 'Drying / Parboiling / Handling'}
+            />
+          </FormGrid>
+        </FormSection>
+
+        <AppTextField
+          fieldName="orderRemarks"
+          multiline
+          rows={2}
+          label={isBn ? 'মন্তব্য (ঐচ্ছিক)' : 'Remarks'}
+          value={orderRemarks}
+          onValueChange={(val) => setOrderRemarks(val)}
+        />
+      </FormDialog>
 
       {/* NEW BATCH DIALOG */}
-      <Dialog open={Boolean(batchModalOrder)} onClose={() => setBatchModalOrder(null)} maxWidth="sm" fullWidth>
-        <form onSubmit={handleCreateBatchSubmit}>
-          <DialogTitle sx={{ fontWeight: 700 }}>
-            {isBn ? 'মাড়াই উৎপাদন ব্যাচ এন্ট্রি' : 'Record Toll Milling Batch'}
-          </DialogTitle>
-          <DialogContent dividers sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            {error && <Alert severity="error">{error}</Alert>}
+      <FormDialog
+        open={Boolean(batchModalOrder)}
+        onClose={() => setBatchModalOrder(null)}
+        onSubmit={handleCreateBatchSubmit}
+        title={isBn ? 'মাড়াই উৎপাদন ব্যাচ এন্ট্রি' : 'Record Toll Milling Batch'}
+        error={error}
+        onClearError={() => setError(null)}
+        loading={busy}
+        submitLabel={isBn ? 'ব্যাচ সংরক্ষণ করুন' : 'Save Batch'}
+        cancelLabel={isBn ? 'বাতিল' : 'Cancel'}
+        maxWidth="sm"
+      >
+        {batchModalOrder && (
+          <Alert severity="info">
+            Order: <strong>{batchModalOrder.orderNumber}</strong> ({batchModalOrder.customer?.name})<br />
+            Paddy Item: <strong>{batchModalOrder.paddyItem?.name}</strong><br />
+            Remaining Paddy in Custody:{' '}
+            <strong>
+              {Math.max(
+                0,
+                Number(batchModalOrder.receivedQuantityKg) - Number(batchModalOrder.processedQuantityKg),
+              ).toLocaleString()}{' '}
+              KG
+            </strong>
+          </Alert>
+        )}
 
-            {batchModalOrder && (
-              <Alert severity="info">
-                Order: <strong>{batchModalOrder.orderNumber}</strong> ({batchModalOrder.customer?.name})<br />
-                Paddy Item: <strong>{batchModalOrder.paddyItem?.name}</strong><br />
-                Remaining Paddy in Custody:{' '}
-                <strong>
-                  {Math.max(
-                    0,
-                    Number(batchModalOrder.receivedQuantityKg) - Number(batchModalOrder.processedQuantityKg),
-                  ).toLocaleString()}{' '}
-                  KG
-                </strong>
-              </Alert>
-            )}
+        <FormGrid columns={{ xs: 1, sm: 2 }}>
+          <AppTextField
+            fieldName="batchNumber"
+            required
+            label={isBn ? 'ব্যাচ নম্বর' : 'Batch Number'}
+            value={batchNumber}
+            errorText={fieldErrors.batchNumber}
+            onValueChange={(val) => {
+              setBatchNumber(val);
+              setFieldErrors((p) => ({ ...p, batchNumber: '' }));
+            }}
+          />
+          <AppTextField
+            fieldName="inputPaddyKg"
+            type="number"
+            required
+            unit="KG"
+            label={isBn ? 'ইনপুট ধান (কেজি)' : 'Input Paddy (KG)'}
+            value={inputPaddyKg}
+            errorText={fieldErrors.inputPaddyKg}
+            inputProps={{ min: 0, step: '.001' }}
+            onValueChange={(val) => {
+              setInputPaddyKg(val);
+              setFieldErrors((p) => ({ ...p, inputPaddyKg: '' }));
+            }}
+          />
+        </FormGrid>
 
-            <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
-              <TextField
-                required
-                size="small"
-                label={isBn ? 'ব্যাচ নম্বর' : 'Batch Number'}
-                value={batchNumber}
-                onChange={(e) => setBatchNumber(e.target.value)}
-              />
-              <TextField
-                type="number"
-                required
-                size="small"
-                label={isBn ? 'ইনপুট ধান (কেজি)' : 'Input Paddy (KG)'}
-                value={inputPaddyKg}
-                onChange={(e) => setInputPaddyKg(e.target.value)}
-              />
-            </Box>
-
-            <Typography variant="subtitle2" fontWeight={700}>
-              {isBn ? 'উৎপাদিত চাল ও উপজাত পণ্য' : 'Outputs (Rice & By-Products)'}
-            </Typography>
-
-            <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
-              <TextField
-                type="number"
-                required
-                size="small"
-                label={isBn ? 'মূল চাল (Head Rice KG)' : 'Head Rice (KG)'}
-                value={headRiceKg}
-                onChange={(e) => setHeadRiceKg(e.target.value)}
-              />
-              <TextField
-                type="number"
-                size="small"
-                label={isBn ? 'ভাঙা চাল (Broken Rice KG)' : 'Broken Rice (KG)'}
-                value={brokenRiceKg}
-                onChange={(e) => setBrokenRiceKg(e.target.value)}
-              />
-            </Box>
-
-            <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
-              <TextField
-                type="number"
-                size="small"
-                label={isBn ? 'কুঁড়া (Rice Bran KG)' : 'Rice Bran (KG)'}
-                value={riceBranKg}
-                onChange={(e) => setRiceBranKg(e.target.value)}
-              />
-              <TextField
-                type="number"
-                size="small"
-                label={isBn ? 'তুষ (Husk KG)' : 'Husk (KG)'}
-                value={huskKg}
-                onChange={(e) => setHuskKg(e.target.value)}
-              />
-            </Box>
-
-            <TextField
-              size="small"
-              multiline
-              rows={2}
-              label={isBn ? 'মন্তব্য' : 'Remarks'}
-              value={batchRemarks}
-              onChange={(e) => setBatchRemarks(e.target.value)}
+        <FormSection title={isBn ? 'উৎপাদিত চাল ও উপজাত পণ্য' : 'Outputs (Rice & By-Products)'}>
+          <FormGrid columns={{ xs: 1, sm: 2 }}>
+            <AppTextField
+              fieldName="headRiceKg"
+              type="number"
+              required
+              unit="KG"
+              label={isBn ? 'মূল চাল (Head Rice KG)' : 'Head Rice (KG)'}
+              value={headRiceKg}
+              errorText={fieldErrors.headRiceKg}
+              inputProps={{ min: 0, step: '.001' }}
+              onValueChange={(val) => {
+                setHeadRiceKg(val);
+                setFieldErrors((p) => ({ ...p, headRiceKg: '' }));
+              }}
             />
-          </DialogContent>
-          <DialogActions sx={{ px: 3, py: 2 }}>
-            <Button onClick={() => setBatchModalOrder(null)} color="inherit">
-              {isBn ? 'বাতিল' : 'Cancel'}
-            </Button>
-            <Button type="submit" variant="contained" color="primary" disabled={busy}>
-              {isBn ? 'ব্যাচ সংরক্ষণ করুন' : 'Save Batch'}
-            </Button>
-          </DialogActions>
-        </form>
-      </Dialog>
+            <AppTextField
+              fieldName="brokenRiceKg"
+              type="number"
+              unit="KG"
+              label={isBn ? 'ভাঙা চাল (Broken Rice KG)' : 'Broken Rice (KG)'}
+              value={brokenRiceKg}
+              errorText={fieldErrors.brokenRiceKg}
+              inputProps={{ min: 0, step: '.001' }}
+              onValueChange={(val) => {
+                setBrokenRiceKg(val);
+                setFieldErrors((p) => ({ ...p, brokenRiceKg: '' }));
+              }}
+            />
+            <AppTextField
+              fieldName="riceBranKg"
+              type="number"
+              unit="KG"
+              label={isBn ? 'কুঁড়া (Rice Bran KG)' : 'Rice Bran (KG)'}
+              value={riceBranKg}
+              errorText={fieldErrors.riceBranKg}
+              inputProps={{ min: 0, step: '.001' }}
+              onValueChange={(val) => {
+                setRiceBranKg(val);
+                setFieldErrors((p) => ({ ...p, riceBranKg: '' }));
+              }}
+            />
+            <AppTextField
+              fieldName="huskKg"
+              type="number"
+              unit="KG"
+              label={isBn ? 'তুষ (Husk KG)' : 'Husk (KG)'}
+              value={huskKg}
+              errorText={fieldErrors.huskKg}
+              inputProps={{ min: 0, step: '.001' }}
+              onValueChange={(val) => {
+                setHuskKg(val);
+                setFieldErrors((p) => ({ ...p, huskKg: '' }));
+              }}
+            />
+          </FormGrid>
+        </FormSection>
+
+        <AppTextField
+          fieldName="batchRemarks"
+          multiline
+          rows={2}
+          label={isBn ? 'মন্তব্য' : 'Remarks'}
+          value={batchRemarks}
+          onValueChange={(val) => setBatchRemarks(val)}
+        />
+      </FormDialog>
 
       {/* NEW DELIVERY DIALOG */}
-      <Dialog open={Boolean(deliveryModalOrder)} onClose={() => setDeliveryModalOrder(null)} maxWidth="sm" fullWidth>
-        <form onSubmit={handleCreateDeliverySubmit}>
-          <DialogTitle sx={{ fontWeight: 700 }}>
-            {isBn ? 'টোল ডেলিভারি চালান ও গেট পাস' : 'Create Toll Delivery Challan & Gate Pass'}
-          </DialogTitle>
-          <DialogContent dividers sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            {error && <Alert severity="error">{error}</Alert>}
+      <FormDialog
+        open={Boolean(deliveryModalOrder)}
+        onClose={() => setDeliveryModalOrder(null)}
+        onSubmit={handleCreateDeliverySubmit}
+        title={isBn ? 'টোল ডেলিভারি চালান ও গেট পাস' : 'Create Toll Delivery Challan & Gate Pass'}
+        error={error}
+        onClearError={() => setError(null)}
+        loading={busy}
+        submitLabel={isBn ? 'চালান পোস্ট করুন' : 'Post Challan'}
+        cancelLabel={isBn ? 'বাতিল' : 'Cancel'}
+        submitColor="secondary"
+        maxWidth="sm"
+      >
+        {deliveryModalOrder && (
+          <Alert severity="info">
+            Customer: <strong>{deliveryModalOrder.customer?.name}</strong><br />
+            Undelivered Rice in Custody:{' '}
+            <strong>
+              {Math.max(
+                0,
+                Number(deliveryModalOrder.totalRiceProducedKg) - Number(deliveryModalOrder.totalRiceDeliveredKg),
+              ).toLocaleString()}{' '}
+              KG
+            </strong>
+          </Alert>
+        )}
 
-            {deliveryModalOrder && (
-              <Alert severity="info">
-                Customer: <strong>{deliveryModalOrder.customer?.name}</strong><br />
-                Undelivered Rice in Custody:{' '}
-                <strong>
-                  {Math.max(
-                    0,
-                    Number(deliveryModalOrder.totalRiceProducedKg) - Number(deliveryModalOrder.totalRiceDeliveredKg),
-                  ).toLocaleString()}{' '}
-                  KG
-                </strong>
-              </Alert>
-            )}
+        <FormGrid columns={{ xs: 1, sm: 2 }}>
+          <AppTextField
+            fieldName="deliveryNumber"
+            required
+            label={isBn ? 'চালান নম্বর' : 'Delivery Challan No'}
+            value={deliveryNumber}
+            errorText={fieldErrors.deliveryNumber}
+            onValueChange={(val) => {
+              setDeliveryNumber(val);
+              setFieldErrors((p) => ({ ...p, deliveryNumber: '' }));
+            }}
+          />
+          <AppTextField
+            fieldName="gatePassNumber"
+            required
+            label={isBn ? 'গেট পাস নম্বর' : 'Gate Pass No'}
+            value={gatePassNumber}
+            errorText={fieldErrors.gatePassNumber}
+            onValueChange={(val) => {
+              setGatePassNumber(val);
+              setFieldErrors((p) => ({ ...p, gatePassNumber: '' }));
+            }}
+          />
+        </FormGrid>
 
-            <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
-              <TextField
-                required
-                size="small"
-                label={isBn ? 'চালান নম্বর' : 'Delivery Challan No'}
-                value={deliveryNumber}
-                onChange={(e) => setDeliveryNumber(e.target.value)}
-              />
-              <TextField
-                required
-                size="small"
-                label={isBn ? 'গেট পাস নম্বর' : 'Gate Pass No'}
-                value={gatePassNumber}
-                onChange={(e) => setGatePassNumber(e.target.value)}
-              />
-            </Box>
+        <FormGrid columns={{ xs: 1, sm: 3 }}>
+          <AppTextField
+            fieldName="delivVehicle"
+            required
+            label={isBn ? 'গাড়ির নম্বর' : 'Vehicle Number'}
+            value={delivVehicle}
+            errorText={fieldErrors.delivVehicle}
+            onValueChange={(val) => {
+              setDelivVehicle(val);
+              setFieldErrors((p) => ({ ...p, delivVehicle: '' }));
+            }}
+          />
+          <AppTextField
+            fieldName="delivDriver"
+            required
+            label={isBn ? 'ড্রাইভার' : 'Driver Name'}
+            value={delivDriver}
+            errorText={fieldErrors.delivDriver}
+            onValueChange={(val) => {
+              setDelivDriver(val);
+              setFieldErrors((p) => ({ ...p, delivDriver: '' }));
+            }}
+          />
+          <AppTextField
+            fieldName="deliveryDate"
+            type="date"
+            required
+            label={isBn ? 'তারিখ' : 'Date'}
+            value={deliveryDate}
+            errorText={fieldErrors.deliveryDate}
+            onValueChange={(val) => {
+              setDeliveryDate(val);
+              setFieldErrors((p) => ({ ...p, deliveryDate: '' }));
+            }}
+            InputLabelProps={{ shrink: true }}
+          />
+        </FormGrid>
 
-            <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 2 }}>
-              <TextField
-                required
-                size="small"
-                label={isBn ? 'গাড়ির নম্বর' : 'Vehicle Number'}
-                value={delivVehicle}
-                onChange={(e) => setDelivVehicle(e.target.value)}
-              />
-              <TextField
-                required
-                size="small"
-                label={isBn ? 'ড্রাইভার' : 'Driver Name'}
-                value={delivDriver}
-                onChange={(e) => setDelivDriver(e.target.value)}
-              />
-              <TextField
-                type="date"
-                required
-                size="small"
-                label={isBn ? 'তারিখ' : 'Date'}
-                value={deliveryDate}
-                onChange={(e) => setDeliveryDate(e.target.value)}
-                InputLabelProps={{ shrink: true }}
-              />
-            </Box>
-
-            <Typography variant="subtitle2" fontWeight={700}>
-              {isBn ? 'বিতরণ পরিমাণ' : 'Dispatched Quantities'}
-            </Typography>
-
-            <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 2 }}>
-              <TextField
-                type="number"
-                size="small"
-                label={isBn ? 'বস্তা' : 'Bags'}
-                value={delivBags}
-                onChange={(e) => setDelivBags(parseInt(e.target.value, 10) || 0)}
-              />
-              <TextField
-                type="number"
-                required
-                size="small"
-                label={isBn ? 'চাল (কেজি)' : 'Rice (KG)'}
-                value={delivRiceKg}
-                onChange={(e) => setDelivRiceKg(e.target.value)}
-              />
-              <TextField
-                type="number"
-                size="small"
-                label={isBn ? 'ভাঙা চাল (কেজি)' : 'Broken Rice (KG)'}
-                value={delivBrokenKg}
-                onChange={(e) => setDelivBrokenKg(e.target.value)}
-              />
-              <TextField
-                type="number"
-                size="small"
-                label={isBn ? 'উপজাত (কেজি)' : 'By-Products (KG)'}
-                value={delivByProductKg}
-                onChange={(e) => setDelivByProductKg(e.target.value)}
-                disabled={deliveryModalOrder?.byProductPolicy === 'MILL_RETENTION'}
-              />
-            </Box>
-
-            <TextField
-              size="small"
-              multiline
-              rows={2}
-              label={isBn ? 'মন্তব্য' : 'Remarks'}
-              value={delivRemarks}
-              onChange={(e) => setDelivRemarks(e.target.value)}
+        <FormSection title={isBn ? 'বিতরণ পরিমাণ' : 'Dispatched Quantities'}>
+          <FormGrid columns={{ xs: 1, sm: 2, md: 4 }}>
+            <AppTextField
+              fieldName="delivBags"
+              type="number"
+              unit="BAGS"
+              label={isBn ? 'বস্তা' : 'Bags'}
+              value={delivBags}
+              inputProps={{ min: 0 }}
+              onValueChange={(val) => setDelivBags(parseInt(val, 10) || 0)}
             />
-          </DialogContent>
-          <DialogActions sx={{ px: 3, py: 2 }}>
-            <Button onClick={() => setDeliveryModalOrder(null)} color="inherit">
-              {isBn ? 'বাতিল' : 'Cancel'}
-            </Button>
-            <Button type="submit" variant="contained" color="secondary" disabled={busy}>
-              {isBn ? 'চালান পোস্ট করুন' : 'Post Challan'}
-            </Button>
-          </DialogActions>
-        </form>
-      </Dialog>
+            <AppTextField
+              fieldName="delivRiceKg"
+              type="number"
+              required
+              unit="KG"
+              label={isBn ? 'চাল (কেজি)' : 'Rice (KG)'}
+              value={delivRiceKg}
+              errorText={fieldErrors.delivRiceKg}
+              inputProps={{ min: 0, step: '.001' }}
+              onValueChange={(val) => {
+                setDelivRiceKg(val);
+                setFieldErrors((p) => ({ ...p, delivRiceKg: '' }));
+              }}
+            />
+            <AppTextField
+              fieldName="delivBrokenKg"
+              type="number"
+              unit="KG"
+              label={isBn ? 'ভাঙা চাল (কেজি)' : 'Broken Rice (KG)'}
+              value={delivBrokenKg}
+              errorText={fieldErrors.delivBrokenKg}
+              inputProps={{ min: 0, step: '.001' }}
+              onValueChange={(val) => {
+                setDelivBrokenKg(val);
+                setFieldErrors((p) => ({ ...p, delivBrokenKg: '' }));
+              }}
+            />
+            <AppTextField
+              fieldName="delivByProductKg"
+              type="number"
+              unit="KG"
+              label={isBn ? 'উপজাত (কেজি)' : 'By-Products (KG)'}
+              value={delivByProductKg}
+              errorText={fieldErrors.delivByProductKg}
+              prerequisite={{
+                met: deliveryModalOrder?.byProductPolicy !== 'MILL_RETENTION',
+                message: isBn
+                  ? 'এই অর্ডারের উপজাত পলিসি MILL_RETENTION হওয়ায় উপজাত পণ্য সরবরাহ লক করা আছে।'
+                  : 'By-product delivery is locked because this order uses MILL_RETENTION policy.',
+              }}
+              inputProps={{ min: 0, step: '.001' }}
+              onValueChange={(val) => {
+                setDelivByProductKg(val);
+                setFieldErrors((p) => ({ ...p, delivByProductKg: '' }));
+              }}
+            />
+          </FormGrid>
+        </FormSection>
+
+        <AppTextField
+          fieldName="delivRemarks"
+          multiline
+          rows={2}
+          label={isBn ? 'মন্তব্য' : 'Remarks'}
+          value={delivRemarks}
+          onValueChange={(val) => setDelivRemarks(val)}
+        />
+      </FormDialog>
 
       {/* PRINTABLE VOUCHER DIALOG */}
       <Dialog open={Boolean(printDoc)} onClose={() => setPrintDoc(null)} maxWidth="md" fullWidth>

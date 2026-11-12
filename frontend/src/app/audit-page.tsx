@@ -20,7 +20,6 @@ import {
   TableCell,
   TableHead,
   TableRow,
-  TextField,
   Typography,
 } from '@mui/material';
 import PolicyRoundedIcon from '@mui/icons-material/PolicyRounded';
@@ -32,6 +31,7 @@ import DevicesRoundedIcon from '@mui/icons-material/DevicesRounded';
 import ComputerRoundedIcon from '@mui/icons-material/ComputerRounded';
 import { useQuery } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/api';
+import { AppSelect, AppTextField } from '@/components/form';
 
 interface AuditPageProps {
   companyId: string;
@@ -186,64 +186,65 @@ export function AuditPage({ companyId, language, onSaved }: AuditPageProps) {
       {/* Filter and Search Bar */}
       <Paper sx={{ p: 2 }}>
         <Stack direction={{ xs: 'column', md: 'row' }} gap={2} justifyContent="space-between" alignItems="center">
-          <Stack direction="row" gap={1} flexWrap="wrap">
-            <TextField
-              select
-              size="small"
-              SelectProps={{ native: true }}
+          <Stack direction="row" gap={1.5} flexWrap="wrap">
+            <AppSelect
+              fieldName="resourceFilter"
+              fullWidth={false}
               label={isBn ? 'মডিউল / রিসোর্স' : 'Module / Resource'}
               value={resourceFilter}
-              onChange={(e) => {
-                setResourceFilter(e.target.value);
+              options={[
+                { value: 'ALL', label: isBn ? 'সকল মডিউল' : 'All Modules' },
+                { value: 'PROCUREMENT', label: 'Procurement' },
+                { value: 'INVENTORY', label: 'Inventory' },
+                { value: 'SALES', label: 'Sales' },
+                { value: 'ACCOUNTING', label: 'Accounting Engine' },
+                { value: 'HR', label: 'HR & Payroll' },
+                { value: 'MACHINES', label: 'Machines' },
+                { value: 'FLEET', label: 'Fleet & Fuel' },
+                { value: 'DOCUMENTS', label: 'Documents' },
+                { value: 'APPROVALS', label: 'Approvals' },
+                { value: 'ROLES', label: 'Roles & Users' },
+                { value: 'AUTH', label: 'Authentication' },
+              ]}
+              onChange={(val) => {
+                setResourceFilter(val);
                 setPage(1);
               }}
-              sx={{ minWidth: 160 }}
-            >
-              <option value="ALL">{isBn ? 'সকল মডিউল' : 'All Modules'}</option>
-              <option value="PROCUREMENT">Procurement</option>
-              <option value="INVENTORY">Inventory</option>
-              <option value="SALES">Sales</option>
-              <option value="ACCOUNTING">Accounting Engine</option>
-              <option value="HR">HR & Payroll</option>
-              <option value="MACHINES">Machines</option>
-              <option value="FLEET">Fleet & Fuel</option>
-              <option value="DOCUMENTS">Documents</option>
-              <option value="APPROVALS">Approvals</option>
-              <option value="ROLES">Roles & Users</option>
-              <option value="AUTH">Authentication</option>
-            </TextField>
+              sx={{ minWidth: 195 }}
+            />
 
-            <TextField
-              select
-              size="small"
-              SelectProps={{ native: true }}
+            <AppSelect
+              fieldName="actionFilter"
+              fullWidth={false}
               label={isBn ? 'অ্যাকশন ধরন' : 'Action Type'}
               value={actionFilter}
-              onChange={(e) => {
-                setActionFilter(e.target.value);
+              options={[
+                { value: 'ALL', label: isBn ? 'সকল অ্যাকশন' : 'All Actions' },
+                { value: 'CREATE', label: 'CREATE' },
+                { value: 'UPDATE', label: 'UPDATE' },
+                { value: 'DELETE', label: 'DELETE' },
+                { value: 'APPROVE', label: 'APPROVE' },
+                { value: 'POST', label: 'POST' },
+                { value: 'LOCK', label: 'LOCK' },
+                { value: 'REJECT', label: 'REJECT' },
+                { value: 'RETURN_FOR_CORRECTION', label: 'RETURN' },
+                { value: 'LOGIN', label: 'LOGIN' },
+              ]}
+              onChange={(val) => {
+                setActionFilter(val);
                 setPage(1);
               }}
-              sx={{ minWidth: 150 }}
-            >
-              <option value="ALL">{isBn ? 'সকল অ্যাকশন' : 'All Actions'}</option>
-              <option value="CREATE">CREATE</option>
-              <option value="UPDATE">UPDATE</option>
-              <option value="DELETE">DELETE</option>
-              <option value="APPROVE">APPROVE</option>
-              <option value="POST">POST</option>
-              <option value="LOCK">LOCK</option>
-              <option value="REJECT">REJECT</option>
-              <option value="RETURN_FOR_CORRECTION">RETURN</option>
-              <option value="LOGIN">LOGIN</option>
-            </TextField>
+              sx={{ minWidth: 175 }}
+            />
           </Stack>
 
-          <TextField
-            size="small"
+          <AppTextField
+            fieldName="searchAudit"
+            fullWidth={false}
             placeholder={isBn ? 'ব্যবহারকারী, রেকর্ড আইডি বা আইপি খুঁজুন...' : 'Search by user, record ID, or IP...'}
             value={searchTerm}
-            onChange={(e) => {
-              setSearchTerm(e.target.value);
+            onValueChange={(val) => {
+              setSearchTerm(val);
               setPage(1);
             }}
             sx={{ minWidth: 280 }}

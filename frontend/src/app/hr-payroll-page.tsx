@@ -22,7 +22,6 @@ import {
   TableHead,
   TableRow,
   Tabs,
-  TextField,
   Typography,
 } from '@mui/material';
 import BadgeRoundedIcon from '@mui/icons-material/BadgeRounded';
@@ -36,6 +35,9 @@ import PrintRoundedIcon from '@mui/icons-material/PrintRounded';
 import RefreshRoundedIcon from '@mui/icons-material/RefreshRounded';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/api';
+import { AppAutocomplete, AppSelect, AppTextField, FormDialog, FormGrid } from '@/components/form';
+import { extractApiError, useToast } from '@/components/ui/toast-provider';
+import { focusFieldByName, validateFormFields } from '@/lib/form-validation';
 
 interface HrPayrollPageProps {
   companyId: string;
@@ -51,6 +53,7 @@ export function HrPayrollPage({
   onSaved,
 }: HrPayrollPageProps) {
   const queryClient = useQueryClient();
+  const toast = useToast();
   const isBn = language === 'bn';
 
   const [activeTab, setActiveTab] = useState(0); // 0: Employees, 1: Attendance, 2: Loans/Advances, 3: Payroll
@@ -90,6 +93,7 @@ export function HrPayrollPage({
 
   const [busy, setBusy] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   // Queries
   const employeesQuery = useQuery({
@@ -111,22 +115,66 @@ export function HrPayrollPage({
   const employees = employeesQuery.data || [];
   const payrolls = payrollQuery.data || [];
 
+  const openEmployeeDialog = () => {
+    setErrorMsg(null);
+    setFieldErrors({});
+    setEmployeeDialogOpen(true);
+  };
+
+  const openAttendanceDialog = () => {
+    setErrorMsg(null);
+    setFieldErrors({});
+    setAttendanceDialogOpen(true);
+  };
+
+  const openLoanDialog = () => {
+    setErrorMsg(null);
+    setFieldErrors({});
+    setLoanDialogOpen(true);
+  };
+
+  const openPayrollDialog = () => {
+    setErrorMsg(null);
+    setFieldErrors({});
+    setPayrollDialogOpen(true);
+  };
+
   const handleCreateEmployee = async (e: React.FormEvent) => {
     e.preventDefault();
+    const validation = validateFormFields(
+      [
+        { name: 'empCode', label: isBn ? 'কর্মচারী কোড' : 'Employee Code', value: empCode, required: true },
+        { name: 'empName', label: isBn ? 'পূর্ণ নাম' : 'Full Name', value: empName, required: true },
+        { name: 'empDept', label: isBn ? 'বিভাগ' : 'Department', value: empDept, required: true },
+        { name: 'empDesig', label: isBn ? 'পদবী' : 'Designation', value: empDesig, required: true },
+        { name: 'empJoinDate', label: isBn ? 'যোগদানের তারিখ' : 'Joining Date', value: empJoinDate, required: true, type: 'date' },
+        { name: 'empSalary', label: isBn ? 'মাসিক মূল বেতন (৳)' : 'Monthly Base Salary (৳)', value: empSalary, required: true, type: 'positiveNumber' },
+      ],
+      language,
+    );
+    if (!validation.valid) {
+      setFieldErrors(validation.errors);
+      setErrorMsg(validation.summary);
+      toast.warning(validation.summary);
+      focusFieldByName(validation.firstField);
+      return;
+    }
+
     setBusy(true);
     setErrorMsg(null);
+    setFieldErrors({});
     try {
       await apiRequest('/hr/employees', {
         method: 'POST',
         body: JSON.stringify({
           companyId,
           factoryId,
-          employeeCode: empCode,
-          fullName: empName,
-          nid: empNid || undefined,
-          phone: empPhone || undefined,
-          department: empDept,
-          designation: empDesig,
+          employeeCode: empCode.trim(),
+          fullName: empName.trim(),
+          nid: empNid.trim() || undefined,
+          phone: empPhone.trim() || undefined,
+          department: empDept.trim(),
+          designation: empDesig.trim(),
           joiningDate: empJoinDate,
           baseSalary: Number(empSalary),
           paymentMode: empPaymentMode,
@@ -137,8 +185,12 @@ export function HrPayrollPage({
       onSaved(isBn ? 'কর্মকর্তা/কর্মচারী সফলভাবে যোগ করা হয়েছে' : 'Employee added successfully');
       setEmpCode('');
       setEmpName('');
-    } catch (err: any) {
-      setErrorMsg(err.message || 'Failed to create employee');
+      setEmpNid('');
+      setEmpPhone('');
+    } catch (err: unknown) {
+      const msg = extractApiError(err, 'Failed to create employee');
+      setErrorMsg(msg);
+      toast.error(msg);
     } finally {
       setBusy(false);
     }
@@ -146,8 +198,26 @@ export function HrPayrollPage({
 
   const handleRecordAttendance = async (e: React.FormEvent) => {
     e.preventDefault();
+    const validation = validateFormFields(
+      [
+        { name: 'attEmpId', label: isBn ? 'কর্মচারী নির্বাচন করুন' : 'Select Employee', value: attEmpId, required: true, isSelect: true },
+        { name: 'attDate', label: isBn ? 'তারিখ' : 'Date', value: attDate, required: true, type: 'date' },
+        { name: 'attStatus', label: isBn ? 'উপস্থিতি স্ট্যাটাস' : 'Attendance Status', value: attStatus, required: true, isSelect: true },
+        { name: 'attOvertime', label: isBn ? 'অতিরিক্ত কর্মঘণ্টা' : 'Overtime Hours', value: attOvertime || '0', type: 'nonNegativeNumber' },
+      ],
+      language,
+    );
+    if (!validation.valid) {
+      setFieldErrors(validation.errors);
+      setErrorMsg(validation.summary);
+      toast.warning(validation.summary);
+      focusFieldByName(validation.firstField);
+      return;
+    }
+
     setBusy(true);
     setErrorMsg(null);
+    setFieldErrors({});
     try {
       await apiRequest('/hr/attendance', {
         method: 'POST',
@@ -162,8 +232,10 @@ export function HrPayrollPage({
       });
       setAttendanceDialogOpen(false);
       onSaved(isBn ? 'উপস্থিতি ও ওভারটাইম সফলভাবে নথিভুক্ত হয়েছে' : 'Attendance recorded successfully');
-    } catch (err: any) {
-      setErrorMsg(err.message || 'Failed to record attendance');
+    } catch (err: unknown) {
+      const msg = extractApiError(err, 'Failed to record attendance');
+      setErrorMsg(msg);
+      toast.error(msg);
     } finally {
       setBusy(false);
     }
@@ -171,8 +243,26 @@ export function HrPayrollPage({
 
   const handleCreateLoan = async (e: React.FormEvent) => {
     e.preventDefault();
+    const validation = validateFormFields(
+      [
+        { name: 'loanEmpId', label: isBn ? 'কর্মচারী' : 'Employee', value: loanEmpId, required: true, isSelect: true },
+        { name: 'loanType', label: isBn ? 'ধরনের' : 'Type', value: loanType, required: true, isSelect: true },
+        { name: 'loanAmount', label: isBn ? 'মঞ্জুরিকৃত পরিমাণ (৳)' : 'Principal Amount (৳)', value: loanAmount, required: true, type: 'positiveNumber' },
+        { name: 'loanMonthly', label: isBn ? 'মাসিক কর্তন (৳)' : 'Monthly Deduction (৳)', value: loanMonthly, required: true, type: 'positiveNumber' },
+      ],
+      language,
+    );
+    if (!validation.valid) {
+      setFieldErrors(validation.errors);
+      setErrorMsg(validation.summary);
+      toast.warning(validation.summary);
+      focusFieldByName(validation.firstField);
+      return;
+    }
+
     setBusy(true);
     setErrorMsg(null);
+    setFieldErrors({});
     try {
       await apiRequest('/hr/loans', {
         method: 'POST',
@@ -187,8 +277,10 @@ export function HrPayrollPage({
       await queryClient.invalidateQueries({ queryKey: ['hr-employees'] });
       setLoanDialogOpen(false);
       onSaved(isBn ? 'অগ্রিম/ঋণ সফলভাবে মঞ্জুর হয়েছে' : 'Loan/Advance disbursed successfully');
-    } catch (err: any) {
-      setErrorMsg(err.message || 'Failed to record loan');
+    } catch (err: unknown) {
+      const msg = extractApiError(err, 'Failed to record loan');
+      setErrorMsg(msg);
+      toast.error(msg);
     } finally {
       setBusy(false);
     }
@@ -196,8 +288,21 @@ export function HrPayrollPage({
 
   const handleGeneratePayroll = async (e: React.FormEvent) => {
     e.preventDefault();
+    const validation = validateFormFields(
+      [{ name: 'payrollMonth', label: isBn ? 'মাস ও বছর' : 'Month & Year', value: payrollMonth, required: true }],
+      language,
+    );
+    if (!validation.valid) {
+      setFieldErrors(validation.errors);
+      setErrorMsg(validation.summary);
+      toast.warning(validation.summary);
+      focusFieldByName(validation.firstField);
+      return;
+    }
+
     setBusy(true);
     setErrorMsg(null);
+    setFieldErrors({});
     try {
       await apiRequest('/hr/payroll/generate', {
         method: 'POST',
@@ -210,8 +315,10 @@ export function HrPayrollPage({
       await queryClient.invalidateQueries({ queryKey: ['hr-payroll'] });
       setPayrollDialogOpen(false);
       onSaved(isBn ? `${payrollMonth} মাসের বেতন তালিকা প্রস্তুত হয়েছে` : `Payroll generated for ${payrollMonth}`);
-    } catch (err: any) {
-      setErrorMsg(err.message || 'Failed to generate payroll');
+    } catch (err: unknown) {
+      const msg = extractApiError(err, 'Failed to generate payroll');
+      setErrorMsg(msg);
+      toast.error(msg);
     } finally {
       setBusy(false);
     }
@@ -227,8 +334,8 @@ export function HrPayrollPage({
       });
       await queryClient.invalidateQueries({ queryKey: ['hr-payroll'] });
       onSaved(isBn ? 'বেতন তালিকা সফলভাবে পোস্ট ও সমন্বিত হয়েছে' : 'Payroll posted and ledger entries generated');
-    } catch (err: any) {
-      alert(err.message || 'Failed to post payroll');
+    } catch (err: unknown) {
+      toast.error(extractApiError(err, 'Failed to post payroll'));
     } finally {
       setBusy(false);
     }
@@ -267,21 +374,21 @@ export function HrPayrollPage({
           <Button
             variant="outlined"
             startIcon={<AccessTimeRoundedIcon />}
-            onClick={() => setAttendanceDialogOpen(true)}
+            onClick={openAttendanceDialog}
           >
             {isBn ? 'উপস্থিতি ও ওভারটাইম' : 'Record Attendance'}
           </Button>
           <Button
             variant="outlined"
             startIcon={<AccountBalanceWalletRoundedIcon />}
-            onClick={() => setLoanDialogOpen(true)}
+            onClick={openLoanDialog}
           >
             {isBn ? 'অগ্রিম / লোন' : 'Disburse Advance'}
           </Button>
           <Button
             variant="outlined"
             startIcon={<PaymentsRoundedIcon />}
-            onClick={() => setPayrollDialogOpen(true)}
+            onClick={openPayrollDialog}
           >
             {isBn ? 'নতুন পেরোল তৈরি' : 'Generate Payroll'}
           </Button>
@@ -289,7 +396,7 @@ export function HrPayrollPage({
             variant="contained"
             color="primary"
             startIcon={<PersonAddRoundedIcon />}
-            onClick={() => setEmployeeDialogOpen(true)}
+            onClick={openEmployeeDialog}
           >
             {isBn ? 'নতুন কর্মচারী' : 'Add Employee'}
           </Button>
@@ -482,222 +589,292 @@ export function HrPayrollPage({
       )}
 
       {/* Add Employee Dialog */}
-      <Dialog open={employeeDialogOpen} onClose={() => !busy && setEmployeeDialogOpen(false)} maxWidth="sm" fullWidth>
-        <form onSubmit={handleCreateEmployee}>
-          <DialogTitle sx={{ fontWeight: 700 }}>{isBn ? 'নতুন কর্মকর্তা/কর্মচারী নিবন্ধন' : 'Register New Employee'}</DialogTitle>
-          <DialogContent dividers>
-            {errorMsg && <Alert severity="error" sx={{ mb: 2 }}>{errorMsg}</Alert>}
-            <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
-              <TextField
-                required
-                size="small"
-                label={isBn ? 'কর্মচারী কোড' : 'Employee Code'}
-                value={empCode}
-                onChange={(e) => setEmpCode(e.target.value)}
-              />
-              <TextField
-                required
-                size="small"
-                label={isBn ? 'পূর্ণ নাম' : 'Full Name'}
-                value={empName}
-                onChange={(e) => setEmpName(e.target.value)}
-              />
-              <TextField
-                size="small"
-                label={isBn ? 'এনআইডি (NID)' : 'National ID'}
-                value={empNid}
-                onChange={(e) => setEmpNid(e.target.value)}
-              />
-              <TextField
-                size="small"
-                label={isBn ? 'ফোন নম্বর' : 'Phone'}
-                value={empPhone}
-                onChange={(e) => setEmpPhone(e.target.value)}
-              />
-              <TextField
-                required
-                size="small"
-                label={isBn ? 'বিভাগ' : 'Department'}
-                value={empDept}
-                onChange={(e) => setEmpDept(e.target.value)}
-              />
-              <TextField
-                required
-                size="small"
-                label={isBn ? 'পদবী' : 'Designation'}
-                value={empDesig}
-                onChange={(e) => setEmpDesig(e.target.value)}
-              />
-              <TextField
-                type="date"
-                required
-                size="small"
-                label={isBn ? 'যোগদানের তারিখ' : 'Joining Date'}
-                value={empJoinDate}
-                onChange={(e) => setEmpJoinDate(e.target.value)}
-                InputLabelProps={{ shrink: true }}
-              />
-              <TextField
-                type="number"
-                required
-                size="small"
-                label={isBn ? 'মাসিক মূল বেতন (৳)' : 'Monthly Base Salary (৳)'}
-                value={empSalary}
-                onChange={(e) => setEmpSalary(e.target.value)}
-              />
-            </Box>
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setEmployeeDialogOpen(false)} disabled={busy}>{isBn ? 'বাতিল' : 'Cancel'}</Button>
-            <Button type="submit" variant="contained" disabled={busy}>{isBn ? 'সংরক্ষণ' : 'Save'}</Button>
-          </DialogActions>
-        </form>
-      </Dialog>
+      {/* Add Employee Dialog */}
+      <FormDialog
+        open={employeeDialogOpen}
+        onClose={() => !busy && setEmployeeDialogOpen(false)}
+        onSubmit={handleCreateEmployee}
+        title={isBn ? 'নতুন কর্মকর্তা/কর্মচারী নিবন্ধন' : 'Register New Employee'}
+        error={errorMsg}
+        onClearError={() => setErrorMsg(null)}
+        loading={busy}
+        submitLabel={isBn ? 'সংরক্ষণ' : 'Save'}
+        cancelLabel={isBn ? 'বাতিল' : 'Cancel'}
+        maxWidth="sm"
+      >
+        <FormGrid columns={{ xs: 1, sm: 2 }}>
+          <AppTextField
+            fieldName="empCode"
+            required
+            label={isBn ? 'কর্মচারী কোড' : 'Employee Code'}
+            value={empCode}
+            errorText={fieldErrors.empCode}
+            onValueChange={(val) => {
+              setEmpCode(val);
+              setFieldErrors((p) => ({ ...p, empCode: '' }));
+            }}
+          />
+          <AppTextField
+            fieldName="empName"
+            required
+            label={isBn ? 'পূর্ণ নাম' : 'Full Name'}
+            value={empName}
+            errorText={fieldErrors.empName}
+            onValueChange={(val) => {
+              setEmpName(val);
+              setFieldErrors((p) => ({ ...p, empName: '' }));
+            }}
+          />
+          <AppTextField
+            fieldName="empNid"
+            label={isBn ? 'এনআইডি (NID)' : 'National ID'}
+            value={empNid}
+            onValueChange={(val) => setEmpNid(val)}
+          />
+          <AppTextField
+            fieldName="empPhone"
+            label={isBn ? 'ফোন নম্বর' : 'Phone'}
+            value={empPhone}
+            onValueChange={(val) => setEmpPhone(val)}
+          />
+          <AppTextField
+            fieldName="empDept"
+            required
+            label={isBn ? 'বিভাগ' : 'Department'}
+            value={empDept}
+            errorText={fieldErrors.empDept}
+            onValueChange={(val) => {
+              setEmpDept(val);
+              setFieldErrors((p) => ({ ...p, empDept: '' }));
+            }}
+          />
+          <AppTextField
+            fieldName="empDesig"
+            required
+            label={isBn ? 'পদবী' : 'Designation'}
+            value={empDesig}
+            errorText={fieldErrors.empDesig}
+            onValueChange={(val) => {
+              setEmpDesig(val);
+              setFieldErrors((p) => ({ ...p, empDesig: '' }));
+            }}
+          />
+          <AppTextField
+            fieldName="empJoinDate"
+            type="date"
+            required
+            label={isBn ? 'যোগদানের তারিখ' : 'Joining Date'}
+            value={empJoinDate}
+            errorText={fieldErrors.empJoinDate}
+            onValueChange={(val) => {
+              setEmpJoinDate(val);
+              setFieldErrors((p) => ({ ...p, empJoinDate: '' }));
+            }}
+            InputLabelProps={{ shrink: true }}
+          />
+          <AppTextField
+            fieldName="empSalary"
+            type="number"
+            required
+            prefixText="৳"
+            label={isBn ? 'মাসিক মূল বেতন (৳)' : 'Monthly Base Salary (৳)'}
+            value={empSalary}
+            errorText={fieldErrors.empSalary}
+            inputProps={{ min: 0 }}
+            onValueChange={(val) => {
+              setEmpSalary(val);
+              setFieldErrors((p) => ({ ...p, empSalary: '' }));
+            }}
+          />
+        </FormGrid>
+      </FormDialog>
 
       {/* Record Attendance Dialog */}
-      <Dialog open={attendanceDialogOpen} onClose={() => !busy && setAttendanceDialogOpen(false)} maxWidth="xs" fullWidth>
-        <form onSubmit={handleRecordAttendance}>
-          <DialogTitle sx={{ fontWeight: 700 }}>{isBn ? 'উপস্থিতি ও ওভারটাইম নথিভুক্ত' : 'Record Attendance & Overtime'}</DialogTitle>
-          <DialogContent dividers>
-            <Stack spacing={2}>
-              <TextField
-                select
-                required
-                size="small"
-                label={isBn ? 'কর্মচারী নির্বাচন করুন' : 'Select Employee'}
-                value={attEmpId}
-                onChange={(e) => setAttEmpId(e.target.value)}
-                SelectProps={{ native: true }}
-              >
-                <option value="">-- {isBn ? 'নির্বাচন করুন' : 'Select'} --</option>
-                {employees.map((e) => (
-                  <option key={e.id} value={e.id}>{e.employeeCode} - {e.fullName}</option>
-                ))}
-              </TextField>
-              <TextField
-                type="date"
-                required
-                size="small"
-                label={isBn ? 'তারিখ' : 'Date'}
-                value={attDate}
-                onChange={(e) => setAttDate(e.target.value)}
-                InputLabelProps={{ shrink: true }}
-              />
-              <TextField
-                select
-                required
-                size="small"
-                label={isBn ? 'উপস্থিতি স্ট্যাটাস' : 'Attendance Status'}
-                value={attStatus}
-                onChange={(e) => setAttStatus(e.target.value)}
-                SelectProps={{ native: true }}
-              >
-                <option value="PRESENT">PRESENT (উপস্থিত)</option>
-                <option value="ABSENT">ABSENT (অনুপস্থিত)</option>
-                <option value="LATE">LATE (দেরিতে উপস্থিতি)</option>
-                <option value="LEAVE">LEAVE (ছুটি)</option>
-              </TextField>
-              <TextField
-                type="number"
-                size="small"
-                label={isBn ? 'অতিরিক্ত কর্মঘণ্টা (Overtime Hours)' : 'Overtime Hours'}
-                value={attOvertime}
-                onChange={(e) => setAttOvertime(e.target.value)}
-              />
-            </Stack>
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setAttendanceDialogOpen(false)} disabled={busy}>{isBn ? 'বাতিল' : 'Cancel'}</Button>
-            <Button type="submit" variant="contained" disabled={busy}>{isBn ? 'সংরক্ষণ' : 'Record'}</Button>
-          </DialogActions>
-        </form>
-      </Dialog>
+      <FormDialog
+        open={attendanceDialogOpen}
+        onClose={() => !busy && setAttendanceDialogOpen(false)}
+        onSubmit={handleRecordAttendance}
+        title={isBn ? 'উপস্থিতি ও ওভারটাইম নথিভুক্ত' : 'Record Attendance & Overtime'}
+        error={errorMsg}
+        onClearError={() => setErrorMsg(null)}
+        loading={busy}
+        submitLabel={isBn ? 'সংরক্ষণ' : 'Record'}
+        cancelLabel={isBn ? 'বাতিল' : 'Cancel'}
+        maxWidth="xs"
+      >
+        <FormGrid columns={1}>
+          <AppAutocomplete
+            fieldName="attEmpId"
+            required
+            label={isBn ? 'কর্মচারী নির্বাচন করুন' : 'Select Employee'}
+            value={attEmpId}
+            errorText={fieldErrors.attEmpId}
+            options={employees.map((e) => ({
+              value: e.id,
+              label: e.fullName,
+              badge: e.employeeCode,
+            }))}
+            emptyMessage={isBn ? 'কোনো কর্মচারী নেই — আগে কর্মচারী যোগ করুন' : 'No employees registered — add an employee first'}
+            onChange={(val) => {
+              setAttEmpId(val);
+              setFieldErrors((p) => ({ ...p, attEmpId: '' }));
+            }}
+          />
+          <AppTextField
+            fieldName="attDate"
+            type="date"
+            required
+            label={isBn ? 'তারিখ' : 'Date'}
+            value={attDate}
+            errorText={fieldErrors.attDate}
+            onValueChange={(val) => {
+              setAttDate(val);
+              setFieldErrors((p) => ({ ...p, attDate: '' }));
+            }}
+            InputLabelProps={{ shrink: true }}
+          />
+          <AppSelect
+            fieldName="attStatus"
+            required
+            label={isBn ? 'উপস্থিতি স্ট্যাটাস' : 'Attendance Status'}
+            value={attStatus}
+            errorText={fieldErrors.attStatus}
+            options={[
+              { value: 'PRESENT', label: 'PRESENT (উপস্থিত)' },
+              { value: 'ABSENT', label: 'ABSENT (অনুপস্থিত)' },
+              { value: 'LATE', label: 'LATE (দেরিতে উপস্থিতি)' },
+              { value: 'LEAVE', label: 'LEAVE (ছুটি)' },
+            ]}
+            onChange={(val) => {
+              setAttStatus(val);
+              setFieldErrors((p) => ({ ...p, attStatus: '' }));
+            }}
+          />
+          <AppTextField
+            fieldName="attOvertime"
+            type="number"
+            unit="HRS"
+            label={isBn ? 'অতিরিক্ত কর্মঘণ্টা (Overtime Hours)' : 'Overtime Hours'}
+            value={attOvertime}
+            errorText={fieldErrors.attOvertime}
+            inputProps={{ min: 0, step: '.5' }}
+            onValueChange={(val) => {
+              setAttOvertime(val);
+              setFieldErrors((p) => ({ ...p, attOvertime: '' }));
+            }}
+          />
+        </FormGrid>
+      </FormDialog>
 
       {/* Disburse Loan/Advance Dialog */}
-      <Dialog open={loanDialogOpen} onClose={() => !busy && setLoanDialogOpen(false)} maxWidth="xs" fullWidth>
-        <form onSubmit={handleCreateLoan}>
-          <DialogTitle sx={{ fontWeight: 700 }}>{isBn ? 'বেতন অগ্রিম ও ঋণ মঞ্জুর' : 'Disburse Advance / Loan'}</DialogTitle>
-          <DialogContent dividers>
-            <Stack spacing={2}>
-              <TextField
-                select
-                required
-                size="small"
-                label={isBn ? 'কর্মচারী' : 'Employee'}
-                value={loanEmpId}
-                onChange={(e) => setLoanEmpId(e.target.value)}
-                SelectProps={{ native: true }}
-              >
-                <option value="">-- {isBn ? 'নির্বাচন করুন' : 'Select'} --</option>
-                {employees.map((e) => (
-                  <option key={e.id} value={e.id}>{e.employeeCode} - {e.fullName}</option>
-                ))}
-              </TextField>
-              <TextField
-                select
-                required
-                size="small"
-                label={isBn ? 'ধরনের' : 'Type'}
-                value={loanType}
-                onChange={(e) => setLoanType(e.target.value)}
-                SelectProps={{ native: true }}
-              >
-                <option value="ADVANCE">SALARY ADVANCE (বেতন অগ্রিম)</option>
-                <option value="LOAN">STAFF LOAN (কর্মচারী ঋণ)</option>
-              </TextField>
-              <TextField
-                type="number"
-                required
-                size="small"
-                label={isBn ? 'মঞ্জুরিকৃত পরিমাণ (৳)' : 'Principal Amount (৳)'}
-                value={loanAmount}
-                onChange={(e) => setLoanAmount(e.target.value)}
-              />
-              <TextField
-                type="number"
-                required
-                size="small"
-                label={isBn ? 'মাসিক কর্তন (৳)' : 'Monthly Deduction (৳)'}
-                value={loanMonthly}
-                onChange={(e) => setLoanMonthly(e.target.value)}
-              />
-            </Stack>
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setLoanDialogOpen(false)} disabled={busy}>{isBn ? 'বাতিল' : 'Cancel'}</Button>
-            <Button type="submit" variant="contained" disabled={busy}>{isBn ? 'মঞ্জুর করুন' : 'Disburse'}</Button>
-          </DialogActions>
-        </form>
-      </Dialog>
+      <FormDialog
+        open={loanDialogOpen}
+        onClose={() => !busy && setLoanDialogOpen(false)}
+        onSubmit={handleCreateLoan}
+        title={isBn ? 'বেতন অগ্রিম ও ঋণ মঞ্জুর' : 'Disburse Advance / Loan'}
+        error={errorMsg}
+        onClearError={() => setErrorMsg(null)}
+        loading={busy}
+        submitLabel={isBn ? 'মঞ্জুর করুন' : 'Disburse'}
+        cancelLabel={isBn ? 'বাতিল' : 'Cancel'}
+        maxWidth="xs"
+      >
+        <FormGrid columns={1}>
+          <AppAutocomplete
+            fieldName="loanEmpId"
+            required
+            label={isBn ? 'কর্মচারী' : 'Employee'}
+            value={loanEmpId}
+            errorText={fieldErrors.loanEmpId}
+            options={employees.map((e) => ({
+              value: e.id,
+              label: e.fullName,
+              badge: e.employeeCode,
+            }))}
+            emptyMessage={isBn ? 'কোনো কর্মচারী নেই — আগে কর্মচারী যোগ করুন' : 'No employees registered — add an employee first'}
+            onChange={(val) => {
+              setLoanEmpId(val);
+              setFieldErrors((p) => ({ ...p, loanEmpId: '' }));
+            }}
+          />
+          <AppSelect
+            fieldName="loanType"
+            required
+            label={isBn ? 'ধরনের' : 'Type'}
+            value={loanType}
+            errorText={fieldErrors.loanType}
+            options={[
+              { value: 'ADVANCE', label: 'SALARY ADVANCE (বেতন অগ্রিম)' },
+              { value: 'LOAN', label: 'STAFF LOAN (কর্মচারী ঋণ)' },
+            ]}
+            onChange={(val) => {
+              setLoanType(val);
+              setFieldErrors((p) => ({ ...p, loanType: '' }));
+            }}
+          />
+          <AppTextField
+            fieldName="loanAmount"
+            type="number"
+            required
+            prefixText="৳"
+            label={isBn ? 'মঞ্জুরিকৃত পরিমাণ (৳)' : 'Principal Amount (৳)'}
+            value={loanAmount}
+            errorText={fieldErrors.loanAmount}
+            inputProps={{ min: 0 }}
+            onValueChange={(val) => {
+              setLoanAmount(val);
+              setFieldErrors((p) => ({ ...p, loanAmount: '' }));
+            }}
+          />
+          <AppTextField
+            fieldName="loanMonthly"
+            type="number"
+            required
+            prefixText="৳"
+            label={isBn ? 'মাসিক কর্তন (৳)' : 'Monthly Deduction (৳)'}
+            value={loanMonthly}
+            errorText={fieldErrors.loanMonthly}
+            inputProps={{ min: 0 }}
+            onValueChange={(val) => {
+              setLoanMonthly(val);
+              setFieldErrors((p) => ({ ...p, loanMonthly: '' }));
+            }}
+          />
+        </FormGrid>
+      </FormDialog>
 
       {/* Generate Payroll Dialog */}
-      <Dialog open={payrollDialogOpen} onClose={() => !busy && setPayrollDialogOpen(false)} maxWidth="xs" fullWidth>
-        <form onSubmit={handleGeneratePayroll}>
-          <DialogTitle sx={{ fontWeight: 700 }}>{isBn ? 'মাসিক পেরোল তৈরি' : 'Generate Monthly Payroll'}</DialogTitle>
-          <DialogContent dividers>
-            <Stack spacing={2}>
-              <Typography variant="body2" color="text.secondary">
-                {isBn
-                  ? 'সক্রিয় সকল কর্মচারীর জন্য উপস্থিতি, ওভারটাইম এবং অগ্রিম সমন্বয় করে স্বয়ংক্রিয়ভাবে নিট বেতন নির্ধারণ করা হবে।'
-                  : 'Automated calculation of base salaries, overtime rates, absent deductions, and loan repayments for all active personnel.'}
-              </Typography>
-              <TextField
-                type="month"
-                required
-                size="small"
-                label={isBn ? 'মাস ও বছর' : 'Month & Year'}
-                value={payrollMonth}
-                onChange={(e) => setPayrollMonth(e.target.value)}
-                InputLabelProps={{ shrink: true }}
-              />
-            </Stack>
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setPayrollDialogOpen(false)} disabled={busy}>{isBn ? 'বাতিল' : 'Cancel'}</Button>
-            <Button type="submit" variant="contained" disabled={busy}>{isBn ? 'তৈরি করুন' : 'Generate'}</Button>
-          </DialogActions>
-        </form>
-      </Dialog>
+      <FormDialog
+        open={payrollDialogOpen}
+        onClose={() => !busy && setPayrollDialogOpen(false)}
+        onSubmit={handleGeneratePayroll}
+        title={isBn ? 'মাসিক পেরোল তৈরি' : 'Generate Monthly Payroll'}
+        error={errorMsg}
+        onClearError={() => setErrorMsg(null)}
+        loading={busy}
+        submitLabel={isBn ? 'তৈরি করুন' : 'Generate'}
+        cancelLabel={isBn ? 'বাতিল' : 'Cancel'}
+        maxWidth="xs"
+      >
+        <Typography variant="body2" color="text.secondary">
+          {isBn
+            ? 'সক্রিয় সকল কর্মচারীর জন্য উপস্থিতি, ওভারটাইম এবং অগ্রিম সমন্বয় করে স্বয়ংক্রিয়ভাবে নিট বেতন নির্ধারণ করা হবে।'
+            : 'Automated calculation of base salaries, overtime rates, absent deductions, and loan repayments for all active personnel.'}
+        </Typography>
+        <AppTextField
+          fieldName="payrollMonth"
+          type="month"
+          required
+          label={isBn ? 'মাস ও বছর' : 'Month & Year'}
+          value={payrollMonth}
+          errorText={fieldErrors.payrollMonth}
+          onValueChange={(val) => {
+            setPayrollMonth(val);
+            setFieldErrors((p) => ({ ...p, payrollMonth: '' }));
+          }}
+          InputLabelProps={{ shrink: true }}
+        />
+      </FormDialog>
 
       {/* Printable Payroll Sheet Modal */}
       {printPayroll && (

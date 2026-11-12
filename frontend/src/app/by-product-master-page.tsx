@@ -2,12 +2,15 @@
 
 import { FormEvent, useEffect, useState } from 'react';
 import {
-  Alert, Box, Button, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle,
-  FormControl, InputLabel, MenuItem, Paper, Select, Stack, Table, TableBody, TableCell, TableHead,
-  TableRow, TextField, Typography,
+  Alert, Box, Button, Chip, CircularProgress,
+  Paper, Stack, Table, TableBody, TableCell, TableHead,
+  TableRow, Typography,
 } from '@mui/material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiRequest, ApiError, queryString } from '@/lib/api';
+import { extractApiError, useToast } from '@/components/ui/toast-provider';
+import { focusFieldByName, validateFormFields } from '@/lib/form-validation';
+import { AppSelect, AppTextField, FormDialog, FormGrid } from '@/components/form';
 
 type ByProduct = {
   id: string;
@@ -174,6 +177,7 @@ export function ByProductMasterPage({
   onSaved: (message: string) => void;
 }) {
   const t = labels[language];
+  const toast = useToast();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [activeFilter, setActiveFilter] = useState<'all' | 'true' | 'false'>('all');
@@ -182,9 +186,11 @@ export function ByProductMasterPage({
   const [editing, setEditing] = useState<ByProduct | null>(null);
   const [values, setValues] = useState<ByProductForm>(blankForm);
   const [formError, setFormError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [priceItem, setPriceItem] = useState<ByProduct | null>(null);
   const [priceValues, setPriceValues] = useState<ReferencePrices>({ purchasePrice: '', salesPrice: '' });
   const [priceError, setPriceError] = useState('');
+  const [priceFieldErrors, setPriceFieldErrors] = useState<Record<string, string>>({});
 
   const itemsQuery = useQuery({
     queryKey: ['by-product-master', companyId, search, activeFilter, page],
@@ -254,7 +260,11 @@ export function ByProductMasterPage({
       setValues(blankForm);
       onSaved(language === 'bn' ? 'উপজাত পণ্য সংরক্ষিত হয়েছে।' : 'By-product saved.');
     },
-    onError: reason => setFormError(messageOf(reason, t.failed)),
+    onError: reason => {
+      const msg = extractApiError(reason, t.failed);
+      setFormError(msg);
+      toast.error(msg);
+    },
   });
 
   const updateMutation = useMutation({
@@ -278,9 +288,14 @@ export function ByProductMasterPage({
       await queryClient.invalidateQueries({ queryKey: ['by-product-master', companyId] });
       setOpen(false);
       setEditing(null);
+      setFieldErrors({});
       onSaved(language === 'bn' ? 'উপজাত পণ্য হালনাগাদ হয়েছে।' : 'By-product updated.');
     },
-    onError: reason => setFormError(messageOf(reason, t.failed)),
+    onError: reason => {
+      const msg = extractApiError(reason, t.failed);
+      setFormError(msg);
+      toast.error(msg);
+    },
   });
 
   const priceMutation = useMutation({
@@ -295,16 +310,22 @@ export function ByProductMasterPage({
       await queryClient.invalidateQueries({ queryKey: ['by-product-prices', companyId, priceItem?.id] });
       await queryClient.invalidateQueries({ queryKey: ['by-product-master', companyId] });
       setPriceError('');
+      setPriceFieldErrors({});
       setPriceItem(null);
       onSaved(language === 'bn' ? 'রেফারেন্স মূল্য সংরক্ষিত হয়েছে।' : 'Reference prices saved.');
     },
-    onError: reason => setPriceError(messageOf(reason, t.permission)),
+    onError: reason => {
+      const msg = extractApiError(reason, t.permission);
+      setPriceError(msg);
+      toast.error(msg);
+    },
   });
 
   function startCreate() {
     setEditing(null);
     setValues(blankForm);
     setFormError('');
+    setFieldErrors({});
     setOpen(true);
   }
 
@@ -312,6 +333,7 @@ export function ByProductMasterPage({
     setEditing(item);
     setValues(toForm(item));
     setFormError('');
+    setFieldErrors({});
     setOpen(true);
   }
 
@@ -319,18 +341,59 @@ export function ByProductMasterPage({
     setPriceItem(item);
     setPriceValues({ purchasePrice: '', salesPrice: '' });
     setPriceError('');
+    setPriceFieldErrors({});
   }
 
   function submit(event: FormEvent) {
     event.preventDefault();
+    const validation = validateFormFields(
+      [
+        { name: 'name', label: t.name, value: values.name, required: true },
+        { name: 'code', label: t.code, value: values.code, required: true },
+        { name: 'byProductTypeChoice', label: t.type, value: values.byProductTypeChoice, required: true, isSelect: true },
+        ...(values.byProductTypeChoice === 'CUSTOM'
+          ? [{ name: 'customType', label: t.custom, value: values.customType, required: true }]
+          : []),
+        ...(!editing
+          ? [
+              { name: 'purchasePrice', label: t.purchasePrice, value: values.purchasePrice, required: true, type: 'nonNegativeNumber' as const, min: 0 },
+              { name: 'salesPrice', label: t.salesPrice, value: values.salesPrice, required: true, type: 'nonNegativeNumber' as const, min: 0 },
+            ]
+          : []),
+      ],
+      language,
+    );
+    if (!validation.valid) {
+      setFieldErrors(validation.errors);
+      setFormError(validation.summary);
+      toast.warning(validation.summary);
+      focusFieldByName(validation.firstField);
+      return;
+    }
     setFormError('');
+    setFieldErrors({});
     if (editing) updateMutation.mutate();
     else createMutation.mutate();
   }
 
   function submitPrices(event: FormEvent) {
     event.preventDefault();
+    const validation = validateFormFields(
+      [
+        { name: 'pricePurchase', label: t.purchasePrice, value: priceValues.purchasePrice ?? '', required: true, type: 'nonNegativeNumber', min: 0 },
+        { name: 'priceSales', label: t.salesPrice, value: priceValues.salesPrice ?? '', required: true, type: 'nonNegativeNumber', min: 0 },
+      ],
+      language,
+    );
+    if (!validation.valid) {
+      setPriceFieldErrors(validation.errors);
+      setPriceError(validation.summary);
+      toast.warning(validation.summary);
+      focusFieldByName(validation.firstField);
+      return;
+    }
     setPriceError('');
+    setPriceFieldErrors({});
     priceMutation.mutate();
   }
 
@@ -342,13 +405,23 @@ export function ByProductMasterPage({
       <Button variant="contained" onClick={startCreate}>{t.add}</Button>
     </Box>
     <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
-      <TextField size="small" fullWidth value={search} placeholder={t.search} onChange={event => { setSearch(event.target.value); setPage(1); }} />
-      <FormControl size="small" sx={{ minWidth: 160 }}><InputLabel>{t.filter}</InputLabel><Select label={t.filter} value={activeFilter} onChange={event => { setActiveFilter(event.target.value as typeof activeFilter); setPage(1); }}>
-        <MenuItem value="all">{t.all}</MenuItem><MenuItem value="true">{t.activeOnly}</MenuItem><MenuItem value="false">{t.inactiveOnly}</MenuItem>
-      </Select></FormControl>
+      <AppTextField fieldName="search" value={search} placeholder={t.search} onValueChange={v => { setSearch(v); setPage(1); }} />
+      <Box sx={{ minWidth: 180 }}>
+        <AppSelect
+          name="filter"
+          label={t.filter}
+          value={activeFilter}
+          onChange={v => { setActiveFilter(v as typeof activeFilter); setPage(1); }}
+          options={[
+            { value: 'all', label: t.all },
+            { value: 'true', label: t.activeOnly },
+            { value: 'false', label: t.inactiveOnly },
+          ]}
+        />
+      </Box>
     </Stack>
-    {itemsQuery.error && <Alert severity="error">{messageOf(itemsQuery.error, t.failed)}</Alert>}
-    {activityQuery.error && !(activityQuery.error instanceof ApiError && activityQuery.error.status === 403) && <Alert severity="error">{messageOf(activityQuery.error, t.failed)}</Alert>}
+    {itemsQuery.error && <Alert severity="error">{extractApiError(itemsQuery.error, t.failed)}</Alert>}
+    {activityQuery.error && !(activityQuery.error instanceof ApiError && activityQuery.error.status === 403) && <Alert severity="error">{extractApiError(activityQuery.error, t.failed)}</Alert>}
     {activityQuery.error instanceof ApiError && activityQuery.error.status === 403 && <Alert severity="info">{t.inventoryPermission}</Alert>}
     <Paper variant="outlined" sx={{ overflowX: 'auto' }}>
       {itemsQuery.isLoading
@@ -395,44 +468,76 @@ export function ByProductMasterPage({
       <Button size="small" disabled={rows.length < 100 || itemsQuery.isFetching} onClick={() => setPage(current => current + 1)}>{t.next}</Button>
     </Stack>
 
-    <Dialog open={open} onClose={() => setOpen(false)} fullWidth maxWidth="sm">
-      <DialogTitle>{editing ? t.edit : t.add}</DialogTitle>
-      <Box component="form" onSubmit={submit}>
-        <DialogContent><Stack spacing={2}>
-          {formError && <Alert severity="error">{formError}</Alert>}
-          <TextField label={t.name} required value={values.name} onChange={event => setValues(current => ({ ...current, name: event.target.value }))} />
-          <TextField label={t.code} required value={values.code} onChange={event => setValues(current => ({ ...current, code: event.target.value }))} />
-          <FormControl fullWidth required><InputLabel>{t.type}</InputLabel><Select label={t.type} value={values.byProductTypeChoice} onChange={event => setValues(current => ({ ...current, byProductTypeChoice: event.target.value }))}>
-            <MenuItem value="">{t.choose}</MenuItem>
-            {byProductTypes.map(type => <MenuItem key={type.value} value={type.value}>{type[language]}</MenuItem>)}
-            <MenuItem value="CUSTOM">{t.custom}</MenuItem>
-          </Select></FormControl>
-          {values.byProductTypeChoice === 'CUSTOM' && <TextField label={t.custom} required value={values.customType} onChange={event => setValues(current => ({ ...current, customType: event.target.value }))} />}
-          <TextField label={t.grade} value={values.grade} onChange={event => setValues(current => ({ ...current, grade: event.target.value }))} />
-          <TextField label={t.description} multiline minRows={2} value={values.description} onChange={event => setValues(current => ({ ...current, description: event.target.value }))} />
-          {!editing && <>
-            <TextField label={t.purchasePrice} required type="number" inputProps={{ min: 0, step: 0.0001 }} value={values.purchasePrice} onChange={event => setValues(current => ({ ...current, purchasePrice: event.target.value }))} />
-            <TextField label={t.salesPrice} required type="number" inputProps={{ min: 0, step: 0.0001 }} value={values.salesPrice} onChange={event => setValues(current => ({ ...current, salesPrice: event.target.value }))} />
-          </>}
-          {editing && <FormControl fullWidth><InputLabel>{t.active}</InputLabel><Select label={t.active} value={values.active ? 'true' : 'false'} onChange={event => setValues(current => ({ ...current, active: event.target.value === 'true' }))}><MenuItem value="true">{t.enabled}</MenuItem><MenuItem value="false">{t.disabled}</MenuItem></Select></FormControl>}
-        </Stack></DialogContent>
-        <DialogActions><Button onClick={() => setOpen(false)}>{t.cancel}</Button><Button type="submit" variant="contained" disabled={createMutation.isPending || updateMutation.isPending}>{createMutation.isPending || updateMutation.isPending ? <CircularProgress size={18} /> : t.save}</Button></DialogActions>
-      </Box>
-    </Dialog>
+    <FormDialog
+      open={open}
+      onClose={() => setOpen(false)}
+      onSubmit={submit}
+      title={editing ? t.edit : t.add}
+      error={formError}
+      onClearError={() => setFormError('')}
+      loading={createMutation.isPending || updateMutation.isPending}
+      submitLabel={t.save}
+      cancelLabel={t.cancel}
+      maxWidth="md"
+    >
+      <FormGrid columns={2}>
+        <AppTextField fieldName="name" label={t.name} required value={values.name} errorText={fieldErrors.name} onValueChange={v => { setValues(c => ({ ...c, name: v })); setFieldErrors(p => ({ ...p, name: '' })); }} />
+        <AppTextField fieldName="code" label={t.code} required value={values.code} errorText={fieldErrors.code} onValueChange={v => { setValues(c => ({ ...c, code: v })); setFieldErrors(p => ({ ...p, code: '' })); }} />
+        <AppSelect
+          fieldName="byProductTypeChoice"
+          label={t.type}
+          required
+          value={values.byProductTypeChoice}
+          emptyOptionLabel={t.choose}
+          errorText={fieldErrors.byProductTypeChoice}
+          onChange={v => { setValues(c => ({ ...c, byProductTypeChoice: v })); setFieldErrors(p => ({ ...p, byProductTypeChoice: '' })); }}
+          options={[
+            ...byProductTypes.map(type => ({ value: type.value, label: type[language] })),
+            { value: 'CUSTOM', label: t.custom },
+          ]}
+        />
+        {values.byProductTypeChoice === 'CUSTOM' && (
+          <AppTextField fieldName="customType" label={t.custom} required value={values.customType} errorText={fieldErrors.customType} onValueChange={v => { setValues(c => ({ ...c, customType: v })); setFieldErrors(p => ({ ...p, customType: '' })); }} />
+        )}
+        <AppTextField fieldName="grade" label={t.grade} value={values.grade} onValueChange={v => setValues(c => ({ ...c, grade: v }))} />
+        {!editing && <>
+          <AppTextField fieldName="purchasePrice" label={t.purchasePrice} prefixText="৳" type="number" inputProps={{ min: 0, step: 0.0001 }} required value={values.purchasePrice} errorText={fieldErrors.purchasePrice} onValueChange={v => { setValues(c => ({ ...c, purchasePrice: v })); setFieldErrors(p => ({ ...p, purchasePrice: '' })); }} />
+          <AppTextField fieldName="salesPrice" label={t.salesPrice} prefixText="৳" type="number" inputProps={{ min: 0, step: 0.0001 }} required value={values.salesPrice} errorText={fieldErrors.salesPrice} onValueChange={v => { setValues(c => ({ ...c, salesPrice: v })); setFieldErrors(p => ({ ...p, salesPrice: '' })); }} />
+        </>}
+        {editing && (
+          <AppSelect
+            fieldName="active"
+            label={t.active}
+            value={values.active ? 'true' : 'false'}
+            onChange={v => setValues(c => ({ ...c, active: v === 'true' }))}
+            options={[{ value: 'true', label: t.enabled }, { value: 'false', label: t.disabled }]}
+          />
+        )}
+        <Box sx={{ gridColumn: { sm: '1 / -1' } }}>
+          <AppTextField fieldName="description" label={t.description} multiline minRows={2} value={values.description} onValueChange={v => setValues(c => ({ ...c, description: v }))} />
+        </Box>
+      </FormGrid>
+    </FormDialog>
 
-    <Dialog open={Boolean(priceItem)} onClose={() => setPriceItem(null)} fullWidth maxWidth="xs">
-      <DialogTitle>{t.prices}: {priceItem?.name}</DialogTitle>
-      <Box component="form" onSubmit={submitPrices}>
-        <DialogContent><Stack spacing={2}>
-          {priceError && <Alert severity="error">{priceError}</Alert>}
-          {priceQuery.isError && !(priceQuery.error instanceof ApiError && priceQuery.error.status === 403) && <Alert severity="error">{messageOf(priceQuery.error, t.permission)}</Alert>}
-          {priceQuery.error instanceof ApiError && priceQuery.error.status === 403 && <Alert severity="info">{t.permission}</Alert>}
-          {priceQuery.isLoading && <CircularProgress size={20} />}
-          <TextField label={t.purchasePrice} required type="number" inputProps={{ min: 0, step: 0.0001 }} value={priceValues.purchasePrice} onChange={event => setPriceValues(current => ({ ...current, purchasePrice: event.target.value }))} />
-          <TextField label={t.salesPrice} required type="number" inputProps={{ min: 0, step: 0.0001 }} value={priceValues.salesPrice} onChange={event => setPriceValues(current => ({ ...current, salesPrice: event.target.value }))} />
-        </Stack></DialogContent>
-        <DialogActions><Button onClick={() => setPriceItem(null)}>{t.cancel}</Button><Button type="submit" variant="contained" disabled={priceMutation.isPending || priceQuery.isLoading || Boolean(priceQuery.error)}>{priceMutation.isPending ? <CircularProgress size={18} /> : t.savePrices}</Button></DialogActions>
-      </Box>
-    </Dialog>
+    <FormDialog
+      open={Boolean(priceItem)}
+      onClose={() => setPriceItem(null)}
+      onSubmit={submitPrices}
+      title={`${t.prices}: ${priceItem?.name ?? ''}`}
+      error={priceError || (priceQuery.isError && !(priceQuery.error instanceof ApiError && priceQuery.error.status === 403) ? extractApiError(priceQuery.error, t.permission) : '')}
+      onClearError={() => setPriceError('')}
+      loading={priceMutation.isPending}
+      submitDisabled={priceQuery.isLoading || Boolean(priceQuery.error)}
+      submitLabel={t.savePrices}
+      cancelLabel={t.cancel}
+      maxWidth="xs"
+    >
+      {priceQuery.error instanceof ApiError && priceQuery.error.status === 403 && <Alert severity="info">{t.permission}</Alert>}
+      {priceQuery.isLoading && <Stack direction="row" spacing={1} alignItems="center"><CircularProgress size={18} /><Typography variant="caption">Loading current prices...</Typography></Stack>}
+      <FormGrid columns={1}>
+        <AppTextField fieldName="pricePurchase" label={t.purchasePrice} prefixText="৳" type="number" inputProps={{ min: 0, step: 0.0001 }} required value={priceValues.purchasePrice ?? ''} errorText={priceFieldErrors.pricePurchase} onValueChange={v => { setPriceValues(c => ({ ...c, purchasePrice: v })); setPriceFieldErrors(p => ({ ...p, pricePurchase: '' })); }} />
+        <AppTextField fieldName="priceSales" label={t.salesPrice} prefixText="৳" type="number" inputProps={{ min: 0, step: 0.0001 }} required value={priceValues.salesPrice ?? ''} errorText={priceFieldErrors.priceSales} onValueChange={v => { setPriceValues(c => ({ ...c, salesPrice: v })); setFieldErrors(p => ({ ...p, priceSales: '' })); }} />
+      </FormGrid>
+    </FormDialog>
   </Stack>;
 }

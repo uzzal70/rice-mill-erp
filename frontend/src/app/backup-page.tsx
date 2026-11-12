@@ -23,11 +23,6 @@ import {
   Alert,
   Divider,
   Stack,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  TextField,
   IconButton,
 } from '@mui/material';
 import BackupIcon from '@mui/icons-material/Backup';
@@ -38,6 +33,8 @@ import DownloadIcon from '@mui/icons-material/Download';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import MenuBookIcon from '@mui/icons-material/MenuBook';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
+import { AppSelect, AppTextField, FormDialog, FormGrid } from '@/components/form';
+import { useToast } from '@/components/ui/toast-provider';
 
 interface BackupItem {
   id: string;
@@ -58,6 +55,7 @@ export function BackupPage({
   language?: 'en' | 'bn';
 }) {
   const isBn = language === 'bn';
+  const toast = useToast();
   const [createDialog, setCreateDialog] = useState(false);
   const [guideDialog, setGuideDialog] = useState(false);
   const [backupType, setBackupType] = useState<'DATABASE' | 'FILES' | 'FULL'>('DATABASE');
@@ -97,7 +95,8 @@ export function BackupPage({
     },
   ]);
 
-  const handleCreateBackup = () => {
+  const handleCreateBackup = (e?: React.FormEvent) => {
+    e?.preventDefault();
     const timestamp = new Date().toISOString().replace(/[-:T.]/g, '').slice(0, 14);
     const ext = backupType === 'DATABASE' ? 'sql.gz' : 'tar.gz';
     const newRecord: BackupItem = {
@@ -114,17 +113,19 @@ export function BackupPage({
     setArchives(prev => [newRecord, ...prev]);
     setCreateDialog(false);
     setBackupNotes('');
-    setToastMsg(
-      isBn
-        ? `সফল: নতুন ${backupType} ব্যাকআপ তৈরি হয়েছে (${newRecord.filename})`
-        : `Success: New ${backupType} backup snapshot created (${newRecord.filename})`,
-    );
+    const msg = isBn
+      ? `সফল: নতুন ${backupType} ব্যাকআপ তৈরি হয়েছে (${newRecord.filename})`
+      : `Success: New ${backupType} backup snapshot created (${newRecord.filename})`;
+    setToastMsg(msg);
+    toast.success(msg);
     setTimeout(() => setToastMsg(''), 5000);
   };
 
   const handleDelete = (id: string) => {
     setArchives(prev => prev.filter(a => a.id !== id));
-    setToastMsg(isBn ? 'ব্যাকআপ আর্কাইভ মুছে ফেলা হয়েছে।' : 'Backup archive deleted.');
+    const msg = isBn ? 'ব্যাকআপ আর্কাইভ মুছে ফেলা হয়েছে।' : 'Backup archive deleted.';
+    setToastMsg(msg);
+    toast.info(msg);
     setTimeout(() => setToastMsg(''), 4000);
   };
 
@@ -303,37 +304,37 @@ export function BackupPage({
       </Paper>
 
       {/* CREATE BACKUP DIALOG */}
-      <Dialog open={createDialog} onClose={() => setCreateDialog(false)} maxWidth="sm" fullWidth>
-        <DialogTitle sx={{ fontWeight: 800 }}>
-          {isBn ? 'নতুন ব্যাকআপ স্ন্যাপশট তৈরি করুন' : 'Create New Backup Snapshot'}
-        </DialogTitle>
-        <DialogContent dividers>
-          <Stack spacing={2} sx={{ mt: 1 }}>
-            <FormControl fullWidth size="small">
-              <InputLabel>{isBn ? 'ব্যাকআপের ধরন' : 'Backup Type'}</InputLabel>
-              <Select value={backupType} label={isBn ? 'ব্যাকআপের ধরন' : 'Backup Type'} onChange={e => setBackupType(e.target.value as any)}>
-                <MenuItem value="DATABASE">{isBn ? 'ডাটাবেজ ব্যাকআপ (PostgreSQL .sql.gz)' : 'Database Only (.sql.gz)'}</MenuItem>
-                <MenuItem value="FILES">{isBn ? 'ডকুমেন্ট ও ফাইল ব্যাকআপ (.tar.gz)' : 'Document & File Attachments (.tar.gz)'}</MenuItem>
-                <MenuItem value="FULL">{isBn ? 'পূর্ণাঙ্গ সিস্টেম ব্যাকআপ (ডাটাবেজ + ফাইল)' : 'Full System Backup (DB + Files)'}</MenuItem>
-              </Select>
-            </FormControl>
-            <TextField
-              label={isBn ? 'মন্তব্য / নোট (ঐচ্ছিক)' : 'Backup Notes (Optional)'}
-              fullWidth
-              size="small"
-              value={backupNotes}
-              onChange={e => setBackupNotes(e.target.value)}
-              placeholder="e.g. Month-end closing snapshot"
-            />
-          </Stack>
-        </DialogContent>
-        <DialogActions sx={{ p: 2 }}>
-          <Button onClick={() => setCreateDialog(false)}>{isBn ? 'বাতিল' : 'Cancel'}</Button>
-          <Button variant="contained" onClick={handleCreateBackup} sx={{ fontWeight: 700 }}>
-            {isBn ? 'ব্যাকআপ শুরু করুন' : 'Start Backup'}
-          </Button>
-        </DialogActions>
-      </Dialog>
+      <FormDialog
+        open={createDialog}
+        onClose={() => setCreateDialog(false)}
+        onSubmit={handleCreateBackup}
+        title={isBn ? 'নতুন ব্যাকআপ স্ন্যাপশট তৈরি করুন' : 'Create New Backup Snapshot'}
+        submitLabel={isBn ? 'ব্যাকআপ শুরু করুন' : 'Start Backup'}
+        cancelLabel={isBn ? 'বাতিল' : 'Cancel'}
+        maxWidth="sm"
+      >
+        <FormGrid columns={1}>
+          <AppSelect
+            fieldName="backupType"
+            required
+            label={isBn ? 'ব্যাকআপের ধরন' : 'Backup Type'}
+            value={backupType}
+            options={[
+              { value: 'DATABASE', label: isBn ? 'ডাটাবেজ ব্যাকআপ (PostgreSQL .sql.gz)' : 'Database Only (.sql.gz)' },
+              { value: 'FILES', label: isBn ? 'ডকুমেন্ট ও ফাইল ব্যাকআপ (.tar.gz)' : 'Document & File Attachments (.tar.gz)' },
+              { value: 'FULL', label: isBn ? 'পূর্ণাঙ্গ সিস্টেম ব্যাকআপ (ডাটাবেজ + ফাইল)' : 'Full System Backup (DB + Files)' },
+            ]}
+            onChange={(val) => setBackupType(val as 'DATABASE' | 'FILES' | 'FULL')}
+          />
+          <AppTextField
+            fieldName="backupNotes"
+            label={isBn ? 'মন্তব্য / নোট (ঐচ্ছিক)' : 'Backup Notes (Optional)'}
+            value={backupNotes}
+            onValueChange={(val) => setBackupNotes(val)}
+            placeholder="e.g. Month-end closing snapshot"
+          />
+        </FormGrid>
+      </FormDialog>
 
       {/* RESTORE DOCUMENTATION DIALOG */}
       <Dialog open={guideDialog} onClose={() => setGuideDialog(false)} maxWidth="md" fullWidth>

@@ -1,6 +1,9 @@
 'use client';
 
 import React, { useState } from 'react';
+import { Alert } from '@mui/material';
+import { AppSelect, FormDialog, FormGrid } from '@/components/form';
+import { useToast } from '@/components/ui/toast-provider';
 
 export type NotificationChannel = 'IN_APP' | 'EMAIL' | 'SMS' | 'WHATSAPP';
 
@@ -84,6 +87,8 @@ const PRIORITY_BADGES: Record<
 };
 
 export function NotificationsPage({ companyId, language, onSaved, onNavigate }: NotificationsPageProps) {
+  const toast = useToast();
+  const isBn = language === 'bn';
   const [activeTab, setActiveTab] = useState<string>('ALL');
   const [selectedChannel, setSelectedChannel] = useState<string>('ALL');
   const [selectedPriority, setSelectedPriority] = useState<string>('ALL');
@@ -354,7 +359,9 @@ export function NotificationsPage({ companyId, language, onSaved, onNavigate }: 
     };
     setNotifications([newNotif, ...notifications]);
     setShowDispatchModal(false);
-    onSaved?.(`Dispatched test ${testType} alert to ${testTargetRole}.`);
+    const msg = `Dispatched test ${testType} alert to ${testTargetRole}.`;
+    if (onSaved) onSaved(msg);
+    else toast.success(msg);
   };
 
   // Advanced Filtering
@@ -651,123 +658,96 @@ export function NotificationsPage({ companyId, language, onSaved, onNavigate }: 
       </div>
 
       {/* 5. MODAL: DISPATCH TEST NOTIFICATION */}
-      {showDispatchModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-200">
-            <h3 className="text-base font-bold text-slate-900 mb-1">
-              {language === 'bn' ? 'টেস্ট নোটিফিকেশন তৈরি করুন' : 'Trigger Test Notification'}
-            </h3>
-            <p className="text-xs text-slate-500 mb-4">
-              {language === 'bn'
-                ? 'যেকোনো বিভাগ, প্রাপক এবং চ্যানেলে টেস্ট নোটিফিকেশন পাঠিয়ে যাচাই করুন।'
-                : 'Select recipient role, event trigger type, priority level, and dispatch channel.'}
-            </p>
+      <FormDialog
+        open={showDispatchModal}
+        onClose={() => setShowDispatchModal(false)}
+        onSubmit={handleTriggerTest}
+        title={isBn ? 'টেস্ট নোটিফিকেশন তৈরি করুন' : 'Trigger Test Notification'}
+        subtitle={
+          isBn
+            ? 'যেকোনো বিভাগ, প্রাপক এবং চ্যানেলে টেস্ট নোটিফিকেশন পাঠিয়ে যাচাই করুন।'
+            : 'Select recipient role, event trigger type, priority level, and dispatch channel.'
+        }
+        submitLabel={isBn ? 'নোটিফিকেশন পাঠান' : 'Dispatch Alert'}
+        cancelLabel={isBn ? 'বাতিল' : 'Cancel'}
+        maxWidth="sm"
+      >
+        <FormGrid columns={1}>
+          <AppSelect
+            fieldName="testTargetRole"
+            required
+            label={isBn ? 'প্রাপক পদবী (Target Role / Audience)' : 'Target Recipient Role (Audience)'}
+            value={testTargetRole}
+            options={[
+              { value: 'OWNER', label: '👑 Managing Director / Owner (মালিক ও প্রশাসন)' },
+              { value: 'ACCOUNTANT', label: '📊 Chief Accountant (প্রধান হিসাবরক্ষক)' },
+              { value: 'FACTORY_MANAGER', label: '🏭 Factory Manager (কারখানা ম্যানেজার)' },
+              { value: 'STORE_MANAGER', label: '📦 Storekeeper / Godown (গুদাম ইন-চার্জ)' },
+              { value: 'GATE_OPERATOR', label: '⚖️ Weighbridge & Gate (স্কেল ও গেট ডেস্ক)' },
+              { value: 'PURCHASE_MANAGER', label: '🛒 Purchase Officer (ধান ক্রয় কর্মকর্তা)' },
+              { value: 'SALES_MANAGER', label: '💼 Sales & Recovery (চাল বিক্রয় বিভাগ)' },
+              { value: 'LAB_TECHNICIAN', label: '🔬 Lab In-Charge (মান ও আর্দ্রতা ল্যাব)' },
+              { value: 'MAINTENANCE_HEAD', label: '🛠️ Maintenance Engineer (রক্ষণাবেক্ষণ)' },
+            ]}
+            onChange={(val) => setTestTargetRole(val as TargetRole)}
+          />
 
-            <form onSubmit={handleTriggerTest} className="space-y-3.5 text-xs">
-              {/* Target Role Selector */}
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">
-                  {language === 'bn' ? 'প্রাপক পদবী (Target Role / Audience):' : 'Target Recipient Role (Audience):'}
-                </label>
-                <select
-                  value={testTargetRole}
-                  onChange={(e) => setTestTargetRole(e.target.value as TargetRole)}
-                  className="w-full p-2.5 border border-slate-300 rounded-lg text-xs font-semibold bg-white"
-                >
-                  <option value="OWNER">👑 Managing Director / Owner (মালিক ও প্রশাসন)</option>
-                  <option value="ACCOUNTANT">📊 Chief Accountant (প্রধান হিসাবরক্ষক)</option>
-                  <option value="FACTORY_MANAGER">🏭 Factory Manager (কারখানা ম্যানেজার)</option>
-                  <option value="STORE_MANAGER">📦 Storekeeper / Godown (গুদাম ইন-চার্জ)</option>
-                  <option value="GATE_OPERATOR">⚖️ Weighbridge & Gate (স্কেল ও গেট ডেস্ক)</option>
-                  <option value="PURCHASE_MANAGER">🛒 Purchase Officer (ধান ক্রয় কর্মকর্তা)</option>
-                  <option value="SALES_MANAGER">💼 Sales & Recovery (চাল বিক্রয় বিভাগ)</option>
-                  <option value="LAB_TECHNICIAN">🔬 Lab In-Charge (মান ও আর্দ্রতা ল্যাব)</option>
-                  <option value="MAINTENANCE_HEAD">🛠️ Maintenance Engineer (রক্ষণাবেক্ষণ)</option>
-                </select>
-              </div>
+          <AppSelect
+            fieldName="testType"
+            required
+            label={isBn ? 'নোটিফিকেশনের ধরন (Event Domain)' : 'Notification Trigger Type'}
+            value={testType}
+            options={[
+              { value: 'DUE', label: '💰 Due (Customer / Supplier Due Overdue)' },
+              { value: 'PAYMENT', label: '💳 Payment (Received / Disbursed Settlement)' },
+              { value: 'LOW_STOCK', label: '⚠️ Low Stock (Paddy / Rice / Packaging Bags)' },
+              { value: 'APPROVAL', label: '✍️ Approval (Pending Purchase/Expense Sign-off)' },
+              { value: 'PRODUCTION', label: '⚙️ Production (Batch Complete & Recovery Yield)' },
+              { value: 'QUALITY', label: '🔬 Quality (Moisture Deduction & Grain Reject)' },
+              { value: 'VEHICLE', label: '🚛 Vehicle (Gate Pass & Weighbridge Tare/Net)' },
+              { value: 'DOCUMENT_EXPIRY', label: '📄 Document Expiry (Trade License / Insurance)' },
+              { value: 'MAINTENANCE', label: '🛠️ Maintenance (Boiler / Huller Service Due)' },
+            ]}
+            onChange={(val) => setTestType(val as NotificationType)}
+          />
+        </FormGrid>
 
-              {/* Event Trigger Type */}
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">
-                  {language === 'bn' ? 'নোটিফিকেশনের ধরন (Event Domain):' : 'Notification Trigger Type:'}
-                </label>
-                <select
-                  value={testType}
-                  onChange={(e) => setTestType(e.target.value as NotificationType)}
-                  className="w-full p-2.5 border border-slate-300 rounded-lg text-xs font-semibold bg-white"
-                >
-                  <option value="DUE">💰 Due (Customer / Supplier Due Overdue)</option>
-                  <option value="PAYMENT">💳 Payment (Received / Disbursed Settlement)</option>
-                  <option value="LOW_STOCK">⚠️ Low Stock (Paddy / Rice / Packaging Bags)</option>
-                  <option value="APPROVAL">✍️ Approval (Pending Purchase/Expense Sign-off)</option>
-                  <option value="PRODUCTION">⚙️ Production (Batch Complete & Recovery Yield)</option>
-                  <option value="QUALITY">🔬 Quality (Moisture Deduction & Grain Reject)</option>
-                  <option value="VEHICLE">🚛 Vehicle (Gate Pass & Weighbridge Tare/Net)</option>
-                  <option value="DOCUMENT_EXPIRY">📄 Document Expiry (Trade License / Insurance)</option>
-                  <option value="MAINTENANCE">🛠️ Maintenance (Boiler / Huller Service Due)</option>
-                </select>
-              </div>
+        <FormGrid columns={{ xs: 1, sm: 2 }}>
+          <AppSelect
+            fieldName="testPriority"
+            required
+            label={isBn ? 'জরুরিতা (Priority)' : 'Priority Level'}
+            value={testPriority}
+            options={[
+              { value: 'CRITICAL', label: '🔴 Critical (জরুরি)' },
+              { value: 'HIGH', label: '🟠 High (উচ্চ সতর্কতা)' },
+              { value: 'NORMAL', label: '🔵 Normal (তথ্য)' },
+              { value: 'SUCCESS', label: '🟢 Success (সম্পন্ন)' },
+            ]}
+            onChange={(val) => setTestPriority(val as NotificationPriority)}
+          />
 
-              {/* Priority & Channel */}
-              <div className="grid grid-cols-2 gap-2.5">
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">
-                    {language === 'bn' ? 'জরুরিতা (Priority):' : 'Priority Level:'}
-                  </label>
-                  <select
-                    value={testPriority}
-                    onChange={(e) => setTestPriority(e.target.value as NotificationPriority)}
-                    className="w-full p-2.5 border border-slate-300 rounded-lg text-xs font-semibold bg-white"
-                  >
-                    <option value="CRITICAL">🔴 Critical (জরুরি)</option>
-                    <option value="HIGH">🟠 High (উচ্চ সতর্কতা)</option>
-                    <option value="NORMAL">🔵 Normal (তথ্য)</option>
-                    <option value="SUCCESS">🟢 Success (সম্পন্ন)</option>
-                  </select>
-                </div>
+          <AppSelect
+            fieldName="testChannel"
+            required
+            label={isBn ? 'চ্যানেল (Channel)' : 'Channel'}
+            value={testChannel}
+            options={[
+              { value: 'IN_APP', label: '💻 In-App Portal' },
+              { value: 'SMS', label: '📱 SMS Gateway' },
+              { value: 'EMAIL', label: '✉️ Email Voucher' },
+              { value: 'WHATSAPP', label: '💬 WhatsApp API' },
+            ]}
+            onChange={(val) => setTestChannel(val as NotificationChannel)}
+          />
+        </FormGrid>
 
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">
-                    {language === 'bn' ? 'চ্যানেল (Channel):' : 'Channel:'}
-                  </label>
-                  <select
-                    value={testChannel}
-                    onChange={(e) => setTestChannel(e.target.value as NotificationChannel)}
-                    className="w-full p-2.5 border border-slate-300 rounded-lg text-xs font-semibold bg-white"
-                  >
-                    <option value="IN_APP">💻 In-App Portal</option>
-                    <option value="SMS">📱 SMS Gateway</option>
-                    <option value="EMAIL">✉️ Email Voucher</option>
-                    <option value="WHATSAPP">💬 WhatsApp API</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-[11px] text-slate-500">
-                {language === 'bn'
-                  ? 'নোটিফিকেশনে প্রাপক রোল, রেফারেন্স আইডি এবং সংশ্লিষ্ট পেজে যাওয়ার লিংক যুক্ত থাকবে।'
-                  : 'Notice includes recipient role badge, reference identifier, and a 1-click action button navigating to the relevant ERP module.'}
-              </div>
-
-              <div className="flex justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowDispatchModal(false)}
-                  className="px-4 py-2 border border-slate-300 rounded-lg hover:bg-slate-50 font-medium text-xs"
-                >
-                  {language === 'bn' ? 'বাতিল' : 'Cancel'}
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-[#1b6a4a] hover:bg-[#104c36] text-white rounded-lg font-bold text-xs"
-                >
-                  {language === 'bn' ? 'নোটিফিকেশন পাঠান' : 'Dispatch Alert'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+        <Alert severity="info">
+          {isBn
+            ? 'নোটিফিকেশনে প্রাপক রোল, রেফারেন্স আইডি এবং সংশ্লিষ্ট পেজে যাওয়ার লিংক যুক্ত থাকবে।'
+            : 'Notice includes recipient role badge, reference identifier, and a 1-click action button navigating to the relevant ERP module.'}
+        </Alert>
+      </FormDialog>
     </div>
   );
 }

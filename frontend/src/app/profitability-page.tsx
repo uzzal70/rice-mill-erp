@@ -8,11 +8,6 @@ import {
   Card,
   CardContent,
   Chip,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  Divider,
   Paper,
   Stack,
   Tab,
@@ -22,7 +17,6 @@ import {
   TableHead,
   TableRow,
   Tabs,
-  TextField,
   Typography,
 } from '@mui/material';
 import TrendingUpRoundedIcon from '@mui/icons-material/TrendingUpRounded';
@@ -35,6 +29,9 @@ import ShoppingBagRoundedIcon from '@mui/icons-material/ShoppingBagRounded';
 import RefreshRoundedIcon from '@mui/icons-material/RefreshRounded';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/api';
+import { AppTextField, FormDialog, FormGrid } from '@/components/form';
+import { extractApiError, useToast } from '@/components/ui/toast-provider';
+import { FieldRule, focusFieldByName, validateFormFields } from '@/lib/form-validation';
 
 interface ProfitabilityPageProps {
   companyId: string;
@@ -50,6 +47,7 @@ export function ProfitabilityPage({
   onSaved,
 }: ProfitabilityPageProps) {
   const queryClient = useQueryClient();
+  const toast = useToast();
   const isBn = language === 'bn';
 
   const [activeTab, setActiveTab] = useState(0); // 0: Batch, 1: Purchase, 2: Products, 3: Customers, 4: Factories
@@ -69,6 +67,7 @@ export function ProfitabilityPage({
   const [riceSalesRate, setRiceSalesRate] = useState('65');
   const [busy, setBusy] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   // Load summary for active dimension
   const summaryQuery = useQuery({
@@ -95,19 +94,37 @@ export function ProfitabilityPage({
 
   const handleCalculateBatch = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!batchId) {
-      setErrorMsg(isBn ? 'অনুগ্রহ করে ব্যাচ আইডি প্রদান করুন' : 'Please provide batch ID');
+    const rules: FieldRule[] = [
+      { name: 'calcBatchId', label: isBn ? 'ব্যাচ আইডি' : 'Batch ID', value: batchId, required: true },
+    ];
+    if (paddyRate.trim()) rules.push({ name: 'paddyRate', label: isBn ? 'ধানের দর / কেজি' : 'Paddy Rate / KG', value: paddyRate, type: 'nonNegativeNumber' });
+    if (riceSalesRate.trim()) rules.push({ name: 'riceSalesRate', label: isBn ? 'চালের দর / কেজি' : 'Rice Sales Rate / KG', value: riceSalesRate, type: 'nonNegativeNumber' });
+    if (processingCost.trim()) rules.push({ name: 'processingCost', label: isBn ? 'প্রসেসিং খরচ' : 'Processing Cost', value: processingCost, type: 'nonNegativeNumber' });
+    if (labourCost.trim()) rules.push({ name: 'labourCost', label: isBn ? 'শ্রমিক মজুরি' : 'Labour Cost', value: labourCost, type: 'nonNegativeNumber' });
+    if (electricityCost.trim()) rules.push({ name: 'electricityCost', label: isBn ? 'বিদ্যুৎ খরচ' : 'Electricity Cost', value: electricityCost, type: 'nonNegativeNumber' });
+    if (packagingCost.trim()) rules.push({ name: 'packagingCost', label: isBn ? 'প্যাকেজিং খরচ' : 'Packaging Cost', value: packagingCost, type: 'nonNegativeNumber' });
+    if (transportCost.trim()) rules.push({ name: 'transportCost', label: isBn ? 'পরিবহন খরচ' : 'Transport Cost', value: transportCost, type: 'nonNegativeNumber' });
+    if (overheadCost.trim()) rules.push({ name: 'overheadCost', label: isBn ? 'কারখানা ওভারহেড' : 'Factory Overhead', value: overheadCost, type: 'nonNegativeNumber' });
+
+    const validation = validateFormFields(rules, language);
+    if (!validation.valid) {
+      setFieldErrors(validation.errors);
+      setErrorMsg(validation.summary);
+      toast.warning(validation.summary);
+      focusFieldByName(validation.firstField);
       return;
     }
+
     setBusy(true);
     setErrorMsg(null);
+    setFieldErrors({});
     try {
       await apiRequest('/profitability/batches/calculate', {
         method: 'POST',
         body: JSON.stringify({
           companyId,
           factoryId,
-          batchId,
+          batchId: batchId.trim(),
           paddyRatePerKg: Number(paddyRate) || undefined,
           processingCost: Number(processingCost) || 0,
           labourCost: Number(labourCost) || 0,
@@ -121,8 +138,10 @@ export function ProfitabilityPage({
       await queryClient.invalidateQueries({ queryKey: ['profitability-summary'] });
       setCalcDialogOpen(false);
       onSaved(isBn ? 'ব্যাচের লাভজনকতা সফলভাবে হিসাব করা হয়েছে' : 'Batch profitability calculated successfully');
-    } catch (err: any) {
-      setErrorMsg(err.message || 'Failed to calculate batch profitability');
+    } catch (err: unknown) {
+      const msg = extractApiError(err, 'Failed to calculate batch profitability');
+      setErrorMsg(msg);
+      toast.error(msg);
     } finally {
       setBusy(false);
     }
@@ -159,7 +178,11 @@ export function ProfitabilityPage({
             variant="contained"
             color="primary"
             startIcon={<CalculateRoundedIcon />}
-            onClick={() => setCalcDialogOpen(true)}
+            onClick={() => {
+              setErrorMsg(null);
+              setFieldErrors({});
+              setCalcDialogOpen(true);
+            }}
           >
             {isBn ? 'নতুন ব্যাচ লাভজনকতা হিসাব' : 'Calculate Batch Costing'}
           </Button>
@@ -431,97 +454,144 @@ export function ProfitabilityPage({
       )}
 
       {/* Recalculate Batch Costing Dialog */}
-      <Dialog open={calcDialogOpen} onClose={() => !busy && setCalcDialogOpen(false)} maxWidth="sm" fullWidth>
-        <form onSubmit={handleCalculateBatch}>
-          <DialogTitle sx={{ fontWeight: 700 }}>
-            {isBn ? 'উৎপাদন ব্যাচের লাভজনকতা ও খরচ হিসাব' : 'Calculate Batch Costing & Profitability'}
-          </DialogTitle>
-          <DialogContent dividers>
-            {errorMsg && <Alert severity="error" sx={{ mb: 2 }}>{errorMsg}</Alert>}
+      <FormDialog
+        open={calcDialogOpen}
+        onClose={() => !busy && setCalcDialogOpen(false)}
+        onSubmit={handleCalculateBatch}
+        title={isBn ? 'উৎপাদন ব্যাচের লাভজনকতা ও খরচ হিসাব' : 'Calculate Batch Costing & Profitability'}
+        error={errorMsg}
+        onClearError={() => setErrorMsg(null)}
+        loading={busy}
+        submitLabel={isBn ? 'হিসাব ও সংরক্ষণ করুন' : 'Calculate & Save'}
+        cancelLabel={isBn ? 'বাতিল' : 'Cancel'}
+        maxWidth="sm"
+      >
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+          {isBn
+            ? 'সূত্র: নেট চালের খরচ = ধানের খরচ + প্রসেসিং + লেবার + বিদ্যুৎ + প্যাকেজিং + পরিবহন + ওভারহেড - বাই-প্রোডাক্ট আয়'
+            : 'Formula: Net Rice Cost = Paddy Cost + Processing + Labour + Electricity + Packaging + Transport + Overhead - By-product Revenue'}
+        </Typography>
 
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 2 }}>
-              {isBn
-                ? 'সূত্র: নেট চালের খরচ = ধানের খরচ + প্রসেসিং + লেবার + বিদ্যুৎ + প্যাকেজিং + পরিবহন + ওভারহেড - বাই-প্রোডাক্ট আয়'
-                : 'Formula: Net Rice Cost = Paddy Cost + Processing + Labour + Electricity + Packaging + Transport + Overhead - By-product Revenue'}
-            </Typography>
-
-            <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
-              <TextField
-                required
-                size="small"
-                label={isBn ? 'ব্যাচ আইডি' : 'Batch ID'}
-                value={batchId}
-                onChange={(e) => setBatchId(e.target.value)}
-                sx={{ gridColumn: 'span 2' }}
-              />
-              <TextField
-                type="number"
-                size="small"
-                label={isBn ? 'ধানের দর / কেজি (৳)' : 'Paddy Rate / KG (৳)'}
-                value={paddyRate}
-                onChange={(e) => setPaddyRate(e.target.value)}
-              />
-              <TextField
-                type="number"
-                size="small"
-                label={isBn ? 'প্রজেক্টেড চালের দর / কেজি' : 'Rice Sales Rate / KG (৳)'}
-                value={riceSalesRate}
-                onChange={(e) => setRiceSalesRate(e.target.value)}
-              />
-              <TextField
-                type="number"
-                size="small"
-                label={isBn ? 'মেশিন প্রসেসিং খরচ' : 'Processing Cost (৳)'}
-                value={processingCost}
-                onChange={(e) => setProcessingCost(e.target.value)}
-              />
-              <TextField
-                type="number"
-                size="small"
-                label={isBn ? 'শ্রমিক মজুরি (Labour)' : 'Labour Cost (৳)'}
-                value={labourCost}
-                onChange={(e) => setLabourCost(e.target.value)}
-              />
-              <TextField
-                type="number"
-                size="small"
-                label={isBn ? 'বিদ্যুৎ / পাওয়ার খরচ' : 'Electricity Cost (৳)'}
-                value={electricityCost}
-                onChange={(e) => setElectricityCost(e.target.value)}
-              />
-              <TextField
-                type="number"
-                size="small"
-                label={isBn ? 'প্যাকেজিং ও বস্তা খরচ' : 'Packaging Cost (৳)'}
-                value={packagingCost}
-                onChange={(e) => setPackagingCost(e.target.value)}
-              />
-              <TextField
-                type="number"
-                size="small"
-                label={isBn ? 'পরিবহন খরচ' : 'Transport Cost (৳)'}
-                value={transportCost}
-                onChange={(e) => setTransportCost(e.target.value)}
-              />
-              <TextField
-                type="number"
-                size="small"
-                label={isBn ? 'কারখানা ওভারহেড' : 'Factory Overhead (৳)'}
-                value={overheadCost}
-                onChange={(e) => setOverheadCost(e.target.value)}
-              />
-            </Box>
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setCalcDialogOpen(false)} disabled={busy}>
-              {isBn ? 'বাতিল' : 'Cancel'}
-            </Button>
-            <Button type="submit" variant="contained" disabled={busy}>
-              {busy ? (isBn ? 'হিসাব হচ্ছে...' : 'Calculating...') : (isBn ? 'হিসাব ও সংরক্ষণ করুন' : 'Calculate & Save')}
-            </Button>
-          </DialogActions>
-        </form>
-      </Dialog>
+        <FormGrid columns={{ xs: 1, sm: 2 }}>
+          <Box sx={{ gridColumn: { sm: 'span 2' } }}>
+            <AppTextField
+              fieldName="calcBatchId"
+              required
+              label={isBn ? 'ব্যাচ আইডি' : 'Batch ID'}
+              value={batchId}
+              errorText={fieldErrors.calcBatchId}
+              onValueChange={(val) => {
+                setBatchId(val);
+                setFieldErrors((p) => ({ ...p, calcBatchId: '' }));
+              }}
+            />
+          </Box>
+          <AppTextField
+            fieldName="paddyRate"
+            type="number"
+            prefixText="৳"
+            label={isBn ? 'ধানের দর / কেজি (৳)' : 'Paddy Rate / KG (৳)'}
+            value={paddyRate}
+            errorText={fieldErrors.paddyRate}
+            inputProps={{ min: 0, step: '.01' }}
+            onValueChange={(val) => {
+              setPaddyRate(val);
+              setFieldErrors((p) => ({ ...p, paddyRate: '' }));
+            }}
+          />
+          <AppTextField
+            fieldName="riceSalesRate"
+            type="number"
+            prefixText="৳"
+            label={isBn ? 'প্রজেক্টেড চালের দর / কেজি' : 'Rice Sales Rate / KG (৳)'}
+            value={riceSalesRate}
+            errorText={fieldErrors.riceSalesRate}
+            inputProps={{ min: 0, step: '.01' }}
+            onValueChange={(val) => {
+              setRiceSalesRate(val);
+              setFieldErrors((p) => ({ ...p, riceSalesRate: '' }));
+            }}
+          />
+          <AppTextField
+            fieldName="processingCost"
+            type="number"
+            prefixText="৳"
+            label={isBn ? 'মেশিন প্রসেসিং খরচ' : 'Processing Cost (৳)'}
+            value={processingCost}
+            errorText={fieldErrors.processingCost}
+            inputProps={{ min: 0 }}
+            onValueChange={(val) => {
+              setProcessingCost(val);
+              setFieldErrors((p) => ({ ...p, processingCost: '' }));
+            }}
+          />
+          <AppTextField
+            fieldName="labourCost"
+            type="number"
+            prefixText="৳"
+            label={isBn ? 'শ্রমিক মজুরি (Labour)' : 'Labour Cost (৳)'}
+            value={labourCost}
+            errorText={fieldErrors.labourCost}
+            inputProps={{ min: 0 }}
+            onValueChange={(val) => {
+              setLabourCost(val);
+              setFieldErrors((p) => ({ ...p, labourCost: '' }));
+            }}
+          />
+          <AppTextField
+            fieldName="electricityCost"
+            type="number"
+            prefixText="৳"
+            label={isBn ? 'বিদ্যুৎ / পাওয়ার খরচ' : 'Electricity Cost (৳)'}
+            value={electricityCost}
+            errorText={fieldErrors.electricityCost}
+            inputProps={{ min: 0 }}
+            onValueChange={(val) => {
+              setElectricityCost(val);
+              setFieldErrors((p) => ({ ...p, electricityCost: '' }));
+            }}
+          />
+          <AppTextField
+            fieldName="packagingCost"
+            type="number"
+            prefixText="৳"
+            label={isBn ? 'প্যাকেজিং ও বস্তা খরচ' : 'Packaging Cost (৳)'}
+            value={packagingCost}
+            errorText={fieldErrors.packagingCost}
+            inputProps={{ min: 0 }}
+            onValueChange={(val) => {
+              setPackagingCost(val);
+              setFieldErrors((p) => ({ ...p, packagingCost: '' }));
+            }}
+          />
+          <AppTextField
+            fieldName="transportCost"
+            type="number"
+            prefixText="৳"
+            label={isBn ? 'পরিবহন খরচ' : 'Transport Cost (৳)'}
+            value={transportCost}
+            errorText={fieldErrors.transportCost}
+            inputProps={{ min: 0 }}
+            onValueChange={(val) => {
+              setTransportCost(val);
+              setFieldErrors((p) => ({ ...p, transportCost: '' }));
+            }}
+          />
+          <AppTextField
+            fieldName="overheadCost"
+            type="number"
+            prefixText="৳"
+            label={isBn ? 'কারখানা ওভারহেড' : 'Factory Overhead (৳)'}
+            value={overheadCost}
+            errorText={fieldErrors.overheadCost}
+            inputProps={{ min: 0 }}
+            onValueChange={(val) => {
+              setOverheadCost(val);
+              setFieldErrors((p) => ({ ...p, overheadCost: '' }));
+            }}
+          />
+        </FormGrid>
+      </FormDialog>
     </Box>
   );
 }

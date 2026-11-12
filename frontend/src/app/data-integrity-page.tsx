@@ -16,7 +16,6 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  TextField,
   Alert,
   Dialog,
   DialogTitle,
@@ -36,6 +35,7 @@ import OpacityIcon from '@mui/icons-material/Opacity';
 import ReceiptIcon from '@mui/icons-material/Receipt';
 import InventoryIcon from '@mui/icons-material/Inventory';
 import NoCrashIcon from '@mui/icons-material/NoCrash';
+import { AppTextField } from '@/components/form';
 
 interface IntegrityRule {
   id: number;
@@ -360,48 +360,53 @@ export function DataIntegrityPage() {
 
         <Grid container spacing={2} sx={{ mb: 2 }}>
           <Grid item xs={12} sm={4} md={2}>
-            <TextField
+            <AppTextField
+              fieldName="simGross"
+              type="number"
+              unit="KG"
               label="Gross Weight (KG)"
-              size="small"
-              fullWidth
               value={simGross}
-              onChange={(e) => setSimGross(e.target.value)}
+              onValueChange={(val) => setSimGross(val)}
             />
           </Grid>
           <Grid item xs={12} sm={4} md={2}>
-            <TextField
+            <AppTextField
+              fieldName="simTare"
+              type="number"
+              unit="KG"
               label="Tare Weight (KG)"
-              size="small"
-              fullWidth
               value={simTare}
-              onChange={(e) => setSimTare(e.target.value)}
+              onValueChange={(val) => setSimTare(val)}
             />
           </Grid>
           <Grid item xs={12} sm={4} md={2}>
-            <TextField
+            <AppTextField
+              fieldName="simMoisture"
+              type="number"
+              unit="%"
               label="Moisture (%)"
-              size="small"
-              fullWidth
               value={simMoisture}
-              onChange={(e) => setSimMoisture(e.target.value)}
+              onValueChange={(val) => setSimMoisture(val)}
             />
           </Grid>
           <Grid item xs={12} sm={4} md={2}>
-            <TextField
+            <AppTextField
+              fieldName="simDebit"
+              type="number"
+              prefixText="৳"
               label="Journal Debit (৳)"
-              size="small"
-              fullWidth
               value={simDebit}
-              onChange={(e) => setSimDebit(e.target.value)}
+              onValueChange={(val) => setSimDebit(val)}
             />
           </Grid>
           <Grid item xs={12} sm={4} md={2}>
-            <TextField
+            <AppTextField
+              fieldName="simCredit"
+              type="number"
+              prefixText="৳"
               label="Journal Credit (৳)"
-              size="small"
-              fullWidth
               value={simCredit}
-              onChange={(e) => setSimCredit(e.target.value)}
+              onValueChange={(val) => setSimCredit(val)}
             />
           </Grid>
           <Grid item xs={12} sm={4} md={2}>

@@ -2,11 +2,14 @@
 
 import { FormEvent, useEffect, useState } from 'react';
 import {
-  Alert, Box, Button, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle,
-  FormControl, InputLabel, MenuItem, Paper, Select, Stack, Table, TableBody, TableCell,
-  TableHead, TableRow, TextField, Typography,
+  Box, Button, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle,
+  Paper, Stack, Table, TableBody, TableCell,
+  TableHead, TableRow, Typography,
 } from '@mui/material';
 import { apiRequest, queryString } from '@/lib/api';
+import { extractApiError, useToast } from '@/components/ui/toast-provider';
+import { focusFieldByName, validateFormFields } from '@/lib/form-validation';
+import { AppSelect, AppTextField, FormDialog, FormGrid } from '@/components/form';
 
 type Vehicle = {
   id: string;
@@ -150,14 +153,17 @@ export function VehicleMasterPage({ companyId, factoryId, language, onSaved, onE
   onError: (message: string) => void;
 }) {
   const t = labels[language];
+  const toast = useToast();
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [busy, setBusy] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingVehicle, setEditingVehicle] = useState<Vehicle | null>(null);
   const [form, setForm] = useState<VehicleForm>(emptyForm);
   const [formError, setFormError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [historyVehicle, setHistoryVehicle] = useState<Vehicle | null>(null);
   const [history, setHistory] = useState<Movement[]>([]);
   const [historyBusy, setHistoryBusy] = useState(false);
@@ -179,7 +185,7 @@ export function VehicleMasterPage({ companyId, factoryId, language, onSaved, onE
       })}`);
       setVehicles(result);
     } catch (reason) {
-      onError(reason instanceof Error ? reason.message : t.failed);
+      onError(extractApiError(reason, t.failed));
     } finally {
       setBusy(false);
     }
@@ -201,22 +207,33 @@ export function VehicleMasterPage({ companyId, factoryId, language, onSaved, onE
       taxTokenExpiry: vehicle.taxTokenExpiry?.slice(0, 10) ?? '',
     } : emptyForm);
     setFormError('');
+    setFieldErrors({});
     setEditorOpen(true);
   }
 
   async function saveVehicle(event: FormEvent) {
     event.preventDefault();
-    setFormError('');
-    const vehicleNumber = form.vehicleNumber.trim();
-    const vehicleType = form.vehicleType.trim();
-    if (vehicleNumber.length < 2 || vehicleType.length < 2) {
-      setFormError(language === 'bn' ? 'যানবাহন নম্বর ও ধরনে অন্তত ২টি অক্ষর থাকতে হবে।' : 'Vehicle number and type must contain at least two characters.');
+    const validation = validateFormFields(
+      [
+        { name: 'vehicleNumber', label: t.number, value: form.vehicleNumber, required: true, minLength: 2 },
+        { name: 'vehicleType', label: t.type, value: form.vehicleType, required: true, minLength: 2 },
+      ],
+      language,
+    );
+    if (!validation.valid) {
+      setFieldErrors(validation.errors);
+      setFormError(validation.summary);
+      toast.warning(validation.summary);
+      focusFieldByName(validation.firstField);
       return;
     }
+    setFormError('');
+    setFieldErrors({});
+    setSaving(true);
     const payload = {
       companyId,
-      vehicleNumber,
-      vehicleType,
+      vehicleNumber: form.vehicleNumber.trim(),
+      vehicleType: form.vehicleType.trim(),
       registrationNumber: form.registrationNumber.trim() || null,
       ownerName: form.ownerName.trim() || null,
       driverName: form.driverName.trim() || null,
@@ -236,7 +253,11 @@ export function VehicleMasterPage({ companyId, factoryId, language, onSaved, onE
       onSaved(t.saved);
       await loadVehicles();
     } catch (reason) {
-      setFormError(reason instanceof Error ? reason.message : t.failed);
+      const msg = extractApiError(reason, t.failed);
+      setFormError(msg);
+      toast.error(msg);
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -246,7 +267,7 @@ export function VehicleMasterPage({ companyId, factoryId, language, onSaved, onE
       onSaved(vehicle.active ? t.inactive : t.active);
       await loadVehicles();
     } catch (reason) {
-      onError(reason instanceof Error ? reason.message : t.failed);
+      onError(extractApiError(reason, t.failed));
     }
   }
 
@@ -258,7 +279,7 @@ export function VehicleMasterPage({ companyId, factoryId, language, onSaved, onE
       const result = await apiRequest<Movement[]>(`/vehicles/${vehicle.id}/movements?${queryString({ companyId, factoryId, page: 1, pageSize: 100 })}`);
       setHistory(result);
     } catch (reason) {
-      onError(reason instanceof Error ? reason.message : t.failed);
+      onError(extractApiError(reason, t.failed));
       setHistoryVehicle(null);
     } finally {
       setHistoryBusy(false);
@@ -267,18 +288,25 @@ export function VehicleMasterPage({ companyId, factoryId, language, onSaved, onE
 
   return <Stack spacing={2}>
     <Paper className="workspace-card" elevation={0} sx={{ p: 2 }}>
-      <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} justifyContent="space-between">
-        <TextField size="small" label={language === 'bn' ? 'নম্বর, রেজিস্ট্রেশন, চালক খুঁজুন' : 'Search number, registration, driver'} value={search} onChange={event => setSearch(event.target.value)} />
-        <Stack direction="row" spacing={1}>
-          <FormControl size="small" sx={{ minWidth: 150 }}>
-            <InputLabel>{t.status}</InputLabel>
-            <Select value={statusFilter} label={t.status} onChange={event => setStatusFilter(event.target.value)}>
-              <MenuItem value="ALL">{t.all}</MenuItem>
-              <MenuItem value="ACTIVE">{t.activeOnly}</MenuItem>
-              <MenuItem value="INACTIVE">{t.inactiveOnly}</MenuItem>
-            </Select>
-          </FormControl>
-          <Button variant="contained" onClick={() => openEditor()}>{t.add}</Button>
+      <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} justifyContent="space-between" alignItems={{ md: 'center' }}>
+        <Box sx={{ flex: 1 }}>
+          <AppTextField fieldName="search" label={language === 'bn' ? 'নম্বর, রেজিস্ট্রেশন, চালক খুঁজুন' : 'Search number, registration, driver'} value={search} onValueChange={setSearch} />
+        </Box>
+        <Stack direction="row" spacing={1.5} alignItems="center">
+          <Box sx={{ minWidth: 160 }}>
+            <AppSelect
+              name="statusFilter"
+              label={t.status}
+              value={statusFilter}
+              onChange={setStatusFilter}
+              options={[
+                { value: 'ALL', label: t.all },
+                { value: 'ACTIVE', label: t.activeOnly },
+                { value: 'INACTIVE', label: t.inactiveOnly },
+              ]}
+            />
+          </Box>
+          <Button variant="contained" onClick={() => openEditor()} sx={{ whiteSpace: 'nowrap' }}>{t.add}</Button>
         </Stack>
       </Stack>
     </Paper>
@@ -287,46 +315,66 @@ export function VehicleMasterPage({ companyId, factoryId, language, onSaved, onE
       {busy ? <Stack alignItems="center" py={5}><CircularProgress size={24} /><Typography mt={1} color="text.secondary">{t.loading}</Typography></Stack>
         : vehicles.length === 0 ? <Typography textAlign="center" color="text.secondary" py={5}>{t.noRows}</Typography>
           : <Box sx={{ overflowX: 'auto' }}><Table size="small" sx={{ minWidth: 1100 }}>
-            <TableHead><TableRow>{[t.number, t.registration, t.type, t.owner, t.driver, t.fitness, t.insurance, t.tax, t.status, t.actions].map(label => <TableCell key={label}>{label}</TableCell>)}</TableRow></TableHead>
+            <TableHead><TableRow>{[t.number, t.registration, t.type, t.owner, t.driver, t.fitness, t.insurance, t.tax, t.status, t.actions].map(label => <TableCell key={label} sx={{ whiteSpace: 'nowrap' }}>{label}</TableCell>)}</TableRow></TableHead>
             <TableBody>{vehicles.map(vehicle => <TableRow key={vehicle.id} hover>
-              <TableCell><Typography fontWeight={800} fontSize={12}>{vehicle.vehicleNumber}</Typography></TableCell>
-              <TableCell>{vehicle.registrationNumber || '—'}</TableCell>
-              <TableCell>{vehicle.vehicleType}</TableCell>
-              <TableCell>{vehicle.ownerName || '—'}</TableCell>
-              <TableCell>{vehicle.driverName || '—'}{vehicle.driverMobile && <Typography color="text.secondary" fontSize={10}>{vehicle.driverMobile}</Typography>}</TableCell>
+              <TableCell sx={{ fontFamily: 'monospace', whiteSpace: 'nowrap' }}><Typography fontWeight={800} fontSize={12}>{vehicle.vehicleNumber}</Typography></TableCell>
+              <TableCell sx={{ whiteSpace: 'nowrap' }}>{vehicle.registrationNumber || '—'}</TableCell>
+              <TableCell sx={{ whiteSpace: 'nowrap' }}>{vehicle.vehicleType}</TableCell>
+              <TableCell sx={{ maxWidth: 170 }}><Typography variant="body2" noWrap title={vehicle.ownerName || '—'}>{vehicle.ownerName || '—'}</Typography></TableCell>
+              <TableCell sx={{ maxWidth: 180 }}><Typography variant="body2" noWrap>{vehicle.driverName || '—'}</Typography>{vehicle.driverMobile && <Typography color="text.secondary" fontSize={10}>{vehicle.driverMobile}</Typography>}</TableCell>
               {[vehicle.fitnessExpiry, vehicle.insuranceExpiry, vehicle.taxTokenExpiry].map((date, index) => {
                 const state = expiryState(date, t.valid, t.dueSoon, t.expired, t.notSet);
-                return <TableCell key={`${vehicle.id}-${index}`}><Stack spacing={.4}><Typography fontSize={11}>{date ? new Date(date).toLocaleDateString() : '—'}</Typography><Chip size="small" color={state.color} label={state.label} sx={{ width: 'fit-content' }} /></Stack></TableCell>;
+                return <TableCell key={`${vehicle.id}-${index}`} sx={{ whiteSpace: 'nowrap' }}><Stack spacing={.4}><Typography fontSize={11}>{date ? new Date(date).toLocaleDateString() : '—'}</Typography><Chip size="small" color={state.color} label={state.label} sx={{ width: 'fit-content' }} /></Stack></TableCell>;
               })}
-              <TableCell><Chip size="small" color={vehicle.active ? 'success' : 'default'} label={vehicle.active ? t.active : t.inactive} /></TableCell>
-              <TableCell><Stack direction="row" spacing={.5}><Button size="small" onClick={() => openHistory(vehicle)}>{t.history}</Button><Button size="small" onClick={() => openEditor(vehicle)}>{t.edit}</Button><Button size="small" color={vehicle.active ? 'warning' : 'success'} onClick={() => toggleActive(vehicle)}>{vehicle.active ? t.inactive : t.active}</Button></Stack></TableCell>
+              <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}><Chip size="small" color={vehicle.active ? 'success' : 'default'} label={vehicle.active ? t.active : t.inactive} /></TableCell>
+              <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}><Stack direction="row" spacing={.5} justifyContent="flex-end"><Button size="small" onClick={() => openHistory(vehicle)}>{t.history}</Button><Button size="small" onClick={() => openEditor(vehicle)}>{t.edit}</Button><Button size="small" color={vehicle.active ? 'warning' : 'success'} onClick={() => toggleActive(vehicle)}>{vehicle.active ? t.inactive : t.active}</Button></Stack></TableCell>
             </TableRow>)}</TableBody>
           </Table></Box>}
     </Paper>
 
-    <Dialog open={editorOpen} onClose={() => setEditorOpen(false)} fullWidth maxWidth="sm">
-      <DialogTitle>{editingVehicle ? t.edit : t.add}</DialogTitle>
-      <Box component="form" onSubmit={saveVehicle}>
-        <DialogContent><Stack spacing={2}>
-          {formError && <Alert severity="error">{formError}</Alert>}
-          {([
-            ['vehicleNumber', t.number],
-            ['registrationNumber', t.registration],
-            ['vehicleType', t.type],
-            ['ownerName', t.owner],
-            ['driverName', t.driver],
-            ['driverMobile', t.mobile],
-            ['fitnessExpiry', t.fitness],
-            ['insuranceExpiry', t.insurance],
-            ['taxTokenExpiry', t.tax],
-          ] as Array<[keyof VehicleForm, string]>).map(([field, label]) => {
-            const dateField = field.endsWith('Expiry');
-            return <TextField key={field} label={label} type={dateField ? 'date' : 'text'} value={form[field]} onChange={event => setForm(current => ({ ...current, [field]: event.target.value }))} InputLabelProps={dateField ? { shrink: true } : undefined} required={field === 'vehicleNumber' || field === 'vehicleType'} />;
-          })}
-        </Stack></DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2 }}><Button onClick={() => setEditorOpen(false)}>{t.cancel}</Button><Button type="submit" variant="contained">{t.save}</Button></DialogActions>
-      </Box>
-    </Dialog>
+    <FormDialog
+      open={editorOpen}
+      onClose={() => setEditorOpen(false)}
+      onSubmit={saveVehicle}
+      title={editingVehicle ? t.edit : t.add}
+      error={formError}
+      onClearError={() => setFormError('')}
+      loading={saving}
+      submitLabel={t.save}
+      cancelLabel={t.cancel}
+      maxWidth="md"
+    >
+      <FormGrid columns={2}>
+        {([
+          ['vehicleNumber', t.number],
+          ['registrationNumber', t.registration],
+          ['vehicleType', t.type],
+          ['ownerName', t.owner],
+          ['driverName', t.driver],
+          ['driverMobile', t.mobile],
+          ['fitnessExpiry', t.fitness],
+          ['insuranceExpiry', t.insurance],
+          ['taxTokenExpiry', t.tax],
+        ] as Array<[keyof VehicleForm, string]>).map(([field, label]) => {
+          const dateField = field.endsWith('Expiry');
+          return (
+            <AppTextField
+              key={field}
+              fieldName={field}
+              label={label}
+              type={dateField ? 'date' : 'text'}
+              value={form[field]}
+              errorText={fieldErrors[field]}
+              required={field === 'vehicleNumber' || field === 'vehicleType'}
+              onValueChange={val => {
+                setForm(current => ({ ...current, [field]: val }));
+                setFieldErrors(p => ({ ...p, [field]: '' }));
+              }}
+            />
+          );
+        })}
+      </FormGrid>
+    </FormDialog>
 
     <Dialog open={Boolean(historyVehicle)} onClose={() => setHistoryVehicle(null)} fullWidth maxWidth="md">
       <DialogTitle>{historyVehicle ? `${t.movementTitle} · ${historyVehicle.vehicleNumber}` : t.movementTitle}</DialogTitle>

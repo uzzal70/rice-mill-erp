@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import React, { useState } from 'react';
 import {
   Alert,
   Box,
@@ -22,7 +22,6 @@ import {
   TableHead,
   TableRow,
   Tabs,
-  TextField,
   Typography,
 } from '@mui/material';
 import FactCheckRoundedIcon from '@mui/icons-material/FactCheckRounded';
@@ -37,6 +36,9 @@ import PostAddRoundedIcon from '@mui/icons-material/PostAddRounded';
 import RateReviewRoundedIcon from '@mui/icons-material/RateReviewRounded';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/api';
+import { AppSelect, AppTextField, FormDialog } from '@/components/form';
+import { extractApiError, useToast } from '@/components/ui/toast-provider';
+import { focusFieldByName, validateFormFields } from '@/lib/form-validation';
 
 interface ApprovalsPageProps {
   companyId: string;
@@ -63,12 +65,16 @@ export function ApprovalsPage({
   onSaved,
 }: ApprovalsPageProps) {
   const queryClient = useQueryClient();
+  const toast = useToast();
   const isBn = language === 'bn';
 
   const [activeTab, setActiveTab] = useState(0); // 0: Inbox, 1: All Records, 2: Workflow Rules
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [typeFilter, setTypeFilter] = useState('ALL');
   const [searchTerm, setSearchTerm] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   // Transition Action Dialog
   const [actionDialogOpen, setActionDialogOpen] = useState(false);
@@ -108,6 +114,8 @@ export function ApprovalsPage({
     setSelectedRequest(req);
     setActionType(action);
     setActionComments('');
+    setErrorMsg(null);
+    setFieldErrors({});
     setActionDialogOpen(true);
   };
 
@@ -116,19 +124,46 @@ export function ApprovalsPage({
       const detailed = await apiRequest<any>(`/approvals/${req.id}?companyId=${companyId}`);
       setTimelineRequest(detailed);
       setTimelineDialogOpen(true);
-    } catch (err: any) {
-      alert(err.message || 'Error loading timeline');
+    } catch (err: unknown) {
+      toast.error(extractApiError(err, 'Error loading timeline'));
     }
   };
 
-  const handleExecuteTransition = async () => {
+  const handleExecuteTransition = async (e?: React.FormEvent) => {
+    e?.preventDefault();
     if (!selectedRequest) return;
+    const isCommentRequired = actionType === 'REJECT' || actionType === 'RETURN_FOR_CORRECTION';
+    if (isCommentRequired) {
+      const commentLabel =
+        actionType === 'REJECT'
+          ? isBn
+            ? 'বাতিলের কারণ'
+            : 'Rejection Reason'
+          : isBn
+          ? 'সংশোধনের বিবরণ'
+          : 'Correction Feedback';
+      const validation = validateFormFields(
+        [{ name: 'actionComments', label: commentLabel, value: actionComments, required: true }],
+        language,
+      );
+      if (!validation.valid) {
+        setFieldErrors(validation.errors);
+        setErrorMsg(validation.summary);
+        toast.warning(validation.summary);
+        focusFieldByName(validation.firstField);
+        return;
+      }
+    }
+
+    setBusy(true);
+    setErrorMsg(null);
+    setFieldErrors({});
     try {
       await apiRequest(`/approvals/${selectedRequest.id}/transition?companyId=${companyId}`, {
         method: 'POST',
         body: JSON.stringify({
           action: actionType,
-          comments: actionComments || undefined,
+          comments: actionComments.trim() || undefined,
         }),
       });
       onSaved(
@@ -138,8 +173,12 @@ export function ApprovalsPage({
       );
       setActionDialogOpen(false);
       handleRefresh();
-    } catch (err: any) {
-      alert(err.message || 'Transition failed');
+    } catch (err: unknown) {
+      const msg = extractApiError(err, 'Transition failed');
+      setErrorMsg(msg);
+      toast.error(msg);
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -336,47 +375,49 @@ export function ApprovalsPage({
       {activeTab === 1 && (
         <Paper sx={{ p: 2 }}>
           <Stack direction={{ xs: 'column', sm: 'row' }} gap={2} sx={{ mb: 2 }} alignItems="center" justifyContent="space-between">
-            <Stack direction="row" gap={1} flexWrap="wrap">
-              <TextField
-                select
-                size="small"
-                SelectProps={{ native: true }}
+            <Stack direction="row" gap={1.5} flexWrap="wrap">
+              <AppSelect
+                fieldName="statusFilter"
+                fullWidth={false}
                 label={isBn ? 'স্ট্যাটাস ফিল্টার' : 'Status Filter'}
                 value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                sx={{ minWidth: 150 }}
-              >
-                <option value="ALL">{isBn ? 'সকল স্ট্যাটাস' : 'All Statuses'}</option>
-                {Object.keys(STATUS_CONFIG).map((k) => (
-                  <option key={k} value={k}>{isBn ? STATUS_CONFIG[k].labelBn : STATUS_CONFIG[k].labelEn}</option>
-                ))}
-              </TextField>
+                options={[
+                  { value: 'ALL', label: isBn ? 'সকল স্ট্যাটাস' : 'All Statuses' },
+                  ...Object.keys(STATUS_CONFIG).map((k) => ({
+                    value: k,
+                    label: isBn ? STATUS_CONFIG[k].labelBn : STATUS_CONFIG[k].labelEn,
+                  })),
+                ]}
+                onChange={(val) => setStatusFilter(val)}
+                sx={{ minWidth: 185 }}
+              />
 
-              <TextField
-                select
-                size="small"
-                SelectProps={{ native: true }}
+              <AppSelect
+                fieldName="typeFilter"
+                fullWidth={false}
                 label={isBn ? 'লেনদেন ক্যাটাগরি' : 'Entity Type'}
                 value={typeFilter}
-                onChange={(e) => setTypeFilter(e.target.value)}
-                sx={{ minWidth: 160 }}
-              >
-                <option value="ALL">{isBn ? 'সকল ক্যাটাগরি' : 'All Entities'}</option>
-                <option value="PURCHASE_ORDER">Purchase Order</option>
-                <option value="PURCHASE_INVOICE">Purchase Invoice</option>
-                <option value="SALES_ORDER">Sales Order</option>
-                <option value="SALES_DISPATCH">Sales Dispatch</option>
-                <option value="EXPENSE">Expense Claim</option>
-                <option value="JOURNAL_VOUCHER">Journal Voucher</option>
-                <option value="PAYROLL">Payroll</option>
-              </TextField>
+                options={[
+                  { value: 'ALL', label: isBn ? 'সকল ক্যাটাগরি' : 'All Entities' },
+                  { value: 'PURCHASE_ORDER', label: 'Purchase Order' },
+                  { value: 'PURCHASE_INVOICE', label: 'Purchase Invoice' },
+                  { value: 'SALES_ORDER', label: 'Sales Order' },
+                  { value: 'SALES_DISPATCH', label: 'Sales Dispatch' },
+                  { value: 'EXPENSE', label: 'Expense Claim' },
+                  { value: 'JOURNAL_VOUCHER', label: 'Journal Voucher' },
+                  { value: 'PAYROLL', label: 'Payroll' },
+                ]}
+                onChange={(val) => setTypeFilter(val)}
+                sx={{ minWidth: 195 }}
+              />
             </Stack>
 
-            <TextField
-              size="small"
+            <AppTextField
+              fieldName="searchApprovals"
+              fullWidth={false}
               placeholder={isBn ? 'লেনদেন নং বা বিবরণ দিয়ে খুঁজুন...' : 'Search by number or title...'}
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onValueChange={(val) => setSearchTerm(val)}
               sx={{ minWidth: 260 }}
             />
           </Stack>
@@ -499,62 +540,67 @@ export function ApprovalsPage({
       )}
 
       {/* Action Dialog (Approve, Review, Post, Lock, Reject, Return) */}
-      <Dialog open={actionDialogOpen} onClose={() => setActionDialogOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>
-          {actionType === 'APPROVE' && (isBn ? 'লেনদেন অনুমোদন করুন' : 'Authorize & Approve Transaction')}
-          {actionType === 'REVIEW' && (isBn ? 'লেনদেন পর্যালোচনা নিশ্চিত করুন' : 'Confirm Document Review')}
-          {actionType === 'POST' && (isBn ? 'লেজার ও স্টক পোস্টিং সম্পন্ন করুন' : 'Post to General Ledger & Stock')}
-          {actionType === 'LOCK' && (isBn ? 'লেনদেন চূড়ান্তভাবে লক করুন' : 'Lock Transaction (Audit Seal)')}
-          {actionType === 'REJECT' && (isBn ? 'লেনদেন বাতিল করুন' : 'Reject Transaction')}
-          {actionType === 'RETURN_FOR_CORRECTION' && (isBn ? 'সংশোধনের জন্য ফেরত পাঠান' : 'Return for Correction')}
-        </DialogTitle>
-        <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 2 }}>
-          {selectedRequest && (
-            <Paper sx={{ p: 1.5, backgroundColor: 'action.hover' }}>
+      <FormDialog
+        open={actionDialogOpen}
+        onClose={() => !busy && setActionDialogOpen(false)}
+        onSubmit={handleExecuteTransition}
+        title={
+          actionType === 'APPROVE'
+            ? (isBn ? 'লেনদেন অনুমোদন করুন' : 'Authorize & Approve Transaction')
+            : actionType === 'REVIEW'
+            ? (isBn ? 'লেনদেন পর্যালোচনা নিশ্চিত করুন' : 'Confirm Document Review')
+            : actionType === 'POST'
+            ? (isBn ? 'লেজার ও স্টক পোস্টিং সম্পন্ন করুন' : 'Post to General Ledger & Stock')
+            : actionType === 'LOCK'
+            ? (isBn ? 'লেনদেন চূড়ান্তভাবে লক করুন' : 'Lock Transaction (Audit Seal)')
+            : actionType === 'REJECT'
+            ? (isBn ? 'লেনদেন বাতিল করুন' : 'Reject Transaction')
+            : (isBn ? 'সংশোধনের জন্য ফেরত পাঠান' : 'Return for Correction')
+        }
+        error={errorMsg}
+        onClearError={() => setErrorMsg(null)}
+        loading={busy}
+        submitLabel={isBn ? 'নিশ্চিত করুন' : 'Confirm'}
+        cancelLabel={isBn ? 'বাতিল' : 'Cancel'}
+        submitColor={actionType === 'REJECT' ? 'error' : actionType === 'RETURN_FOR_CORRECTION' ? 'warning' : 'primary'}
+        maxWidth="sm"
+      >
+        {selectedRequest && (
+          <Paper variant="outlined" sx={{ p: 1.5, backgroundColor: 'action.hover', borderRadius: 2 }}>
+            <Typography variant="body2">
+              <strong>{isBn ? 'নথি নম্বর:' : 'Document #:'}</strong> {selectedRequest.entityNumber} ({selectedRequest.entityType})
+            </Typography>
+            <Typography variant="body2">
+              <strong>{isBn ? 'বিবরণ:' : 'Title:'}</strong> {selectedRequest.title}
+            </Typography>
+            {selectedRequest.amount && (
               <Typography variant="body2">
-                <strong>{isBn ? 'নথি নম্বর:' : 'Document #:'}</strong> {selectedRequest.entityNumber} ({selectedRequest.entityType})
+                <strong>{isBn ? 'পরিমাণ:' : 'Amount:'}</strong> ৳{Number(selectedRequest.amount).toLocaleString()}
               </Typography>
-              <Typography variant="body2">
-                <strong>{isBn ? 'বিবরণ:' : 'Title:'}</strong> {selectedRequest.title}
-              </Typography>
-              {selectedRequest.amount && (
-                <Typography variant="body2">
-                  <strong>{isBn ? 'পরিমাণ:' : 'Amount:'}</strong> ৳{Number(selectedRequest.amount).toLocaleString()}
-                </Typography>
-              )}
-            </Paper>
-          )}
+            )}
+          </Paper>
+        )}
 
-          <TextField
-            label={
-              actionType === 'REJECT'
-                ? (isBn ? 'বাতিলের কারণ (বাধ্যতামূলক)' : 'Rejection Reason (Required)')
-                : actionType === 'RETURN_FOR_CORRECTION'
-                ? (isBn ? 'প্রয়োজনীয় সংশোধনের বিবরণ (বাধ্যতামূলক)' : 'Correction Feedback (Required)')
-                : (isBn ? 'অনুমোদন মন্তব্য (ঐচ্ছিক)' : 'Comments / Sign-off Notes')
-            }
-            multiline
-            rows={3}
-            value={actionComments}
-            onChange={(e) => setActionComments(e.target.value)}
-            required={actionType === 'REJECT' || actionType === 'RETURN_FOR_CORRECTION'}
-            fullWidth
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setActionDialogOpen(false)}>{isBn ? 'বাতিল' : 'Cancel'}</Button>
-          <Button
-            variant="contained"
-            color={actionType === 'REJECT' ? 'error' : actionType === 'RETURN_FOR_CORRECTION' ? 'warning' : 'primary'}
-            onClick={handleExecuteTransition}
-            disabled={
-              (actionType === 'REJECT' || actionType === 'RETURN_FOR_CORRECTION') && !actionComments.trim()
-            }
-          >
-            {isBn ? 'নিশ্চিত করুন' : 'Confirm'}
-          </Button>
-        </DialogActions>
-      </Dialog>
+        <AppTextField
+          fieldName="actionComments"
+          label={
+            actionType === 'REJECT'
+              ? (isBn ? 'বাতিলের কারণ (বাধ্যতামূলক)' : 'Rejection Reason (Required)')
+              : actionType === 'RETURN_FOR_CORRECTION'
+              ? (isBn ? 'প্রয়োজনীয় সংশোধনের বিবরণ (বাধ্যতামূলক)' : 'Correction Feedback (Required)')
+              : (isBn ? 'অনুমোদন মন্তব্য (ঐচ্ছিক)' : 'Comments / Sign-off Notes')
+          }
+          multiline
+          rows={3}
+          value={actionComments}
+          errorText={fieldErrors.actionComments}
+          required={actionType === 'REJECT' || actionType === 'RETURN_FOR_CORRECTION'}
+          onValueChange={(val) => {
+            setActionComments(val);
+            setFieldErrors((p) => ({ ...p, actionComments: '' }));
+          }}
+        />
+      </FormDialog>
 
       {/* History Timeline Dialog */}
       <Dialog open={timelineDialogOpen} onClose={() => setTimelineDialogOpen(false)} maxWidth="sm" fullWidth>

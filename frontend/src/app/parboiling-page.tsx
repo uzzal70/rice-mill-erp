@@ -1,9 +1,12 @@
 'use client';
 
 import { FormEvent, useState } from 'react';
-import { Alert, Button, Chip, Paper, Stack, Table, TableBody, TableCell, TableHead, TableRow, TextField, Typography } from '@mui/material';
+import { Alert, Box, Button, Chip, CircularProgress, Paper, Stack, Table, TableBody, TableCell, TableHead, TableRow, Typography } from '@mui/material';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiRequest, queryString } from '@/lib/api';
+import { extractApiError, useToast } from '@/components/ui/toast-provider';
+import { FieldRule, focusFieldByName, validateFormFields } from '@/lib/form-validation';
+import { AppAutocomplete, AppTextField, FormGrid, FormSection } from '@/components/form';
 
 type Item = { id: string; name: string; kind: string; baseUnit: string };
 type StackRow = { id: string; code: string; godown: { name: string } };
@@ -19,7 +22,14 @@ const blankStage = (type: string, offset: number): Stage => {
 const blank = () => ({ batchNumber: `PB-${Date.now()}`, inputItemId: '', outputItemId: '', inputStackId: '', outputStackId: '', inputQuantityKg: '', outputQuantityKg: '', startedAt: localDateTime(new Date(Date.now() - 4 * 3_600_000)), completedAt: localDateTime(new Date(Date.now() - 1 * 3_600_000)), remarks: '', stages: stages.map(blankStage) });
 
 export function ParboilingPage({ companyId, factoryId, language, onSaved }: { companyId: string; factoryId: string; language: 'en' | 'bn'; onSaved: (message: string) => void }) {
-  const bn = language === 'bn'; const qc = useQueryClient(); const [form, setForm] = useState(blank()); const [error, setError] = useState('');
+  const bn = language === 'bn';
+  const toast = useToast();
+  const qc = useQueryClient();
+  const [form, setForm] = useState(blank());
+  const [error, setError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
+  const [actionBusyId, setActionBusyId] = useState('');
   const scope = queryString({ companyId, factoryId, page: 1, pageSize: 100 });
   const batches = useQuery({ queryKey: ['parboiling-batches', companyId, factoryId], queryFn: () => apiRequest<List<Batch>>(`/parboiling/batches?${scope}`), enabled: Boolean(companyId && factoryId) });
   const items = useQuery({ queryKey: ['parboiling-paddy-items', companyId], queryFn: () => apiRequest<List<Item>>(`/items?${queryString({ companyId, kind: 'PADDY', active: true, page: 1, pageSize: 100 })}`), enabled: Boolean(companyId) });
@@ -28,39 +38,121 @@ export function ParboilingPage({ companyId, factoryId, language, onSaved }: { co
   const itemRows = items.data?.data ?? []; const stackRows = stacks.data ?? []; const rows = batches.data?.data ?? [];
   function patchStage(i: number, values: Partial<Stage>) { setForm(current => ({ ...current, stages: current.stages.map((s, index) => index === i ? { ...s, ...values } : s) })); }
   async function create(event: FormEvent) {
-    event.preventDefault(); setError('');
+    event.preventDefault();
+    const rules: FieldRule[] = [
+      { name: 'batchNumber', label: t.batch, value: form.batchNumber, required: true },
+      { name: 'inputItemId', label: t.inputItem, value: form.inputItemId, required: true, isSelect: true },
+      { name: 'outputItemId', label: t.outputItem, value: form.outputItemId, required: true, isSelect: true },
+      { name: 'inputStackId', label: t.inputStack, value: form.inputStackId, required: true, isSelect: true },
+      { name: 'outputStackId', label: t.outputStack, value: form.outputStackId, required: true, isSelect: true },
+      { name: 'inputQuantityKg', label: t.input, value: form.inputQuantityKg, required: true, type: 'positiveNumber' },
+      { name: 'outputQuantityKg', label: t.output, value: form.outputQuantityKg, required: true, type: 'positiveNumber' },
+      { name: 'startedAt', label: t.start, value: form.startedAt, required: true, type: 'date' },
+      { name: 'completedAt', label: t.end, value: form.completedAt, required: true, type: 'date' },
+    ];
+    form.stages.forEach((s, i) => {
+      rules.push(
+        { name: `stage-${i}-startedAt`, label: `${s.stageType} ${t.start}`, value: s.startedAt, required: true, type: 'date' },
+        { name: `stage-${i}-completedAt`, label: `${s.stageType} ${t.end}`, value: s.completedAt, required: true, type: 'date' },
+        { name: `stage-${i}-inputQuantityKg`, label: `${s.stageType} ${t.stageInput}`, value: s.inputQuantityKg, required: true, type: 'positiveNumber' },
+        { name: `stage-${i}-outputQuantityKg`, label: `${s.stageType} ${t.stageOutput}`, value: s.outputQuantityKg, required: true, type: 'positiveNumber' },
+        { name: `stage-${i}-moistureBeforePct`, label: `${s.stageType} ${t.moistureBefore}`, value: s.moistureBeforePct, required: true, type: 'nonNegativeNumber', min: 0, max: 100 },
+        { name: `stage-${i}-moistureAfterPct`, label: `${s.stageType} ${t.moistureAfter}`, value: s.moistureAfterPct, required: true, type: 'nonNegativeNumber', min: 0, max: 100 },
+      );
+    });
+    const validation = validateFormFields(rules, language);
+    if (!validation.valid) {
+      setFieldErrors(validation.errors);
+      setError(validation.summary);
+      toast.warning(validation.summary);
+      focusFieldByName(validation.firstField);
+      return;
+    }
+
+    setError('');
+    setFieldErrors({});
+    setSaving(true);
     try {
       const stagesBody = form.stages.map(s => ({ ...Object.fromEntries(Object.entries(s).filter(([, v]) => v !== '')), startedAt: new Date(s.startedAt).toISOString(), completedAt: new Date(s.completedAt).toISOString(), moistureBeforePct: Number(s.moistureBeforePct), moistureAfterPct: Number(s.moistureAfterPct) }));
       await apiRequest('/parboiling/batches', { method: 'POST', body: JSON.stringify({ companyId, factoryId, ...form, startedAt: new Date(form.startedAt).toISOString(), completedAt: new Date(form.completedAt).toISOString(), stages: stagesBody }) });
       setForm(blank()); onSaved(bn ? 'সিদ্ধকরণ ব্যাচ তৈরি হয়েছে।' : 'Parboiling batch created.'); await qc.invalidateQueries({ queryKey: ['parboiling-batches', companyId, factoryId] });
-    } catch (e) { setError(e instanceof Error ? e.message : 'Could not create parboiling batch.'); }
+    } catch (e) {
+      const msg = extractApiError(e, 'Could not create parboiling batch.');
+      setError(msg);
+      toast.error(msg);
+    } finally {
+      setSaving(false);
+    }
   }
   async function action(row: Batch, operation: 'approve' | 'post') {
-    try { await apiRequest(`/parboiling/batches/${encodeURIComponent(row.id)}/${operation}`, { method: 'POST', body: JSON.stringify({ companyId, factoryId }) }); await qc.invalidateQueries({ queryKey: ['parboiling-batches', companyId, factoryId] }); }
-    catch (e) { setError(e instanceof Error ? e.message : 'Could not update parboiling batch.'); }
+    setActionBusyId(row.id);
+    try {
+      await apiRequest(`/parboiling/batches/${encodeURIComponent(row.id)}/${operation}`, { method: 'POST', body: JSON.stringify({ companyId, factoryId }) });
+      onSaved(operation === 'approve' ? (bn ? 'অনুমোদিত হয়েছে।' : 'Batch approved.') : (bn ? 'স্টক পোস্ট হয়েছে।' : 'Stock posted.'));
+      await qc.invalidateQueries({ queryKey: ['parboiling-batches', companyId, factoryId] });
+    } catch (e) {
+      const msg = extractApiError(e, 'Could not update parboiling batch.');
+      setError(msg);
+      toast.error(msg);
+    } finally {
+      setActionBusyId('');
+    }
   }
   if (!companyId || !factoryId) return <Alert severity="info">{bn ? 'কোম্পানি ও কারখানা নির্বাচন করুন।' : 'Select a company and factory.'}</Alert>;
   if (batches.isLoading || items.isLoading || stacks.isLoading) return <Typography color="text.secondary">{bn ? 'সিদ্ধকরণ ব্যাচ লোড হচ্ছে...' : 'Loading parboiling batches...'}</Typography>;
   return <Stack spacing={2}>
     {(batches.isError || items.isError || stacks.isError) && <Alert severity="error">{error || 'Unable to load parboiling workflow. Check parboiling, item and stack permissions.'}</Alert>}{error && <Alert severity="error" onClose={() => setError('')}>{error}</Alert>}
-    <Paper component="form" onSubmit={create} className="workspace-card" elevation={0} sx={{ p: 2 }}>
+    <Paper component="form" noValidate onSubmit={create} className="workspace-card" elevation={0} sx={{ p: 2.5 }}>
       <Typography fontWeight={800} mb={2}>{t.title}</Typography>
-      <Stack direction={{ xs: 'column', md: 'row' }} flexWrap="wrap" gap={1.2}>
-        <TextField required size="small" label={t.batch} value={form.batchNumber} onChange={e => setForm({ ...form, batchNumber: e.target.value })} />
-        {([['inputItemId', t.inputItem], ['outputItemId', t.outputItem]] as const).map(([key, title]) => <TextField key={key} required select size="small" SelectProps={{ native: true }} label={title} value={form[key]} onChange={e => setForm({ ...form, [key]: e.target.value })}><option value="" />{itemRows.map(x => <option key={x.id} value={x.id}>{x.name}</option>)}</TextField>)}
-        {([['inputStackId', t.inputStack], ['outputStackId', t.outputStack]] as const).map(([key, title]) => <TextField key={key} required select size="small" SelectProps={{ native: true }} label={title} value={form[key]} onChange={e => setForm({ ...form, [key]: e.target.value })}><option value="" />{stackRows.map(x => <option key={x.id} value={x.id}>{x.godown.name} / {x.code}</option>)}</TextField>)}
-        {([['inputQuantityKg', t.input], ['outputQuantityKg', t.output]] as const).map(([key, title]) => <TextField key={key} required size="small" type="number" inputProps={{ min: 0, step: '.001' }} label={title} value={form[key]} onChange={e => setForm({ ...form, [key]: e.target.value })} />)}
-        <TextField required size="small" type="datetime-local" label={t.start} value={form.startedAt} onChange={e => setForm({ ...form, startedAt: e.target.value })} InputLabelProps={{ shrink: true }} />
-        <TextField required size="small" type="datetime-local" label={t.end} value={form.completedAt} onChange={e => setForm({ ...form, completedAt: e.target.value })} InputLabelProps={{ shrink: true }} />
-        <TextField size="small" label={t.remarks} value={form.remarks} onChange={e => setForm({ ...form, remarks: e.target.value })} />
+      <FormGrid columns={{ xs: 1, sm: 2, md: 4 }} gap={1.5}>
+        <AppTextField fieldName="batchNumber" required label={t.batch} value={form.batchNumber} errorText={fieldErrors.batchNumber} onValueChange={v => { setForm({ ...form, batchNumber: v }); setFieldErrors(p => ({ ...p, batchNumber: '' })); }} />
+        <AppAutocomplete fieldName="inputItemId" required label={t.inputItem} value={form.inputItemId} errorText={fieldErrors.inputItemId} options={itemRows.map(x => ({ value: x.id, label: x.name }))} emptyMessage={bn ? 'কোনো ধান পাওয়া যায়নি' : 'No paddy items'} onChange={v => { setForm({ ...form, inputItemId: v }); setFieldErrors(p => ({ ...p, inputItemId: '' })); }} />
+        <AppAutocomplete fieldName="outputItemId" required label={t.outputItem} value={form.outputItemId} errorText={fieldErrors.outputItemId} options={itemRows.map(x => ({ value: x.id, label: x.name }))} emptyMessage={bn ? 'কোনো ধান পাওয়া যায়নি' : 'No paddy items'} onChange={v => { setForm({ ...form, outputItemId: v }); setFieldErrors(p => ({ ...p, outputItemId: '' })); }} />
+        <AppAutocomplete fieldName="inputStackId" required label={t.inputStack} value={form.inputStackId} errorText={fieldErrors.inputStackId} options={stackRows.map(x => ({ value: x.id, label: `${x.godown.name} / ${x.code}` }))} emptyMessage={bn ? 'কোনো স্ট্যাক নেই' : 'No stacks'} onChange={v => { setForm({ ...form, inputStackId: v }); setFieldErrors(p => ({ ...p, inputStackId: '' })); }} />
+        <AppAutocomplete fieldName="outputStackId" required label={t.outputStack} value={form.outputStackId} errorText={fieldErrors.outputStackId} options={stackRows.map(x => ({ value: x.id, label: `${x.godown.name} / ${x.code}` }))} emptyMessage={bn ? 'কোনো স্ট্যাক নেই' : 'No stacks'} onChange={v => { setForm({ ...form, outputStackId: v }); setFieldErrors(p => ({ ...p, outputStackId: '' })); }} />
+        <AppTextField fieldName="inputQuantityKg" required type="number" unit="KG" inputProps={{ min: 0, step: '.001' }} label={t.input} value={form.inputQuantityKg} errorText={fieldErrors.inputQuantityKg} onValueChange={v => { setForm({ ...form, inputQuantityKg: v }); setFieldErrors(p => ({ ...p, inputQuantityKg: '' })); }} />
+        <AppTextField fieldName="outputQuantityKg" required type="number" unit="KG" inputProps={{ min: 0, step: '.001' }} label={t.output} value={form.outputQuantityKg} errorText={fieldErrors.outputQuantityKg} onValueChange={v => { setForm({ ...form, outputQuantityKg: v }); setFieldErrors(p => ({ ...p, outputQuantityKg: '' })); }} />
+        <AppTextField fieldName="startedAt" required type="datetime-local" label={t.start} value={form.startedAt} errorText={fieldErrors.startedAt} onValueChange={v => { setForm({ ...form, startedAt: v }); setFieldErrors(p => ({ ...p, startedAt: '' })); }} />
+        <AppTextField fieldName="completedAt" required type="datetime-local" label={t.end} value={form.completedAt} errorText={fieldErrors.completedAt} onValueChange={v => { setForm({ ...form, completedAt: v }); setFieldErrors(p => ({ ...p, completedAt: '' })); }} />
+        <Box sx={{ gridColumn: { md: 'span 3' } }}>
+          <AppTextField fieldName="remarks" label={t.remarks} value={form.remarks} onValueChange={v => setForm({ ...form, remarks: v })} />
+        </Box>
+      </FormGrid>
+      <Typography fontWeight={700} mt={2.5} mb={1.5}>{t.stages}</Typography>
+      <Stack spacing={1.5}>{form.stages.map((s, i) => (
+        <FormSection key={s.stageType} title={s.stageType}>
+          <FormGrid columns={{ xs: 1, sm: 2, md: 4 }} gap={1.5}>
+            <AppTextField fieldName={`stage-${i}-startedAt`} required type="datetime-local" label={t.start} value={s.startedAt} errorText={fieldErrors[`stage-${i}-startedAt`]} onValueChange={v => { patchStage(i, { startedAt: v }); setFieldErrors(p => ({ ...p, [`stage-${i}-startedAt`]: '' })); }} />
+            <AppTextField fieldName={`stage-${i}-completedAt`} required type="datetime-local" label={t.end} value={s.completedAt} errorText={fieldErrors[`stage-${i}-completedAt`]} onValueChange={v => { patchStage(i, { completedAt: v }); setFieldErrors(p => ({ ...p, [`stage-${i}-completedAt`]: '' })); }} />
+            {([['inputQuantityKg', t.stageInput, 'KG'], ['outputQuantityKg', t.stageOutput, 'KG'], ['moistureBeforePct', t.moistureBefore, '%'], ['moistureAfterPct', t.moistureAfter, '%'], ['waterQuantity', t.fields[0], 'L'], ['temperatureC', t.fields[1], '°C'], ['pressureBar', t.fields[2], 'bar'], ['fuelQuantity', t.fields[3], ''], ['electricityKwh', t.fields[4], 'kWh'], ['labourCost', t.fields[5], '৳']] as const).map(([key, labelText, unitText]) => {
+              const req = ['inputQuantityKg', 'outputQuantityKg', 'moistureBeforePct', 'moistureAfterPct'].includes(key);
+              const errKey = `stage-${i}-${key}`;
+              return (
+                <AppTextField
+                  key={key}
+                  fieldName={errKey}
+                  required={req}
+                  type="number"
+                  unit={unitText && unitText !== '৳' ? unitText : undefined}
+                  prefixText={unitText === '৳' ? '৳' : undefined}
+                  inputProps={{ min: 0, step: key.includes('Pct') ? '.01' : '.001' }}
+                  label={labelText}
+                  value={s[key]}
+                  errorText={fieldErrors[errKey]}
+                  onValueChange={v => {
+                    patchStage(i, { [key]: v });
+                    setFieldErrors(p => ({ ...p, [errKey]: '' }));
+                  }}
+                />
+              );
+            })}
+            <AppTextField fieldName={`stage-${i}-remarks`} label={t.remarks} value={s.remarks} onValueChange={v => patchStage(i, { remarks: v })} />
+          </FormGrid>
+        </FormSection>
+      ))}</Stack>
+      <Stack direction="row" justifyContent="flex-end" mt={2}>
+        <Button type="submit" variant="contained" disabled={saving} startIcon={saving ? <CircularProgress size={16} color="inherit" /> : undefined}>{t.create}</Button>
       </Stack>
-      <Typography fontWeight={700} mt={2} mb={1}>{t.stages}</Typography>
-      <Stack spacing={1.5}>{form.stages.map((s, i) => <Paper key={s.stageType} variant="outlined" sx={{ p: 1.5 }}><Typography fontWeight={700} mb={1}>{s.stageType}</Typography><Stack direction={{ xs: 'column', md: 'row' }} flexWrap="wrap" gap={1}>
-        <TextField required size="small" type="datetime-local" label={t.start} value={s.startedAt} onChange={e => patchStage(i, { startedAt: e.target.value })} InputLabelProps={{ shrink: true }} />
-        <TextField required size="small" type="datetime-local" label={t.end} value={s.completedAt} onChange={e => patchStage(i, { completedAt: e.target.value })} InputLabelProps={{ shrink: true }} />
-        {([['inputQuantityKg', t.stageInput], ['outputQuantityKg', t.stageOutput], ['moistureBeforePct', t.moistureBefore], ['moistureAfterPct', t.moistureAfter], ['waterQuantity', t.fields[0]], ['temperatureC', t.fields[1]], ['pressureBar', t.fields[2]], ['fuelQuantity', t.fields[3]], ['electricityKwh', t.fields[4]], ['labourCost', t.fields[5]]] as const).map(([key, label]) => <TextField key={key} required={['inputQuantityKg', 'outputQuantityKg', 'moistureBeforePct', 'moistureAfterPct'].includes(key)} size="small" type="number" inputProps={{ min: 0, step: key.includes('Pct') ? '.01' : '.001' }} label={label} value={s[key]} onChange={e => patchStage(i, { [key]: e.target.value })} />)}
-        <TextField size="small" label={t.remarks} value={s.remarks} onChange={e => patchStage(i, { remarks: e.target.value })} />
-      </Stack></Paper>)}</Stack><Button type="submit" variant="contained" sx={{ mt: 2 }}>{t.create}</Button>
     </Paper>
     <Paper className="workspace-card" elevation={0} sx={{ p: 2, overflowX: 'auto' }}>
       <Table size="small" sx={{ minWidth: 1050 }}>
@@ -85,7 +177,7 @@ export function ParboilingPage({ companyId, factoryId, language, onSaved }: { co
             <TableCell align="right" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums', color: 'error.main' }}>{row.processLossKg} KG</TableCell>
             <TableCell sx={{ maxWidth: 220 }}><Typography variant="body2" noWrap title={row.stages.map(s => `${s.stageType}: ${s.inputQuantityKg}→${s.outputQuantityKg} KG`).join(' · ')}>{row.stages.map(s => `${s.stageType}: ${s.inputQuantityKg}→${s.outputQuantityKg} KG`).join(' · ')}</Typography></TableCell>
             <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}><Chip size="small" label={row.status} color={row.status === 'POSTED' ? 'success' : 'default'} /></TableCell>
-            <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>{row.status === 'DRAFT' ? <Button size="small" variant="outlined" onClick={() => action(row, 'approve')}>{t.approve}</Button> : row.status === 'APPROVED' ? <Button size="small" variant="contained" onClick={() => action(row, 'post')}>{t.post}</Button> : '—'}</TableCell>
+            <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>{row.status === 'DRAFT' ? <Button size="small" variant="outlined" disabled={actionBusyId === row.id} onClick={() => action(row, 'approve')}>{t.approve}</Button> : row.status === 'APPROVED' ? <Button size="small" variant="contained" disabled={actionBusyId === row.id} onClick={() => action(row, 'post')}>{t.post}</Button> : '—'}</TableCell>
           </TableRow>)}
           {!rows.length && <TableRow><TableCell colSpan={9} align="center" sx={{ color: 'text.secondary', py: 3 }}>{bn ? 'সিদ্ধকরণ ব্যাচ নেই।' : 'No parboiling batches recorded.'}</TableCell></TableRow>}
         </TableBody>

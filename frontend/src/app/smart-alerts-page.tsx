@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import React, { useState } from 'react';
 import {
   Alert,
   Box,
@@ -8,19 +8,11 @@ import {
   Card,
   CardContent,
   Chip,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
   Divider,
-  FormControl,
   Grid,
   IconButton,
-  InputLabel,
   LinearProgress,
-  MenuItem,
   Paper,
-  Select,
   Stack,
   Tab,
   Table,
@@ -30,7 +22,6 @@ import {
   TableHead,
   TableRow,
   Tabs,
-  TextField,
   Tooltip,
   Typography,
 } from '@mui/material';
@@ -46,6 +37,9 @@ import DoneRoundedIcon from '@mui/icons-material/DoneRounded';
 import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/api';
+import { AppSelect, AppTextField, FormDialog, FormGrid } from '@/components/form';
+import { extractApiError, useToast } from '@/components/ui/toast-provider';
+import { focusFieldByName, validateFormFields } from '@/lib/form-validation';
 
 interface SmartAlertsPageProps {
   companyId: string;
@@ -97,6 +91,7 @@ export function SmartAlertsPage({
 }: SmartAlertsPageProps) {
   const isBn = language === 'bn';
   const queryClient = useQueryClient();
+  const toast = useToast();
 
   const [categoryFilter, setCategoryFilter] = useState('ALL');
   const [severityFilter, setSeverityFilter] = useState('ALL');
@@ -107,6 +102,8 @@ export function SmartAlertsPage({
   const [ruleType, setRuleType] = useState('LOW_STOCK');
   const [ruleThreshold, setRuleThreshold] = useState('5000');
   const [ruleSeverity, setRuleSeverity] = useState('WARNING');
+  const [ruleError, setRuleError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   // Query alerts
   const { data, isLoading, error, refetch } = useQuery<AlertsResponse>({
@@ -141,6 +138,7 @@ export function SmartAlertsPage({
       onSaved(res.message || (isBn ? 'ডায়াগনস্টিক স্ক্যান সফল হয়েছে।' : 'Diagnostic scan complete.'));
       queryClient.invalidateQueries({ queryKey: ['smart-alerts'] });
     },
+    onError: (err: unknown) => toast.error(extractApiError(err, 'Diagnostic scan failed.')),
   });
 
   // Dismiss Mutation
@@ -154,6 +152,7 @@ export function SmartAlertsPage({
       onSaved(isBn ? 'সতর্কবার্তা বাতিল করা হয়েছে।' : 'Alert dismissed.');
       queryClient.invalidateQueries({ queryKey: ['smart-alerts'] });
     },
+    onError: (err: unknown) => toast.error(extractApiError(err, 'Could not dismiss alert.')),
   });
 
   // Acknowledge Mutation
@@ -167,6 +166,7 @@ export function SmartAlertsPage({
       onSaved(isBn ? 'সতর্কবার্তা প্রাপ্তিস্বীকার করা হয়েছে।' : 'Alert acknowledged.');
       queryClient.invalidateQueries({ queryKey: ['smart-alerts'] });
     },
+    onError: (err: unknown) => toast.error(extractApiError(err, 'Could not acknowledge alert.')),
   });
 
   // Rule Update Mutation
@@ -182,10 +182,40 @@ export function SmartAlertsPage({
         }),
       }),
     onSuccess: () => {
+      setRuleError(null);
+      setFieldErrors({});
+      setRulesOpen(false);
       onSaved(isBn ? 'সতর্কতার নিয়ম হালনাগাদ করা হয়েছে।' : 'Alert rule threshold updated.');
       refetchRules();
     },
+    onError: (err: unknown) => {
+      const msg = extractApiError(err, 'Failed to update alert rule.');
+      setRuleError(msg);
+      toast.error(msg);
+    },
   });
+
+  const handleSaveRule = (e?: React.FormEvent) => {
+    e?.preventDefault();
+    const validation = validateFormFields(
+      [
+        { name: 'ruleType', label: isBn ? 'এলার্টের ধরন' : 'Alert Type', value: ruleType, required: true, isSelect: true },
+        { name: 'ruleThreshold', label: isBn ? 'থ্রেশহোল্ড মান' : 'Threshold Value', value: ruleThreshold, required: true, type: 'number' },
+        { name: 'ruleSeverity', label: isBn ? 'ডিফল্ট তীব্রতা' : 'Default Severity', value: ruleSeverity, required: true, isSelect: true },
+      ],
+      language,
+    );
+    if (!validation.valid) {
+      setFieldErrors(validation.errors);
+      setRuleError(validation.summary);
+      toast.warning(validation.summary);
+      focusFieldByName(validation.firstField);
+      return;
+    }
+    setRuleError(null);
+    setFieldErrors({});
+    updateRuleMutation.mutate();
+  };
 
   const getSeverityChip = (sev: string) => {
     if (sev === 'CRITICAL') {
@@ -340,20 +370,21 @@ export function SmartAlertsPage({
             ))}
           </Stack>
 
-          <Stack direction="row" spacing={1} alignItems="center">
-            <FormControl size="small" sx={{ minWidth: 120 }}>
-              <InputLabel>{isBn ? 'তীব্রতা' : 'Severity'}</InputLabel>
-              <Select
-                value={severityFilter}
-                label={isBn ? 'তীব্রতা' : 'Severity'}
-                onChange={e => setSeverityFilter(e.target.value)}
-              >
-                <MenuItem value="ALL">{isBn ? 'সকল' : 'All'}</MenuItem>
-                <MenuItem value="CRITICAL">{isBn ? 'জরুরি' : 'Critical'}</MenuItem>
-                <MenuItem value="WARNING">{isBn ? 'সতর্কতা' : 'Warning'}</MenuItem>
-                <MenuItem value="INFO">{isBn ? 'তথ্য' : 'Info'}</MenuItem>
-              </Select>
-            </FormControl>
+          <Stack direction="row" spacing={1.5} alignItems="center">
+            <AppSelect
+              fieldName="severityFilter"
+              fullWidth={false}
+              label={isBn ? 'তীব্রতা' : 'Severity'}
+              value={severityFilter}
+              options={[
+                { value: 'ALL', label: isBn ? 'সকল' : 'All' },
+                { value: 'CRITICAL', label: isBn ? 'জরুরি' : 'Critical' },
+                { value: 'WARNING', label: isBn ? 'সতর্কতা' : 'Warning' },
+                { value: 'INFO', label: isBn ? 'তথ্য' : 'Info' },
+              ]}
+              onChange={(val) => setSeverityFilter(val)}
+              sx={{ minWidth: 140 }}
+            />
 
             <Button
               variant={showDismissed ? 'contained' : 'outlined'}
@@ -477,66 +508,74 @@ export function SmartAlertsPage({
       </TableContainer>
 
       {/* Rules Dialog */}
-      <Dialog open={rulesOpen} onClose={() => setRulesOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle sx={{ fontWeight: 700 }}>
-          {isBn ? 'স্মার্ট এলার্ট নিয়ম ও থ্রেশহোল্ড কনফিগারেশন' : 'Configure Alert Rules & Thresholds'}
-        </DialogTitle>
-        <DialogContent dividers>
-          <Stack spacing={2.5} sx={{ mt: 1 }}>
-            <FormControl fullWidth size="small">
-              <InputLabel>{isBn ? 'এলার্টের ধরন' : 'Alert Type'}</InputLabel>
-              <Select
-                value={ruleType}
-                label={isBn ? 'এলার্টের ধরন' : 'Alert Type'}
-                onChange={e => setRuleType(e.target.value)}
-              >
-                <MenuItem value="LOW_STOCK">Low Stock (Safety KG Threshold)</MenuItem>
-                <MenuItem value="HIGH_MOISTURE">High Moisture (% Upper Limit)</MenuItem>
-                <MenuItem value="LOW_RECOVERY">Low Recovery (% Minimum Ratio)</MenuItem>
-                <MenuItem value="CUSTOMER_OVERDUE">Customer Overdue (Days/Amount)</MenuItem>
-                <MenuItem value="SUPPLIER_PAYMENT_DUE">Supplier Due (Payables Threshold)</MenuItem>
-                <MenuItem value="UNUSUAL_WEIGHT">Unusual Weighbridge Weight (KG)</MenuItem>
-                <MenuItem value="UNUSUAL_PRODUCTION_LOSS">Unusual Production Loss (%)</MenuItem>
-                <MenuItem value="NEGATIVE_MARGIN">Negative Margin (Minimum Rate ৳)</MenuItem>
-                <MenuItem value="SLOW_MOVING_STOCK">Slow Moving Stock (Days Idle)</MenuItem>
-              </Select>
-            </FormControl>
+      <FormDialog
+        open={rulesOpen}
+        onClose={() => !updateRuleMutation.isPending && setRulesOpen(false)}
+        onSubmit={handleSaveRule}
+        title={isBn ? 'স্মার্ট এলার্ট নিয়ম ও থ্রেশহোল্ড কনফিগারেশন' : 'Configure Alert Rules & Thresholds'}
+        error={ruleError}
+        onClearError={() => setRuleError(null)}
+        loading={updateRuleMutation.isPending}
+        submitLabel={isBn ? 'সংরক্ষণ করুন' : 'Save Rule'}
+        cancelLabel={isBn ? 'বন্ধ করুন' : 'Close'}
+        maxWidth="sm"
+      >
+        <FormGrid columns={1}>
+          <AppSelect
+            fieldName="ruleType"
+            required
+            label={isBn ? 'এলার্টের ধরন' : 'Alert Type'}
+            value={ruleType}
+            errorText={fieldErrors.ruleType}
+            options={[
+              { value: 'LOW_STOCK', label: 'Low Stock (Safety KG Threshold)' },
+              { value: 'HIGH_MOISTURE', label: 'High Moisture (% Upper Limit)' },
+              { value: 'LOW_RECOVERY', label: 'Low Recovery (% Minimum Ratio)' },
+              { value: 'CUSTOMER_OVERDUE', label: 'Customer Overdue (Days/Amount)' },
+              { value: 'SUPPLIER_PAYMENT_DUE', label: 'Supplier Due (Payables Threshold)' },
+              { value: 'UNUSUAL_WEIGHT', label: 'Unusual Weighbridge Weight (KG)' },
+              { value: 'UNUSUAL_PRODUCTION_LOSS', label: 'Unusual Production Loss (%)' },
+              { value: 'NEGATIVE_MARGIN', label: 'Negative Margin (Minimum Rate ৳)' },
+              { value: 'SLOW_MOVING_STOCK', label: 'Slow Moving Stock (Days Idle)' },
+            ]}
+            onChange={(val) => {
+              setRuleType(val);
+              setFieldErrors((p) => ({ ...p, ruleType: '' }));
+            }}
+          />
 
-            <TextField
-              fullWidth
-              size="small"
-              type="number"
-              label={isBn ? 'থ্রেশহোল্ড মান' : 'Threshold Value'}
-              value={ruleThreshold}
-              onChange={e => setRuleThreshold(e.target.value)}
-              helperText={isBn ? 'এই মানের নিচে বা উপরে গেলে স্বয়ংক্রিয় এলার্ট সৃষ্টি হবে' : 'Alert triggers when operational metric crosses this threshold'}
-            />
+          <AppTextField
+            fieldName="ruleThreshold"
+            required
+            type="number"
+            label={isBn ? 'থ্রেশহোল্ড মান' : 'Threshold Value'}
+            value={ruleThreshold}
+            errorText={fieldErrors.ruleThreshold}
+            onValueChange={(val) => {
+              setRuleThreshold(val);
+              setFieldErrors((p) => ({ ...p, ruleThreshold: '' }));
+            }}
+            helperText={isBn ? 'এই মানের নিচে বা উপরে গেলে স্বয়ংক্রিয় এলার্ট সৃষ্টি হবে' : 'Alert triggers when operational metric crosses this threshold'}
+          />
 
-            <FormControl fullWidth size="small">
-              <InputLabel>{isBn ? 'ডিফল্ট তীব্রতা' : 'Default Severity'}</InputLabel>
-              <Select
-                value={ruleSeverity}
-                label={isBn ? 'ডিফল্ট তীব্রতা' : 'Default Severity'}
-                onChange={e => setRuleSeverity(e.target.value)}
-              >
-                <MenuItem value="CRITICAL">CRITICAL</MenuItem>
-                <MenuItem value="WARNING">WARNING</MenuItem>
-                <MenuItem value="INFO">INFO</MenuItem>
-              </Select>
-            </FormControl>
-          </Stack>
-        </DialogContent>
-        <DialogActions sx={{ p: 2 }}>
-          <Button onClick={() => setRulesOpen(false)}>{isBn ? 'বন্ধ করুন' : 'Close'}</Button>
-          <Button
-            variant="contained"
-            onClick={() => updateRuleMutation.mutate()}
-            disabled={updateRuleMutation.isPending}
-          >
-            {isBn ? 'সংরক্ষণ করুন' : 'Save Rule'}
-          </Button>
-        </DialogActions>
-      </Dialog>
+          <AppSelect
+            fieldName="ruleSeverity"
+            required
+            label={isBn ? 'ডিফল্ট তীব্রতা' : 'Default Severity'}
+            value={ruleSeverity}
+            errorText={fieldErrors.ruleSeverity}
+            options={[
+              { value: 'CRITICAL', label: 'CRITICAL' },
+              { value: 'WARNING', label: 'WARNING' },
+              { value: 'INFO', label: 'INFO' },
+            ]}
+            onChange={(val) => {
+              setRuleSeverity(val);
+              setFieldErrors((p) => ({ ...p, ruleSeverity: '' }));
+            }}
+          />
+        </FormGrid>
+      </FormDialog>
     </Box>
   );
 }

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { AppTextField } from '@/components/form';
 
 export type ImportEntityType =
   | 'SUPPLIERS'
@@ -472,17 +473,13 @@ export function ExcelImportPage({ companyId, language, onSaved }: ExcelImportPag
                       const val = rec.data[col] || '';
 
                       return (
-                        <td key={col} className="py-2 px-3">
-                          <input
-                            type="text"
+                        <td key={col} className="py-1.5 px-2" style={{ minWidth: 130 }}>
+                          <AppTextField
+                            fieldName={`import-${rec.id}-${col}`}
                             value={val}
-                            onChange={(e) => handleCellEdit(rec.id, col, e.target.value)}
+                            onValueChange={(newVal) => handleCellEdit(rec.id, col, newVal)}
                             placeholder={`Enter ${col}`}
-                            className={`w-full py-1 px-2 rounded border text-xs font-medium transition-all ${
-                              hasError
-                                ? 'border-rose-400 bg-rose-50 text-rose-950 font-semibold focus:ring-2 focus:ring-rose-400'
-                                : 'border-slate-200 bg-white hover:border-slate-300 focus:ring-2 focus:ring-emerald-400'
-                            }`}
+                            error={hasError}
                           />
                         </td>
                       );

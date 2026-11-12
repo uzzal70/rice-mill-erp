@@ -2,12 +2,15 @@
 
 import { FormEvent, useState } from 'react';
 import {
-  Alert, Box, Button, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle,
-  FormControl, InputLabel, MenuItem, Paper, Select, Stack, Table, TableBody, TableCell, TableHead,
-  TableRow, TextField, Typography,
+  Alert, Box, Button, Chip, CircularProgress,
+  Paper, Stack, Table, TableBody, TableCell, TableHead,
+  TableRow, Typography,
 } from '@mui/material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiRequest, queryString } from '@/lib/api';
+import { extractApiError, useToast } from '@/components/ui/toast-provider';
+import { focusFieldByName, validateFormFields } from '@/lib/form-validation';
+import { AppSelect, AppTextField, FormDialog, FormGrid } from '@/components/form';
 
 type PaddyItem = {
   id: string;
@@ -140,6 +143,7 @@ export function PaddyMasterPage({
   onSaved: (message: string) => void;
 }) {
   const t = labels[language];
+  const toast = useToast();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [activeFilter, setActiveFilter] = useState<'all' | 'true' | 'false'>('all');
@@ -148,6 +152,7 @@ export function PaddyMasterPage({
   const [editing, setEditing] = useState<PaddyItem | null>(null);
   const [values, setValues] = useState<PaddyForm>(blankForm);
   const [formError, setFormError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   const itemsQuery = useQuery({
     queryKey: ['paddy-master', companyId, search, activeFilter, page],
@@ -188,15 +193,21 @@ export function PaddyMasterPage({
       setEditing(null);
       setValues(blankForm);
       setFormError('');
+      setFieldErrors({});
       onSaved(language === 'bn' ? 'ধানের তথ্য সংরক্ষিত হয়েছে।' : 'Paddy variety saved.');
     },
-    onError: reason => setFormError(messageOf(reason, t.failed)),
+    onError: reason => {
+      const msg = extractApiError(reason, t.failed);
+      setFormError(msg);
+      toast.error(msg);
+    },
   });
 
   function startCreate() {
     setEditing(null);
     setValues(blankForm);
     setFormError('');
+    setFieldErrors({});
     setOpen(true);
   }
 
@@ -204,12 +215,32 @@ export function PaddyMasterPage({
     setEditing(item);
     setValues(toForm(item));
     setFormError('');
+    setFieldErrors({});
     setOpen(true);
   }
 
   function submit(event: FormEvent) {
     event.preventDefault();
+    const validation = validateFormFields(
+      [
+        { name: 'name', label: t.name, value: values.name, required: true },
+        { name: 'code', label: t.code, value: values.code, required: true },
+        { name: 'variety', label: t.variety, value: values.variety, required: true },
+        { name: 'cropYear', label: t.cropYear, value: values.cropYear, type: 'integer', min: 1900, max: 2200 },
+        { name: 'standardMoisture', label: t.moisture, value: values.standardMoisture, required: true, type: 'nonNegativeNumber', min: 0, max: 100 },
+        { name: 'standardRecovery', label: t.recovery, value: values.standardRecovery, required: true, type: 'nonNegativeNumber', min: 0, max: 100 },
+      ],
+      language,
+    );
+    if (!validation.valid) {
+      setFieldErrors(validation.errors);
+      setFormError(validation.summary);
+      toast.warning(validation.summary);
+      focusFieldByName(validation.firstField);
+      return;
+    }
     setFormError('');
+    setFieldErrors({});
     mutation.mutate();
   }
 
@@ -221,12 +252,22 @@ export function PaddyMasterPage({
       <Button variant="contained" onClick={startCreate}>{t.add}</Button>
     </Box>
     <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
-      <TextField size="small" fullWidth value={search} placeholder={t.search} onChange={event => { setSearch(event.target.value); setPage(1); }} />
-      <FormControl size="small" sx={{ minWidth: 160 }}><InputLabel>{t.filter}</InputLabel><Select label={t.filter} value={activeFilter} onChange={event => { setActiveFilter(event.target.value as typeof activeFilter); setPage(1); }}>
-        <MenuItem value="all">{t.all}</MenuItem><MenuItem value="true">{t.activeOnly}</MenuItem><MenuItem value="false">{t.inactiveOnly}</MenuItem>
-      </Select></FormControl>
+      <AppTextField fieldName="search" value={search} placeholder={t.search} onValueChange={val => { setSearch(val); setPage(1); }} />
+      <Box sx={{ minWidth: 180 }}>
+        <AppSelect
+          name="filter"
+          label={t.filter}
+          value={activeFilter}
+          onChange={val => { setActiveFilter(val as typeof activeFilter); setPage(1); }}
+          options={[
+            { value: 'all', label: t.all },
+            { value: 'true', label: t.activeOnly },
+            { value: 'false', label: t.inactiveOnly },
+          ]}
+        />
+      </Box>
     </Stack>
-    {itemsQuery.error && <Alert severity="error">{messageOf(itemsQuery.error, t.failed)}</Alert>}
+    {itemsQuery.error && <Alert severity="error">{extractApiError(itemsQuery.error, t.failed)}</Alert>}
     <Paper variant="outlined" sx={{ overflowX: 'auto' }}>
       {itemsQuery.isLoading
         ? <Stack direction="row" spacing={1} alignItems="center" p={3}><CircularProgress size={18} /><Typography>{t.loading}</Typography></Stack>
@@ -266,24 +307,40 @@ export function PaddyMasterPage({
       <Button size="small" disabled={rows.length < 100 || itemsQuery.isFetching} onClick={() => setPage(current => current + 1)}>{t.next}</Button>
     </Stack>
 
-    <Dialog open={open} onClose={() => setOpen(false)} fullWidth maxWidth="sm">
-      <DialogTitle>{editing ? t.edit : t.add}</DialogTitle>
-      <Box component="form" onSubmit={submit}>
-        <DialogContent><Stack spacing={2}>
-          {formError && <Alert severity="error">{formError}</Alert>}
-          <TextField label={t.name} required value={values.name} onChange={event => setValues(current => ({ ...current, name: event.target.value }))} />
-          <TextField label={t.code} required value={values.code} onChange={event => setValues(current => ({ ...current, code: event.target.value }))} />
-          <TextField label={t.variety} required value={values.variety} onChange={event => setValues(current => ({ ...current, variety: event.target.value }))} />
-          <TextField label={t.localName} value={values.localName} onChange={event => setValues(current => ({ ...current, localName: event.target.value }))} />
-          <TextField label={t.cropYear} type="number" inputProps={{ min: 1900, max: 2200 }} value={values.cropYear} onChange={event => setValues(current => ({ ...current, cropYear: event.target.value }))} />
-          <TextField label={t.grade} value={values.grade} onChange={event => setValues(current => ({ ...current, grade: event.target.value }))} />
-          <TextField label={t.moisture} type="number" inputProps={{ min: 0, max: 100, step: 0.01 }} required value={values.standardMoisture} onChange={event => setValues(current => ({ ...current, standardMoisture: event.target.value }))} />
-          <TextField label={t.recovery} type="number" inputProps={{ min: 0, max: 100, step: 0.01 }} required value={values.standardRecovery} onChange={event => setValues(current => ({ ...current, standardRecovery: event.target.value }))} />
-          <TextField label={t.description} multiline minRows={2} value={values.description} onChange={event => setValues(current => ({ ...current, description: event.target.value }))} />
-          {editing && <FormControl fullWidth><InputLabel>{t.active}</InputLabel><Select label={t.active} value={values.active ? 'true' : 'false'} onChange={event => setValues(current => ({ ...current, active: event.target.value === 'true' }))}><MenuItem value="true">{t.enabled}</MenuItem><MenuItem value="false">{t.disabled}</MenuItem></Select></FormControl>}
-        </Stack></DialogContent>
-        <DialogActions><Button onClick={() => setOpen(false)}>{t.cancel}</Button><Button type="submit" variant="contained" disabled={mutation.isPending}>{mutation.isPending ? <CircularProgress size={18} /> : t.save}</Button></DialogActions>
-      </Box>
-    </Dialog>
+    <FormDialog
+      open={open}
+      onClose={() => setOpen(false)}
+      onSubmit={submit}
+      title={editing ? t.edit : t.add}
+      error={formError}
+      onClearError={() => setFormError('')}
+      loading={mutation.isPending}
+      submitLabel={t.save}
+      cancelLabel={t.cancel}
+      maxWidth="md"
+    >
+      <FormGrid columns={2}>
+        <AppTextField fieldName="name" label={t.name} required value={values.name} errorText={fieldErrors.name} onValueChange={v => { setValues(c => ({ ...c, name: v })); setFieldErrors(p => ({ ...p, name: '' })); }} />
+        <AppTextField fieldName="code" label={t.code} required value={values.code} errorText={fieldErrors.code} onValueChange={v => { setValues(c => ({ ...c, code: v })); setFieldErrors(p => ({ ...p, code: '' })); }} />
+        <AppTextField fieldName="variety" label={t.variety} required value={values.variety} errorText={fieldErrors.variety} onValueChange={v => { setValues(c => ({ ...c, variety: v })); setFieldErrors(p => ({ ...p, variety: '' })); }} />
+        <AppTextField fieldName="localName" label={t.localName} value={values.localName} onValueChange={v => setValues(c => ({ ...c, localName: v }))} />
+        <AppTextField fieldName="cropYear" label={t.cropYear} type="number" inputProps={{ min: 1900, max: 2200 }} value={values.cropYear} errorText={fieldErrors.cropYear} onValueChange={v => { setValues(c => ({ ...c, cropYear: v })); setFieldErrors(p => ({ ...p, cropYear: '' })); }} />
+        <AppTextField fieldName="grade" label={t.grade} value={values.grade} onValueChange={v => setValues(c => ({ ...c, grade: v }))} />
+        <AppTextField fieldName="standardMoisture" label={t.moisture} unit="%" type="number" inputProps={{ min: 0, max: 100, step: 0.01 }} required value={values.standardMoisture} errorText={fieldErrors.standardMoisture} onValueChange={v => { setValues(c => ({ ...c, standardMoisture: v })); setFieldErrors(p => ({ ...p, standardMoisture: '' })); }} />
+        <AppTextField fieldName="standardRecovery" label={t.recovery} unit="%" type="number" inputProps={{ min: 0, max: 100, step: 0.01 }} required value={values.standardRecovery} errorText={fieldErrors.standardRecovery} onValueChange={v => { setValues(c => ({ ...c, standardRecovery: v })); setFieldErrors(p => ({ ...p, standardRecovery: '' })); }} />
+        <Box sx={{ gridColumn: { sm: '1 / -1' } }}>
+          <AppTextField fieldName="description" label={t.description} multiline minRows={2} value={values.description} onValueChange={v => setValues(c => ({ ...c, description: v }))} />
+        </Box>
+        {editing && (
+          <AppSelect
+            fieldName="active"
+            label={t.active}
+            value={values.active ? 'true' : 'false'}
+            onChange={v => setValues(c => ({ ...c, active: v === 'true' }))}
+            options={[{ value: 'true', label: t.enabled }, { value: 'false', label: t.disabled }]}
+          />
+        )}
+      </FormGrid>
+    </FormDialog>
   </Stack>;
 }
